@@ -18,7 +18,7 @@ export function MasterLayout({ title, formPanel, tablePanel }: Props) {
           {formPanel}
         </div>
         {/* Right: table */}
-        <div className="flex-1 bg-white rounded-lg border border-slate-200 flex flex-col min-h-0">
+        <div className="flex-1 min-w-0 bg-white rounded-lg border border-slate-200 flex flex-col min-h-0">
           {tablePanel}
         </div>
       </div>

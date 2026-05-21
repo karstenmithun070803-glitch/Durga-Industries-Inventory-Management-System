@@ -101,10 +101,13 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
               )}
             </div>
             <div className="overflow-auto flex-1">
-              <table className="w-full text-sm">
+              <table className="min-w-max text-sm">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
-                    {["S.No", "Supplier Code", "Supplier Name", "Address", "State", "GSTIN", "TIN No.", "Actions"].map((h) => (
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-0 z-20 bg-slate-50 w-12">S.No</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-12 z-20 bg-slate-50 w-28">Supplier Code</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-40 z-20 bg-slate-50 w-44 border-r border-slate-200">Supplier Name</th>
+                    {["Address", "State", "GSTIN", "TIN No.", "Actions"].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -113,12 +116,14 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                   {visible.length === 0 && (
                     <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">No suppliers found</td></tr>
                   )}
-                  {visible.map((s, i) => (
+                  {visible.map((s, i) => {
+                    const stickyBg = !s.is_active ? "bg-slate-50" : "bg-white";
+                    return (
                     <tr key={s.id} className={`border-t border-slate-100 ${!s.is_active ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"}`}>
-                      <td className="px-3 py-2.5 text-slate-500">{i + 1}</td>
-                      <td className="px-3 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("S", s.code_no)}</td>
-                      <td className="px-3 py-2.5 font-medium">{s.name}</td>
-                      <td className="px-3 py-2.5 text-slate-500 max-w-[160px] truncate">{s.address ?? "—"}</td>
+                      <td className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                      <td className={`px-3 py-2.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("S", s.code_no)}</td>
+                      <td className={`px-3 py-2.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{s.name}</td>
+                      <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{s.address ?? "—"}</td>
                       <td className="px-3 py-2.5 text-slate-500">{s.state ?? "—"}</td>
                       <td className="px-3 py-2.5 text-slate-500 font-mono text-xs">{s.gstin ?? "—"}</td>
                       <td className="px-3 py-2.5 text-slate-500 font-mono text-xs">{s.tin_no ?? "—"}</td>
@@ -135,7 +140,8 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

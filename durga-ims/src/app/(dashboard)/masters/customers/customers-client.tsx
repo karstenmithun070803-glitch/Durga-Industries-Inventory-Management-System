@@ -115,10 +115,13 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
               )}
             </div>
             <div className="overflow-auto flex-1">
-              <table className="w-full text-sm">
+              <table className="min-w-max text-sm">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
-                    {["S.No", "Customer Code", "Customer Name", "Address", "City", "State", "GSTIN", "Actions"].map((h) => (
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-0 z-20 bg-slate-50 w-12">S.No</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-12 z-20 bg-slate-50 w-28">Customer Code</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-40 z-20 bg-slate-50 w-44 border-r border-slate-200">Customer Name</th>
+                    {["Address", "City", "State", "GSTIN", "Actions"].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -127,12 +130,15 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                   {visible.length === 0 && (
                     <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">No customers found</td></tr>
                   )}
-                  {visible.map((c, i) => (
+                  {visible.map((c, i) => {
+                    const stickyBg = !c.is_active ? "bg-slate-50" : "bg-white";
+                    const addr = [c.address_1, c.address_2, c.street].filter(Boolean).join(", ") || "—";
+                    return (
                     <tr key={c.id} className={`border-t border-slate-100 ${!c.is_active ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"}`}>
-                      <td className="px-3 py-2.5 text-slate-500">{i + 1}</td>
-                      <td className="px-3 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("C", c.customer_no)}</td>
-                      <td className="px-3 py-2.5 font-medium">{c.customer_name}</td>
-                      <td className="px-3 py-2.5 text-slate-500 max-w-[160px] truncate">{c.address_1 ?? "—"}</td>
+                      <td className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                      <td className={`px-3 py-2.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("C", c.customer_no)}</td>
+                      <td className={`px-3 py-2.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{c.customer_name}</td>
+                      <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{addr}</td>
                       <td className="px-3 py-2.5 text-slate-500">{c.city ?? "—"}</td>
                       <td className="px-3 py-2.5 text-slate-500">{c.state ?? "—"}</td>
                       <td className="px-3 py-2.5 text-slate-500 font-mono text-xs">{c.gstin ?? "—"}</td>
@@ -149,7 +155,8 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>

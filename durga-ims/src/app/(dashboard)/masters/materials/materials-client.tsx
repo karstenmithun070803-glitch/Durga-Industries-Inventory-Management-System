@@ -148,10 +148,13 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
               )}
             </div>
             <div className="overflow-auto flex-1">
-              <table className="w-full text-sm">
+              <table className="min-w-max text-sm">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
-                    {["S.No", "Material Code", "Material Name", "HSN", "Tax Rate", "Pur. Unit", "Sal. Unit", "Conv.", "Min", "Max", "Stock", "Actions"].map((h) => (
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-0 z-20 bg-slate-50 w-12">S.No</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-12 z-20 bg-slate-50 w-28">Material Code</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-40 z-20 bg-slate-50 w-44 border-r border-slate-200">Material Name</th>
+                    {["HSN", "Tax Rate", "Pur. Unit", "Sal. Unit", "Conv.", "Min", "Max", "Stock", "Actions"].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -165,11 +168,12 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                     const salUnit = units.find((u) => u.id === m.sales_unit_id);
                     const taxRate = taxRates.find((t) => t.id === m.tax_rate_id);
                     const stockLow = m.min_level && parseFloat(m.current_stock) < parseFloat(m.min_level);
+                    const stickyBg = !m.is_active ? "bg-slate-50" : stockLow ? "bg-red-50" : "bg-white";
                     return (
                       <tr key={m.id} className={`border-t border-slate-100 ${!m.is_active ? "opacity-50 bg-slate-50" : stockLow ? "bg-red-50" : "hover:bg-slate-50"}`}>
-                        <td className="px-3 py-2.5 text-slate-500">{i + 1}</td>
-                        <td className="px-3 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("M", m.material_no)}</td>
-                        <td className="px-3 py-2.5 font-medium">{m.name}</td>
+                        <td className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                        <td className={`px-3 py-2.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("M", m.material_no)}</td>
+                        <td className={`px-3 py-2.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{m.name}</td>
                         <td className="px-3 py-2.5 text-slate-500 font-mono text-xs">{m.hsn_code ?? "—"}</td>
                         <td className="px-3 py-2.5 text-slate-500 text-xs">{taxRate ? taxRate.description : "—"}</td>
                         <td className="px-3 py-2.5 text-slate-500">{purUnit?.unit_name ?? "—"}</td>
