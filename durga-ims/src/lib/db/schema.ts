@@ -143,7 +143,6 @@ export const purchaseOrders = pgTable("purchase_orders", {
   po_number: integer("po_number").notNull(),
   po_date: timestamp("po_date", { withTimezone: true }).notNull().defaultNow(),
   supplier_id: uuid("supplier_id")
-    .notNull()
     .references(() => suppliers.id),
   total_amount: numeric("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   // 'Draft' = editable, 'Received' = triggers stock addition
@@ -171,6 +170,10 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   sgst_amount: numeric("sgst_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   igst_amount: numeric("igst_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  // supplier per line item — different materials may come from different suppliers
+  supplier_id: uuid("supplier_id").references(() => suppliers.id),
+  // gst_type frozen at entry time — historical integrity if supplier GSTIN changes later
+  gst_type: text("gst_type"), // "CGST_SGST" | "IGST"
   ...timestamps,
 });
 
@@ -299,6 +302,7 @@ export const vehiclesRelations = relations(vehicles, ({ one, many }) => ({
 
 export const suppliersRelations = relations(suppliers, ({ many }) => ({
   purchaseOrders: many(purchaseOrders),
+  purchaseOrderItems: many(purchaseOrderItems),
 }));
 
 export const taxRatesRelations = relations(taxRates, ({ many }) => ({
@@ -358,6 +362,10 @@ export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one 
   unit: one(units, {
     fields: [purchaseOrderItems.unit_id],
     references: [units.id],
+  }),
+  supplier: one(suppliers, {
+    fields: [purchaseOrderItems.supplier_id],
+    references: [suppliers.id],
   }),
 }));
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFY } from "@/lib/financial-year";
@@ -10,14 +10,12 @@ import {
   receivePurchaseOrder,
   updateReceivedPurchaseOrder,
 } from "@/lib/actions/purchase-orders.actions";
-import { TransactionGrid, newRow, calcTotals } from "@/components/forms/TransactionGrid";
-import { Combobox } from "@/components/ui/combobox";
+import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { formatCode } from "@/lib/utils";
-import { determineGstType } from "@/types";
-import type { PurchaseOrderWithDetails, LineItemDraft, GstType } from "@/types";
+import type { PurchaseOrderWithDetails, LineItemDraft } from "@/types";
 import { AlertTriangle, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 
@@ -73,7 +71,10 @@ function poItemsToRows(po: PurchaseOrderWithDetails): LineItemDraft[] {
     _key: crypto.randomUUID(),
     material_id: item.material_id,
     material_name: item.material_name,
-    hsn_code: item.hsn_code ?? "",
+    material_no: item.material_no ?? 0,
+    supplier_id: item.supplier_id ?? "",
+    supplier_name: item.supplier_name ?? "",
+    gst_type: item.gst_type ?? "IGST",
     qty: item.qty,
     unit_id: item.unit_id ?? "",
     unit_name: item.unit_name ?? "",
@@ -92,73 +93,53 @@ function formatAmount(n: number): string {
   return "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function calcAllTotals(rows: LineItemDraft[]) {
+  let subtotal = 0, cgst = 0, sgst = 0, igst = 0;
+  for (const r of rows) {
+    if (!r.material_id) continue;
+    subtotal += parseFloat(r.amount) || 0;
+    cgst += parseFloat(r.cgst_amount) || 0;
+    sgst += parseFloat(r.sgst_amount) || 0;
+    igst += parseFloat(r.igst_amount) || 0;
+  }
+  const grand = subtotal + cgst + sgst + igst;
+  return { subtotal, cgst, sgst, igst, grand };
+}
+
 export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates, units }: Props) {
   const { activeFY } = useFY();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Header state
-  const [supplierId, setSupplierId] = useState(po?.supplier_id ?? "");
   const [poDate, setPoDate] = useState(po ? toISODate(po.po_date) : toISODate(new Date()));
   const [rows, setRows] = useState<LineItemDraft[]>(po ? poItemsToRows(po) : [newRow()]);
 
-  // Receive confirmation dialog
   const [showReceiveDialog, setShowReceiveDialog] = useState(false);
 
   const isReadOnly = mode === "view";
   const isEditReceived = mode === "edit-received";
 
-  // Derived supplier info
-  const supplier = suppliers.find((s) => s.id === supplierId);
-  const gstType: GstType = determineGstType(supplier?.gstin, supplier?.state);
+  const { subtotal, cgst, sgst, igst, grand } = calcAllTotals(rows);
 
-  // When supplier changes: recalculate tax amounts for all existing rows
-  useEffect(() => {
-    if (rows.length === 0) return;
-    setRows((prev) =>
-      prev.map((r) => {
-        const q = parseFloat(r.qty) || 0;
-        const rate = parseFloat(r.rate) || 0;
-        const t = parseFloat(r.tax_percentage) || 0;
-        const amount = q * rate;
-        const roundTwo = (n: number) => Math.round(n * 100) / 100;
-        if (gstType === "CGST_SGST") {
-          const half = roundTwo((amount * (t / 100)) / 2);
-          return { ...r, amount: amount.toFixed(2), cgst_amount: half.toFixed(2), sgst_amount: half.toFixed(2), igst_amount: "0.00" };
-        } else {
-          const igst = roundTwo(amount * (t / 100));
-          return { ...r, amount: amount.toFixed(2), cgst_amount: "0.00", sgst_amount: "0.00", igst_amount: igst.toFixed(2) };
-        }
-      })
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gstType]);
-
-  const { subtotal, cgst, sgst, igst, grand } = calcTotals(rows, gstType);
-
-  // Validation
   function validate(): string | null {
-    if (!supplierId) return "Please select a supplier.";
     if (!poDate) return "Please enter a PO date.";
     const filledRows = rows.filter((r) => r.material_id);
     if (filledRows.length === 0) return "Add at least one material.";
+    const missingSupplier = filledRows.find((r) => !r.supplier_id);
+    if (missingSupplier) return `Select a supplier for ${missingSupplier.material_name}.`;
     const zeroQty = filledRows.find((r) => !r.qty || parseFloat(r.qty) <= 0);
     if (zeroQty) return `Quantity must be greater than 0 for ${zeroQty.material_name}.`;
-    const unconfirmedZeroRate = filledRows.find(
-      (r) => (r.rate === "0" || r.rate === "") && !r.zeroRateConfirmed && !r.rateBlank
-    );
-    if (unconfirmedZeroRate) return `Confirm zero rate for ${unconfirmedZeroRate.material_name}.`;
     return null;
   }
 
   function buildSubmitData() {
     const filledRows = rows.filter((r) => r.material_id);
     return {
-      supplier_id: supplierId,
       po_date: poDate,
       total_amount: grand.toFixed(2),
       items: filledRows.map((r) => ({
         material_id: r.material_id,
+        supplier_id: r.supplier_id || null,
         qty: r.qty,
         unit_id: r.unit_id,
         rate: r.rate || "0",
@@ -167,6 +148,7 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
         sgst_amount: r.sgst_amount,
         igst_amount: r.igst_amount,
         amount: r.amount,
+        gst_type: r.gst_type || null,
       })),
     };
   }
@@ -241,7 +223,6 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
 
   const poNumber = po?.po_number ?? nextPoNumber;
   const displayPONumber = poNumber ? formatCode("PO-", poNumber, 4) : "Pending";
-
   const filledRows = rows.filter((r) => r.material_id);
 
   return (
@@ -253,7 +234,7 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
         </Link>
         <span>/</span>
         <span className="text-slate-800 font-medium">
-          {mode === "new" ? "New PO" : mode === "view" ? `${displayPONumber} (View)` : `${displayPONumber}`}
+          {mode === "new" ? "New PO" : mode === "view" ? `${displayPONumber} (View)` : displayPONumber}
         </span>
       </div>
 
@@ -267,17 +248,15 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
         </div>
       )}
 
-      {/* Form + table scroll container */}
+      {/* Form scroll container */}
       <div className="flex-1 overflow-y-auto px-6 pb-40">
-        {/* Header card */}
+        {/* Header card — PO# / Date / FY only, no supplier at header level */}
         <div className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-4">
-            {/* PO Number */}
+          <div className="grid grid-cols-3 gap-x-8 gap-y-4">
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">PO Number</label>
               <p className="font-mono text-sm font-medium text-slate-700 py-1">{displayPONumber}</p>
             </div>
-            {/* PO Date */}
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">PO Date</label>
               {isReadOnly ? (
@@ -286,54 +265,9 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
                 <Input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} className="h-8 text-sm" />
               )}
             </div>
-            {/* Financial Year */}
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Financial Year</label>
               <p className="text-sm text-slate-700 py-1">{po?.financial_year ?? activeFY}</p>
-            </div>
-            {/* GST Type badge */}
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">GST Type</label>
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                gstType === "CGST_SGST"
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-blue-50 text-blue-700 border border-blue-200"
-              }`}>
-                {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {/* Supplier */}
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Supplier *</label>
-              {isReadOnly ? (
-                <p className="text-sm font-medium text-slate-800 py-1">{supplier?.name ?? po?.supplier_name}</p>
-              ) : (
-                <Combobox
-                  options={suppliers.map((s) => ({
-                    value: s.id,
-                    label: `${formatCode("S", s.code_no)} — ${s.name}`,
-                  }))}
-                  value={supplierId}
-                  onChange={setSupplierId}
-                  placeholder="Select supplier..."
-                  searchPlaceholder="Search suppliers..."
-                />
-              )}
-            </div>
-            {/* Supplier details (auto-filled) */}
-            <div className="space-y-1">
-              {supplier?.gstin && (
-                <p className="text-xs text-slate-500">GSTIN: <span className="font-mono text-slate-700">{supplier.gstin}</span></p>
-              )}
-              {supplier?.address && (
-                <p className="text-xs text-slate-500">Address: <span className="text-slate-700">{supplier.address}</span></p>
-              )}
-              {supplier?.state && (
-                <p className="text-xs text-slate-500">State: <span className="text-slate-700">{supplier.state}</span></p>
-              )}
             </div>
           </div>
         </div>
@@ -342,11 +276,12 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-100">
             <h2 className="text-sm font-medium text-slate-700">Line Items</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Each row has its own supplier — different materials can come from different suppliers.</p>
           </div>
           <TransactionGrid
             rows={rows}
             onChange={setRows}
-            gstType={gstType}
+            suppliers={suppliers}
             materials={materials}
             taxRates={taxRates}
             units={units}
@@ -357,29 +292,24 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
 
       {/* Sticky totals + action bar */}
       <div className="fixed bottom-0 left-56 right-0 bg-white border-t border-slate-200 shadow-lg z-30">
-        {/* Totals row */}
-        <div className="px-6 py-2.5 flex items-center gap-6 text-sm border-b border-slate-100">
+        {/* Totals row — always show all 3 tax columns */}
+        <div className="px-6 py-2.5 flex items-center gap-6 text-sm border-b border-slate-100 flex-wrap">
           <div>
             <span className="text-slate-500">Subtotal: </span>
             <span className="font-medium text-slate-800">{formatAmount(subtotal)}</span>
           </div>
-          {gstType === "CGST_SGST" ? (
-            <>
-              <div>
-                <span className="text-slate-500">CGST: </span>
-                <span className="font-medium text-slate-800">{formatAmount(cgst)}</span>
-              </div>
-              <div>
-                <span className="text-slate-500">SGST: </span>
-                <span className="font-medium text-slate-800">{formatAmount(sgst)}</span>
-              </div>
-            </>
-          ) : (
-            <div>
-              <span className="text-slate-500">IGST: </span>
-              <span className="font-medium text-slate-800">{formatAmount(igst)}</span>
-            </div>
-          )}
+          <div>
+            <span className="text-slate-500">CGST: </span>
+            <span className="font-medium text-slate-800">{formatAmount(cgst)}</span>
+          </div>
+          <div>
+            <span className="text-slate-500">SGST: </span>
+            <span className="font-medium text-slate-800">{formatAmount(sgst)}</span>
+          </div>
+          <div>
+            <span className="text-slate-500">IGST: </span>
+            <span className="font-medium text-slate-800">{formatAmount(igst)}</span>
+          </div>
           <div className="ml-auto">
             <span className="text-slate-600 font-medium">Grand Total: </span>
             <span className="text-lg font-bold text-slate-900">{formatAmount(grand)}</span>
@@ -389,9 +319,7 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
         {/* Action buttons */}
         <div className="px-6 py-3 flex items-center gap-3">
           <Link href="/transactions/purchase-orders">
-            <Button variant="outline">
-              {isReadOnly ? "Back" : "Cancel"}
-            </Button>
+            <Button variant="outline">{isReadOnly ? "Back" : "Cancel"}</Button>
           </Link>
 
           {mode === "view" && (
@@ -424,25 +352,19 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Mark {displayPONumber} as Received?</DialogTitle>
-            <DialogDescription>
-              This will add the following quantities to stock:
-            </DialogDescription>
+            <DialogDescription>This will add the following quantities to stock:</DialogDescription>
           </DialogHeader>
           <div className="max-h-48 overflow-y-auto space-y-1 py-2">
             {filledRows.map((r) => (
               <div key={r._key} className="flex justify-between text-sm py-0.5">
                 <span className="text-slate-700">{r.material_name}</span>
-                <span className="font-medium text-emerald-700">
-                  +{r.qty} {r.unit_name || ""}
-                </span>
+                <span className="font-medium text-emerald-700">+{r.qty} {r.unit_name || ""}</span>
               </div>
             ))}
           </div>
           <p className="text-xs text-slate-500">Stock changes are permanent and recorded in the Stock Ledger.</p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReceiveDialog(false)} disabled={isPending}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setShowReceiveDialog(false)} disabled={isPending}>Cancel</Button>
             <Button onClick={confirmReceive} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-700">
               {isPending ? "Processing…" : "Mark as Received"}
             </Button>

@@ -70,11 +70,7 @@ export interface PurchaseOrderWithDetails {
   id: string;
   po_number: number;
   po_date: Date | string;
-  supplier_id: string;
-  supplier_name: string;
-  supplier_gstin: string | null;
-  supplier_state: string | null;
-  supplier_address: string | null;
+  supplier_id: string | null;
   total_amount: string;
   status: string;
   financial_year: string;
@@ -90,6 +86,8 @@ export interface PurchaseOrderItemWithDetails {
   material_name: string;
   material_no: number;
   hsn_code: string | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
   qty: string;
   unit_id: string | null;
   unit_name: string | null;
@@ -99,6 +97,7 @@ export interface PurchaseOrderItemWithDetails {
   sgst_amount: string;
   igst_amount: string;
   amount: string;
+  gst_type: string | null;
 }
 
 // Client-only: unsaved row state in the TransactionGrid
@@ -106,7 +105,10 @@ export interface LineItemDraft {
   _key: string; // unique row key (uuid v4, client-only)
   material_id: string;
   material_name: string;
-  hsn_code: string;
+  material_no: number;
+  supplier_id: string;
+  supplier_name: string;
+  gst_type: string; // "CGST_SGST" | "IGST"
   qty: string;
   unit_id: string;
   unit_name: string;

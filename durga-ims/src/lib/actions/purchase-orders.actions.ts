@@ -10,42 +10,44 @@ import type { PurchaseOrderWithDetails, PurchaseOrderItemWithDetails } from "@/t
 const REVALIDATE_PATH = "/transactions/purchase-orders";
 
 // ---------------------------------------------------------------------------
-// READ — list
+// READ — list (one row per line item, expanded)
 // ---------------------------------------------------------------------------
 
 export async function getPurchaseOrders(financialYear: string) {
   const rows = await db
     .select({
+      // PO header
       id: purchaseOrders.id,
       po_number: purchaseOrders.po_number,
       po_date: purchaseOrders.po_date,
-      supplier_id: purchaseOrders.supplier_id,
-      supplier_name: suppliers.name,
-      total_amount: purchaseOrders.total_amount,
       status: purchaseOrders.status,
       financial_year: purchaseOrders.financial_year,
-      created_at: purchaseOrders.created_at,
-      updated_at: purchaseOrders.updated_at,
+      // line item
+      item_id: purchaseOrderItems.id,
+      material_id: purchaseOrderItems.material_id,
+      material_name: materials.name,
+      material_no: materials.material_no,
+      supplier_id: purchaseOrderItems.supplier_id,
+      supplier_name: suppliers.name,
+      qty: purchaseOrderItems.qty,
+      unit_name: units.unit_name,
+      rate: purchaseOrderItems.rate,
+      tax_percentage: purchaseOrderItems.tax_percentage,
+      cgst_amount: purchaseOrderItems.cgst_amount,
+      sgst_amount: purchaseOrderItems.sgst_amount,
+      igst_amount: purchaseOrderItems.igst_amount,
+      amount: purchaseOrderItems.amount,
+      gst_type: purchaseOrderItems.gst_type,
     })
     .from(purchaseOrders)
-    .innerJoin(suppliers, eq(purchaseOrders.supplier_id, suppliers.id))
+    .innerJoin(purchaseOrderItems, eq(purchaseOrderItems.po_id, purchaseOrders.id))
+    .innerJoin(materials, eq(purchaseOrderItems.material_id, materials.id))
+    .leftJoin(suppliers, eq(purchaseOrderItems.supplier_id, suppliers.id))
+    .leftJoin(units, eq(purchaseOrderItems.unit_id, units.id))
     .where(eq(purchaseOrders.financial_year, financialYear))
-    .orderBy(desc(purchaseOrders.po_number));
+    .orderBy(desc(purchaseOrders.po_date), desc(purchaseOrders.po_number));
 
-  // Fetch item counts per PO
-  const poIds = rows.map((r) => r.id);
-  const itemCounts: Record<string, number> = {};
-  if (poIds.length > 0) {
-    const counts = await db
-      .select({ po_id: purchaseOrderItems.po_id, id: purchaseOrderItems.id })
-      .from(purchaseOrderItems)
-      .where(inArray(purchaseOrderItems.po_id, poIds));
-    for (const c of counts) {
-      itemCounts[c.po_id] = (itemCounts[c.po_id] ?? 0) + 1;
-    }
-  }
-
-  return rows.map((r) => ({ ...r, item_count: itemCounts[r.id] ?? 0 }));
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,10 +61,6 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
       po_number: purchaseOrders.po_number,
       po_date: purchaseOrders.po_date,
       supplier_id: purchaseOrders.supplier_id,
-      supplier_name: suppliers.name,
-      supplier_gstin: suppliers.gstin,
-      supplier_state: suppliers.state,
-      supplier_address: suppliers.address,
       total_amount: purchaseOrders.total_amount,
       status: purchaseOrders.status,
       financial_year: purchaseOrders.financial_year,
@@ -70,7 +68,6 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
       updated_at: purchaseOrders.updated_at,
     })
     .from(purchaseOrders)
-    .innerJoin(suppliers, eq(purchaseOrders.supplier_id, suppliers.id))
     .where(eq(purchaseOrders.id, id));
 
   if (!po) return null;
@@ -83,6 +80,8 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
       material_name: materials.name,
       material_no: materials.material_no,
       hsn_code: materials.hsn_code,
+      supplier_id: purchaseOrderItems.supplier_id,
+      supplier_name: suppliers.name,
       qty: purchaseOrderItems.qty,
       unit_id: purchaseOrderItems.unit_id,
       unit_name: units.unit_name,
@@ -92,9 +91,11 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
       sgst_amount: purchaseOrderItems.sgst_amount,
       igst_amount: purchaseOrderItems.igst_amount,
       amount: purchaseOrderItems.amount,
+      gst_type: purchaseOrderItems.gst_type,
     })
     .from(purchaseOrderItems)
     .leftJoin(materials, eq(purchaseOrderItems.material_id, materials.id))
+    .leftJoin(suppliers, eq(purchaseOrderItems.supplier_id, suppliers.id))
     .leftJoin(units, eq(purchaseOrderItems.unit_id, units.id))
     .where(eq(purchaseOrderItems.po_id, id));
 
@@ -105,6 +106,8 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
     material_name: r.material_name ?? "",
     material_no: r.material_no ?? 0,
     hsn_code: r.hsn_code ?? null,
+    supplier_id: r.supplier_id ?? null,
+    supplier_name: r.supplier_name ?? null,
     qty: r.qty,
     unit_id: r.unit_id ?? null,
     unit_name: r.unit_name ?? null,
@@ -114,6 +117,7 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
     sgst_amount: r.sgst_amount,
     igst_amount: r.igst_amount,
     amount: r.amount,
+    gst_type: r.gst_type ?? null,
   }));
 
   return { ...po, items };
@@ -197,6 +201,7 @@ async function getNextPoNumber(financialYear: string): Promise<number> {
 
 interface LineItemInput {
   material_id: string;
+  supplier_id: string | null;
   qty: string;
   unit_id: string;
   rate: string;
@@ -205,14 +210,31 @@ interface LineItemInput {
   sgst_amount: string;
   igst_amount: string;
   amount: string;
+  gst_type: string | null;
 }
 
 interface POHeaderInput {
-  supplier_id: string;
   po_date: string;
   financial_year: string;
   total_amount: string;
   items: LineItemInput[];
+}
+
+function itemValues(poId: string, item: LineItemInput) {
+  return {
+    po_id: poId,
+    material_id: item.material_id,
+    supplier_id: item.supplier_id || null,
+    qty: item.qty,
+    unit_id: item.unit_id || null,
+    rate: item.rate,
+    tax_percentage: item.tax_percentage,
+    cgst_amount: item.cgst_amount,
+    sgst_amount: item.sgst_amount,
+    igst_amount: item.igst_amount,
+    amount: item.amount,
+    gst_type: item.gst_type || null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +249,7 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
     .values({
       po_number: poNumber,
       po_date: new Date(data.po_date),
-      supplier_id: data.supplier_id,
+      supplier_id: null,
       total_amount: data.total_amount,
       status: "Draft",
       financial_year: data.financial_year,
@@ -235,20 +257,7 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
     .returning({ id: purchaseOrders.id });
 
   if (data.items.length > 0) {
-    await db.insert(purchaseOrderItems).values(
-      data.items.map((item) => ({
-        po_id: po.id,
-        material_id: item.material_id,
-        qty: item.qty,
-        unit_id: item.unit_id || null,
-        rate: item.rate,
-        tax_percentage: item.tax_percentage,
-        cgst_amount: item.cgst_amount,
-        sgst_amount: item.sgst_amount,
-        igst_amount: item.igst_amount,
-        amount: item.amount,
-      }))
-    );
+    await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(po.id, item)));
   }
 
   revalidatePath(REVALIDATE_PATH);
@@ -263,7 +272,6 @@ export async function updatePurchaseOrder(id: string, data: Omit<POHeaderInput, 
   await db
     .update(purchaseOrders)
     .set({
-      supplier_id: data.supplier_id,
       po_date: new Date(data.po_date),
       total_amount: data.total_amount,
       updated_at: new Date(),
@@ -273,20 +281,7 @@ export async function updatePurchaseOrder(id: string, data: Omit<POHeaderInput, 
   await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.po_id, id));
 
   if (data.items.length > 0) {
-    await db.insert(purchaseOrderItems).values(
-      data.items.map((item) => ({
-        po_id: id,
-        material_id: item.material_id,
-        qty: item.qty,
-        unit_id: item.unit_id || null,
-        rate: item.rate,
-        tax_percentage: item.tax_percentage,
-        cgst_amount: item.cgst_amount,
-        sgst_amount: item.sgst_amount,
-        igst_amount: item.igst_amount,
-        amount: item.amount,
-      }))
-    );
+    await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item)));
   }
 
   revalidatePath(REVALIDATE_PATH);
@@ -386,11 +381,10 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
       });
     }
 
-    // Update header
+    // Update header date and total
     await tx
       .update(purchaseOrders)
       .set({
-        supplier_id: data.supplier_id,
         po_date: new Date(data.po_date),
         total_amount: data.total_amount,
         updated_at: new Date(),
@@ -401,20 +395,7 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
     await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.po_id, id));
 
     if (data.items.length > 0) {
-      await tx.insert(purchaseOrderItems).values(
-        data.items.map((item) => ({
-          po_id: id,
-          material_id: item.material_id,
-          qty: item.qty,
-          unit_id: item.unit_id || null,
-          rate: item.rate,
-          tax_percentage: item.tax_percentage,
-          cgst_amount: item.cgst_amount,
-          sgst_amount: item.sgst_amount,
-          igst_amount: item.igst_amount,
-          amount: item.amount,
-        }))
-      );
+      await tx.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item)));
     }
 
     // Apply new stock
@@ -472,7 +453,6 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
   const materialIds = items.map((i) => i.material_id);
 
   if (materialIds.length > 0) {
-    // Import here to avoid circular deps at module top
     const { materialIssueItems, materialIssues, vehicles } = await import("@/lib/db/schema");
 
     const issued = await db
@@ -530,4 +510,3 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
 
   revalidatePath(REVALIDATE_PATH);
 }
-

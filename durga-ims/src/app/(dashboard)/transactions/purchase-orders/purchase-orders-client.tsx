@@ -8,23 +8,36 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCode } from "@/lib/utils";
-import { Eye, Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
-type PORow = {
+type ItemRow = {
+  // PO header
   id: string;
   po_number: number;
   po_date: Date | string;
-  supplier_name: string;
-  total_amount: string;
   status: string;
-  item_count: number;
+  // line item
+  item_id: string | null;
+  material_id: string | null;
+  material_name: string | null;
+  material_no: number | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  qty: string | null;
+  unit_name: string | null;
+  rate: string | null;
+  cgst_amount: string | null;
+  sgst_amount: string | null;
+  igst_amount: string | null;
+  amount: string | null;
+  gst_type: string | null;
 };
 
 type StatusFilter = "All" | "Draft" | "Received";
 
 interface Props {
-  initialOrders: PORow[];
+  initialRows: ItemRow[];
   initialFY: string;
 }
 
@@ -33,17 +46,29 @@ function formatDate(d: Date | string): string {
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function formatAmount(amt: string): string {
+function formatAmount(amt: string | null): string {
+  if (!amt) return "—";
   return "₹" + parseFloat(amt).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function PurchaseOrdersClient({ initialOrders, initialFY }: Props) {
+function taxDisplay(row: ItemRow): string {
+  const igst = parseFloat(row.igst_amount ?? "0");
+  const cgst = parseFloat(row.cgst_amount ?? "0");
+  const sgst = parseFloat(row.sgst_amount ?? "0");
+  if (igst > 0) return formatAmount(row.igst_amount);
+  if (cgst > 0 || sgst > 0) return formatAmount(String(cgst + sgst));
+  return "—";
+}
+
+export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
   const { activeFY } = useFY();
-  const [orders, setOrders] = useState<PORow[]>(initialOrders);
+  const [rows, setRows] = useState<ItemRow[]>(initialRows);
   const [loadedFY, setLoadedFY] = useState(initialFY);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [deletingPoId, setDeletingPoId] = useState<string | null>(null);
   const [deletingStatus, setDeletingStatus] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const [isFetching, setIsFetching] = useState(false);
@@ -52,52 +77,69 @@ export function PurchaseOrdersClient({ initialOrders, initialFY }: Props) {
   useEffect(() => {
     if (activeFY === loadedFY) return;
     setIsFetching(true);
-    getPurchaseOrders(activeFY).then((rows) => {
-      setOrders(rows as PORow[]);
+    getPurchaseOrders(activeFY).then((data) => {
+      setRows(data as ItemRow[]);
       setLoadedFY(activeFY);
       setIsFetching(false);
     });
   }, [activeFY, loadedFY]);
 
-  const visible = orders.filter((o) => {
-    if (statusFilter !== "All" && o.status !== statusFilter) return false;
+  const visible = rows.filter((r) => {
+    if (statusFilter !== "All" && r.status !== statusFilter) return false;
+
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      const rowDate = typeof r.po_date === "string" ? new Date(r.po_date) : r.po_date;
+      if (rowDate < from) return false;
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
+      const rowDate = typeof r.po_date === "string" ? new Date(r.po_date) : r.po_date;
+      if (rowDate > to) return false;
+    }
+
     const q = search.toLowerCase();
     if (!q) return true;
     return (
-      o.supplier_name.toLowerCase().includes(q) ||
-      formatCode("PO-", o.po_number, 4).toLowerCase().includes(q) ||
-      String(o.po_number).includes(q)
+      (r.supplier_name ?? "").toLowerCase().includes(q) ||
+      (r.material_name ?? "").toLowerCase().includes(q) ||
+      formatCode("PO-", r.po_number, 4).toLowerCase().includes(q) ||
+      String(r.po_number).includes(q) ||
+      (r.material_no ? formatCode("M", r.material_no).toLowerCase().includes(q) : false) ||
+      (r.material_no ? String(r.material_no).includes(q) : false)
     );
   });
 
-  function handleDeleteClick(o: PORow) {
-    setDeletingId(o.id);
-    setDeletingStatus(o.status);
+  // Unique PO IDs present in the full rows list (for status tab counts)
+  const uniquePOs = new Map<string, string>();
+  for (const r of rows) uniquePOs.set(r.id, r.status);
+  const poArray = Array.from(uniquePOs.values());
+  const tabCounts: Record<StatusFilter, number> = {
+    All: uniquePOs.size,
+    Draft: poArray.filter((s) => s === "Draft").length,
+    Received: poArray.filter((s) => s === "Received").length,
+  };
+
+  function handleDeleteClick(r: ItemRow) {
+    setDeletingPoId(r.id);
+    setDeletingStatus(r.status);
   }
 
   function confirmDelete() {
-    if (!deletingId) return;
+    if (!deletingPoId) return;
     startTransition(async () => {
       try {
-        await deletePurchaseOrder(deletingId);
-        setOrders((prev) => prev.filter((o) => o.id !== deletingId));
+        await deletePurchaseOrder(deletingPoId);
+        setRows((prev) => prev.filter((r) => r.id !== deletingPoId));
         toast.success("Purchase order deleted");
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Delete failed");
       } finally {
-        setDeletingId(null);
+        setDeletingPoId(null);
       }
     });
   }
-
-  const tabs: StatusFilter[] = ["All", "Draft", "Received"];
-  const draftCount = orders.filter((o) => o.status === "Draft").length;
-  const receivedCount = orders.filter((o) => o.status === "Received").length;
-  const tabCounts: Record<StatusFilter, number> = {
-    All: orders.length,
-    Draft: draftCount,
-    Received: receivedCount,
-  };
 
   const deleteTitle = deletingStatus === "Received"
     ? "Delete received purchase order?"
@@ -105,6 +147,8 @@ export function PurchaseOrdersClient({ initialOrders, initialFY }: Props) {
   const deleteDescription = deletingStatus === "Received"
     ? "This will permanently delete the PO and reverse all stock additions. This cannot be undone."
     : "This draft PO will be permanently deleted. No stock was added.";
+
+  const tabs: StatusFilter[] = ["All", "Draft", "Received"];
 
   return (
     <div className="p-6 h-full flex flex-col gap-4">
@@ -144,8 +188,33 @@ export function PurchaseOrdersClient({ initialOrders, initialFY }: Props) {
               </button>
             ))}
           </div>
+          {/* Date range */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">From</span>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-36 text-xs"
+            />
+            <span className="text-xs text-slate-500">To</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-36 text-xs"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <Input
-            placeholder="Search by PO number, supplier..."
+            placeholder="Search supplier, material, M001, PO#..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-xs"
@@ -158,53 +227,74 @@ export function PurchaseOrdersClient({ initialOrders, initialFY }: Props) {
           <table className="min-w-max text-sm w-full">
             <thead className="bg-slate-50 sticky top-0 z-10">
               <tr>
-                {["S.No", "PO Number", "Date", "Supplier", "Items", "Amount", "Status", "Actions"].map((h) => (
-                  <th key={h} className={`px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap ${h === "Amount" ? "text-right" : ""}`}>{h}</th>
+                {[
+                  { label: "S.No", align: "" },
+                  { label: "Date", align: "" },
+                  { label: "PO#", align: "" },
+                  { label: "Mat. Code", align: "" },
+                  { label: "Material Name", align: "" },
+                  { label: "Supplier", align: "" },
+                  { label: "Qty", align: "" },
+                  { label: "Unit", align: "" },
+                  { label: "Rate", align: "text-right" },
+                  { label: "Tax", align: "text-right" },
+                  { label: "Amount", align: "text-right" },
+                  { label: "Status", align: "" },
+                  { label: "Actions", align: "" },
+                ].map((h) => (
+                  <th
+                    key={h.label}
+                    className={`px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap ${h.align}`}
+                  >
+                    {h.label}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
-                    {orders.length === 0 ? "No purchase orders yet. Create your first PO." : "No orders match your search."}
+                  <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
+                    {rows.length === 0 ? "No purchase orders yet. Create your first PO." : "No entries match your filters."}
                   </td>
                 </tr>
               )}
-              {visible.map((o, i) => (
-                <tr key={o.id} className="border-t border-slate-100 hover:bg-slate-50">
+              {visible.map((r, i) => (
+                <tr key={r.item_id ?? r.id + i} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{i + 1}</td>
+                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(r.po_date)}</td>
                   <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-800 whitespace-nowrap">
-                    {formatCode("PO-", o.po_number, 4)}
+                    {formatCode("PO-", r.po_number, 4)}
                   </td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(o.po_date)}</td>
-                  <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap">{o.supplier_name}</td>
-                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{o.item_count} item{o.item_count !== 1 ? "s" : ""}</td>
-                  <td className="px-4 py-2.5 text-slate-800 font-medium whitespace-nowrap text-right">{formatAmount(o.total_amount)}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-700 whitespace-nowrap">
+                    {r.material_no ? formatCode("M", r.material_no) : "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap">{r.material_name ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{r.supplier_name ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{r.qty ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{r.unit_name ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap text-right">
+                    {r.rate ? "₹" + parseFloat(r.rate).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap text-right">{taxDisplay(r)}</td>
+                  <td className="px-4 py-2.5 text-slate-800 font-medium whitespace-nowrap text-right">{formatAmount(r.amount)}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      o.status === "Received"
+                      r.status === "Received"
                         ? "bg-emerald-50 text-emerald-700"
                         : "bg-slate-100 text-slate-600"
                     }`}>
-                      {o.status}
+                      {r.status}
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex gap-1">
-                      {o.status === "Received" && (
-                        <Link href={`/transactions/purchase-orders/${o.id}/view`}>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-600 hover:bg-slate-100" title="View">
-                            <Eye className="w-3.5 h-3.5" />
-                          </Button>
-                        </Link>
-                      )}
-                      <Link href={`/transactions/purchase-orders/${o.id}/edit`}>
+                      <Link href={`/transactions/purchase-orders/${r.id}/edit`}>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-7 w-7 ${o.status === "Received" ? "text-amber-600 hover:bg-amber-50" : "text-slate-600 hover:bg-slate-100"}`}
-                          title={o.status === "Received" ? "Edit (will reverse & reapply stock)" : "Edit"}
+                          className={`h-7 w-7 ${r.status === "Received" ? "text-amber-600 hover:bg-amber-50" : "text-slate-600 hover:bg-slate-100"}`}
+                          title={r.status === "Received" ? "Edit (will reverse & reapply stock)" : "Edit"}
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
@@ -213,8 +303,8 @@ export function PurchaseOrdersClient({ initialOrders, initialFY }: Props) {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-red-500 hover:bg-red-50"
-                        title="Delete"
-                        onClick={() => handleDeleteClick(o)}
+                        title="Delete entire PO"
+                        onClick={() => handleDeleteClick(r)}
                         disabled={isPending}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -229,8 +319,8 @@ export function PurchaseOrdersClient({ initialOrders, initialFY }: Props) {
       </div>
 
       <ConfirmDialog
-        open={deletingId !== null}
-        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        open={deletingPoId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingPoId(null); }}
         title={deleteTitle}
         description={deleteDescription}
         confirmLabel="Delete"
