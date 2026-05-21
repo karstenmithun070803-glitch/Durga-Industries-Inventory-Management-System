@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { units } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { units, materials } from "@/lib/db/schema";
+import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getUnits() {
@@ -26,6 +26,21 @@ export async function updateUnit(id: string, name: string) {
 }
 
 export async function deleteUnit(id: string) {
+  const inUse = await db
+    .select({ id: materials.id })
+    .from(materials)
+    .where(
+      or(eq(materials.purchase_unit_id, id), eq(materials.sales_unit_id, id))
+    )
+    .limit(1);
+
+  if (inUse.length > 0) {
+    const [unit] = await db.select({ unit_name: units.unit_name }).from(units).where(eq(units.id, id));
+    throw new Error(
+      `Cannot deactivate unit "${unit?.unit_name}": it is assigned to one or more materials. Reassign those materials first.`
+    );
+  }
+
   await db.update(units).set({ is_active: false }).where(eq(units.id, id));
   revalidatePath("/masters/units");
 }

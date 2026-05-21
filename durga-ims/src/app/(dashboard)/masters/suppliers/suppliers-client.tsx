@@ -15,6 +15,15 @@ import { toast } from "sonner";
 
 const EMPTY = { name: "", tin_no: "", cst_no: "", gstin: "", address: "", state: "" };
 
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
+
+function handleGstinBlur(value: string) {
+  const trimmed = value.trim().toUpperCase();
+  if (trimmed && !GSTIN_REGEX.test(trimmed)) {
+    toast.warning("GSTIN format looks incorrect. Expected: 2 digits + 5 letters + 4 digits + 1 letter + 1 alphanumeric + Z + 1 alphanumeric (e.g. 33AAAAA1234A1Z5)");
+  }
+}
+
 export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -72,7 +81,6 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
               { label: "Supplier Name *", key: "name", placeholder: "Company name" },
               { label: "TIN No", key: "tin_no", placeholder: "Legacy TIN number" },
               { label: "CST No", key: "cst_no", placeholder: "Legacy CST number" },
-              { label: "GSTIN", key: "gstin", placeholder: "15-character GSTIN" },
               { label: "Address", key: "address", placeholder: "Full address" },
             ].map(({ label, key, placeholder }) => (
               <div key={key} className="space-y-1.5">
@@ -80,6 +88,16 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                 <Input placeholder={placeholder} value={form[key as keyof typeof form]} onChange={(e) => set(key, e.target.value)} />
               </div>
             ))}
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">GSTIN</label>
+              <Input
+                placeholder="e.g. 33AAAAA1234A1Z5"
+                value={form.gstin}
+                onChange={(e) => set("gstin", e.target.value)}
+                onBlur={(e) => handleGstinBlur(e.target.value)}
+                maxLength={15}
+              />
+            </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">State</label>
               <Combobox options={INDIAN_STATES.map((s) => ({ value: s, label: s }))} value={form.state} onChange={(v) => set("state", v)} placeholder="Select state..." searchPlaceholder="Search states..." />

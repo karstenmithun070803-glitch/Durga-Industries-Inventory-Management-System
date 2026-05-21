@@ -25,6 +25,7 @@ export async function createMaterial(data: {
   max_level?: string;
 }) {
   if (!data.name.trim()) throw new Error("Material name is required");
+  if (!data.purchase_unit_id) throw new Error("Purchase unit is required.");
   await db.insert(materials).values({
     name: data.name.trim().toUpperCase(),
     hsn_code: data.hsn_code?.trim() || null,
@@ -50,6 +51,8 @@ export async function updateMaterial(id: string, data: {
   min_level?: string;
   max_level?: string;
 }) {
+  if (!data.name.trim()) throw new Error("Material name is required");
+  if (!data.purchase_unit_id) throw new Error("Purchase unit is required.");
   await db.update(materials).set({
     name: data.name.trim().toUpperCase(),
     hsn_code: data.hsn_code?.trim() || null,
@@ -64,6 +67,17 @@ export async function updateMaterial(id: string, data: {
 }
 
 export async function deleteMaterial(id: string) {
+  const [mat] = await db
+    .select({ name: materials.name, current_stock: materials.current_stock })
+    .from(materials)
+    .where(eq(materials.id, id));
+
+  if (mat && parseFloat(mat.current_stock) > 0) {
+    throw new Error(
+      `Cannot deactivate "${mat.name}": current stock is ${parseFloat(mat.current_stock).toFixed(2)}. Bring stock to zero before deactivating.`
+    );
+  }
+
   await db.update(materials).set({ is_active: false }).where(eq(materials.id, id));
   revalidatePath("/masters/materials");
 }

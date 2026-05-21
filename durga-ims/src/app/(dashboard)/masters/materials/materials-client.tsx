@@ -90,7 +90,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Purchase Unit</label>
+              <label className="text-xs text-slate-500">Purchase Unit *</label>
               <Combobox
                 options={activeUnits.map((u) => ({ value: u.id, label: `${formatCode("U", u.unit_code, 2)} — ${u.unit_name}` }))}
                 value={form.purchase_unit_id}

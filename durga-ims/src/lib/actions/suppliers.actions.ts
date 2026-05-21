@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { suppliers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { suppliers, purchaseOrderItems, purchaseOrders } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getSuppliers() {
@@ -53,6 +53,20 @@ export async function updateSupplier(id: string, data: {
 }
 
 export async function deleteSupplier(id: string) {
+  const draftPO = await db
+    .select({ po_number: purchaseOrders.po_number })
+    .from(purchaseOrderItems)
+    .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
+    .where(and(eq(purchaseOrderItems.supplier_id, id), eq(purchaseOrders.status, "Draft")))
+    .limit(1);
+
+  if (draftPO.length > 0) {
+    const [sup] = await db.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, id));
+    throw new Error(
+      `Cannot deactivate "${sup?.name}": they are referenced in Draft PO-${String(draftPO[0].po_number).padStart(4, "0")}. Complete or delete that PO first.`
+    );
+  }
+
   await db.update(suppliers).set({ is_active: false }).where(eq(suppliers.id, id));
   revalidatePath("/masters/suppliers");
 }
