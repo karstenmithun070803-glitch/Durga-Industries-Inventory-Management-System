@@ -1,0 +1,27 @@
+"use server";
+
+import { db } from "@/lib/db";
+import { units } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+
+export async function getUnits() {
+  return db.select().from(units).where(eq(units.is_active, true)).orderBy(units.unit_code);
+}
+
+export async function createUnit(name: string) {
+  if (!name.trim()) throw new Error("Unit name is required");
+  await db.insert(units).values({ unit_name: name.trim().toUpperCase() });
+  revalidatePath("/masters/units");
+}
+
+export async function updateUnit(id: string, name: string) {
+  if (!name.trim()) throw new Error("Unit name is required");
+  await db.update(units).set({ unit_name: name.trim().toUpperCase() }).where(eq(units.id, id));
+  revalidatePath("/masters/units");
+}
+
+export async function deleteUnit(id: string) {
+  await db.update(units).set({ is_active: false }).where(eq(units.id, id));
+  revalidatePath("/masters/units");
+}
