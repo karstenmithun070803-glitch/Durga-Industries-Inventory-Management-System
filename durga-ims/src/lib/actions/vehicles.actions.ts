@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { vehicles, customers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { vehicles, customers, materialIssues } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 const vehicleSelect = {
@@ -62,6 +62,18 @@ export async function updateVehicle(id: string, data: {
 }
 
 export async function deleteVehicle(id: string) {
+  // Guard: block if referenced in any Draft issue slip
+  const [veh] = await db.select({ vehicle_name: vehicles.vehicle_name }).from(vehicles).where(eq(vehicles.id, id));
+  const inUse = await db
+    .select({ slip_number: materialIssues.slip_number })
+    .from(materialIssues)
+    .where(and(eq(materialIssues.vehicle_id, id), eq(materialIssues.status, "Draft")))
+    .limit(1);
+  if (inUse.length > 0)
+    throw new Error(
+      `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": referenced in a Draft issue slip. Complete or delete that slip first.`
+    );
+
   await db.update(vehicles).set({ is_active: false }).where(eq(vehicles.id, id));
   revalidatePath("/masters/vehicles");
 }

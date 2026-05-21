@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ interface MaterialOption {
   hsn_code: string | null;
   tax_rate_id: string | null;
   purchase_unit_id: string | null;
+  sales_unit_id?: string | null;
   current_stock: string;
 }
 
@@ -40,6 +41,13 @@ interface UnitOption {
   unit_name: string;
 }
 
+interface ContractorOption {
+  id: string;
+  code_no: number;
+  name: string;
+  role: string | null;
+}
+
 interface Props {
   rows: LineItemDraft[];
   onChange: (rows: LineItemDraft[]) => void;
@@ -48,6 +56,10 @@ interface Props {
   taxRates: TaxRateOption[];
   units: UnitOption[];
   readOnly?: boolean;
+  // Material issue mode props
+  mode?: "purchase-order" | "material-issue";
+  contractors?: ContractorOption[];
+  gstType?: string; // header-level GST type (all rows share it in material-issue mode)
 }
 
 export function newRow(): LineItemDraft {
@@ -56,6 +68,7 @@ export function newRow(): LineItemDraft {
     material_id: "",
     material_name: "",
     material_no: 0,
+    hsn_code: "",
     supplier_id: "",
     supplier_name: "",
     gst_type: "IGST",
@@ -70,6 +83,9 @@ export function newRow(): LineItemDraft {
     amount: "0",
     rateBlank: false,
     zeroRateConfirmed: false,
+    contractor_id: "",
+    contractor_name: "",
+    affects_inventory: true,
   };
 }
 
@@ -104,8 +120,37 @@ function calcAmountsForRow(
   }
 }
 
-export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates, units, readOnly = false }: Props) {
+export function TransactionGrid({
+  rows,
+  onChange,
+  suppliers,
+  materials,
+  taxRates,
+  units,
+  readOnly = false,
+  mode = "purchase-order",
+  contractors = [],
+  gstType,
+}: Props) {
   const gridRef = useRef<HTMLTableElement>(null);
+  const isIssueMode = mode === "material-issue";
+
+  // In material-issue mode, gstType is header-level (same for all rows)
+  const effectiveGstType = isIssueMode ? (gstType ?? "CGST_SGST") : undefined;
+
+  // Recalculate all rows when header-level gstType changes (issue mode only)
+  const prevGstTypeRef = useRef(effectiveGstType);
+  useEffect(() => {
+    if (!isIssueMode || !effectiveGstType) return;
+    if (effectiveGstType === prevGstTypeRef.current) return;
+    prevGstTypeRef.current = effectiveGstType;
+    const recalculated = rows.map((r) => {
+      const amounts = calcAmountsForRow(r.qty, r.rate, r.tax_percentage, effectiveGstType);
+      return { ...r, gst_type: effectiveGstType, ...amounts };
+    });
+    onChange(recalculated);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveGstType]); // intentionally excludes rows/onChange to prevent loop
 
   const update = useCallback(
     (key: string, patch: Partial<LineItemDraft>) => {
@@ -113,23 +158,32 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
         rows.map((r) => {
           if (r._key !== key) return r;
           const updated = { ...r, ...patch };
-          // Recalculate amounts whenever qty, rate, tax, or gst_type changes
-          const amounts = calcAmountsForRow(updated.qty, updated.rate, updated.tax_percentage, updated.gst_type);
-          return { ...updated, ...amounts };
+          const gstForCalc = effectiveGstType ?? updated.gst_type;
+          const amounts = calcAmountsForRow(updated.qty, updated.rate, updated.tax_percentage, gstForCalc);
+          return { ...updated, gst_type: gstForCalc, ...amounts };
         })
       );
     },
-    [rows, onChange]
+    [rows, onChange, effectiveGstType]
   );
 
   async function handleMaterialSelect(key: string, materialId: string) {
     const mat = materials.find((m) => m.id === materialId);
     if (!mat) return;
 
-    const existing = rows.find((r) => r._key !== key && r.material_id === materialId);
-    if (existing) toast.warning(`${mat.name} is already in this PO`);
+    // In PO mode warn on duplicate; in issue mode server validates (contractor+rate combo)
+    if (!isIssueMode) {
+      const existing = rows.find((r) => r._key !== key && r.material_id === materialId);
+      if (existing) toast.warning(`${mat.name} is already in this PO`);
+    }
 
-    const unit = mat.purchase_unit_id ? units.find((u) => u.id === mat.purchase_unit_id) : null;
+    // Issue mode: prefer sales unit → fallback purchase unit → amber warning
+    // PO mode: always use purchase unit
+    const preferredUnitId = isIssueMode
+      ? (mat.sales_unit_id ?? mat.purchase_unit_id)
+      : mat.purchase_unit_id;
+
+    const unit = preferredUnitId ? units.find((u) => u.id === preferredUnitId) : null;
     const taxRate = mat.tax_rate_id ? taxRates.find((t) => t.id === mat.tax_rate_id) : null;
     const taxPct = taxRate?.tax_percentage ?? "0";
 
@@ -140,12 +194,15 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
       material_id: materialId,
       material_name: mat.name,
       material_no: mat.material_no,
-      unit_id: mat.purchase_unit_id ?? "",
+      hsn_code: mat.hsn_code ?? "",
+      unit_id: preferredUnitId ?? "",
       unit_name: unit?.unit_name ?? "",
       tax_percentage: taxPct,
       rate: lastRate ?? "",
       rateBlank,
       zeroRateConfirmed: false,
+      // In issue mode, apply header gstType; in PO mode gst_type set by supplier select
+      ...(isIssueMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
     });
   }
 
@@ -157,6 +214,19 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
       supplier_id: supplierId,
       supplier_name: sup.name,
       gst_type: gstType,
+    });
+  }
+
+  function handleContractorSelect(key: string, contractorId: string) {
+    if (!contractorId) {
+      update(key, { contractor_id: "", contractor_name: "" });
+      return;
+    }
+    const con = contractors.find((c) => c.id === contractorId);
+    if (!con) return;
+    update(key, {
+      contractor_id: contractorId,
+      contractor_name: con.name,
     });
   }
 
@@ -187,7 +257,19 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
     label: `${formatCode("S", s.code_no)} — ${s.name}`,
   }));
 
-  const fmt2 = (v: string) => parseFloat(v || "0").toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const contractorOptions = [
+    { value: "", label: "None" },
+    ...contractors.map((c) => ({
+      value: c.id,
+      label: `${formatCode("CON", c.code_no, 2)} — ${c.name}`,
+    })),
+  ];
+
+  const fmt2 = (v: string) =>
+    parseFloat(v || "0").toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   return (
     <div className="overflow-auto">
@@ -197,7 +279,22 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-10">S.No</th>
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Mat. Code</th>
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-56">Material Name</th>
-            <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-48">Supplier</th>
+
+            {/* Supplier column — PO mode only */}
+            {!isIssueMode && (
+              <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-48">Supplier</th>
+            )}
+
+            {/* Contractor column — issue mode only */}
+            {isIssueMode && (
+              <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-44">Contractor</th>
+            )}
+
+            {/* Affects Stock column — issue mode only */}
+            {isIssueMode && (
+              <th className="px-3 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap w-24">Affects Stock</th>
+            )}
+
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">Qty</th>
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Unit</th>
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">Rate</th>
@@ -238,20 +335,65 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
                   )}
                 </td>
 
-                {/* Supplier combobox */}
-                <td className="px-3 py-1.5">
-                  {readOnly ? (
-                    <span className="text-slate-600">{row.supplier_name || "—"}</span>
-                  ) : (
-                    <Combobox
-                      options={supplierOptions}
-                      value={row.supplier_id}
-                      onChange={(v) => handleSupplierSelect(row._key, v)}
-                      placeholder="Select supplier..."
-                      searchPlaceholder="Search suppliers..."
-                    />
-                  )}
-                </td>
+                {/* Supplier combobox — PO mode only */}
+                {!isIssueMode && (
+                  <td className="px-3 py-1.5">
+                    {readOnly ? (
+                      <span className="text-slate-600">{row.supplier_name || "—"}</span>
+                    ) : (
+                      <Combobox
+                        options={supplierOptions}
+                        value={row.supplier_id}
+                        onChange={(v) => handleSupplierSelect(row._key, v)}
+                        placeholder="Select supplier..."
+                        searchPlaceholder="Search suppliers..."
+                      />
+                    )}
+                  </td>
+                )}
+
+                {/* Contractor combobox — issue mode only (optional, nullable) */}
+                {isIssueMode && (
+                  <td className="px-3 py-1.5">
+                    {readOnly ? (
+                      <span className="text-slate-600">{row.contractor_name || "—"}</span>
+                    ) : (
+                      <Combobox
+                        options={contractorOptions}
+                        value={row.contractor_id}
+                        onChange={(v) => handleContractorSelect(row._key, v)}
+                        placeholder="None"
+                        searchPlaceholder="Search contractors..."
+                      />
+                    )}
+                  </td>
+                )}
+
+                {/* Affects Stock checkbox — issue mode only */}
+                {isIssueMode && (
+                  <td className="px-3 py-1.5 text-center">
+                    {readOnly ? (
+                      <span
+                        className={`inline-block w-4 h-4 rounded-sm border ${
+                          row.affects_inventory
+                            ? "bg-emerald-500 border-emerald-600"
+                            : "bg-slate-100 border-slate-300"
+                        }`}
+                        title={row.affects_inventory ? "Affects stock" : "Does not affect stock"}
+                      />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={row.affects_inventory}
+                        onChange={(e) =>
+                          update(row._key, { affects_inventory: e.target.checked })
+                        }
+                        className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                        title="Uncheck if this item should not reduce warehouse stock"
+                      />
+                    )}
+                  </td>
+                )}
 
                 {/* Qty */}
                 <td className="px-3 py-1.5">
@@ -260,7 +402,11 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
                   ) : (
                     <Input
                       type="number"
-                      className={`w-20 h-8 text-sm ${!row.qty || parseFloat(row.qty) <= 0 ? "border-red-300 focus-visible:ring-red-400" : ""}`}
+                      className={`w-20 h-8 text-sm ${
+                        !row.qty || parseFloat(row.qty) <= 0
+                          ? "border-red-300 focus-visible:ring-red-400"
+                          : ""
+                      }`}
                       value={row.qty}
                       onChange={(e) => update(row._key, { qty: e.target.value })}
                       onKeyDown={(e) => handleTabOnLastCell(e, isLastRow)}
@@ -273,8 +419,15 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
                 {/* Unit — read-only, auto-filled */}
                 <td className="px-3 py-1.5 whitespace-nowrap">
                   {row.material_id && !row.unit_name ? (
-                    <span className="text-xs text-amber-600" title="No purchase unit set — edit in Materials master">
-                      Not set
+                    <span
+                      className="text-xs text-amber-600"
+                      title={
+                        isIssueMode
+                          ? "No sales or purchase unit set — edit in Materials master"
+                          : "No purchase unit set — edit in Materials master"
+                      }
+                    >
+                      ⚠ Not set
                     </span>
                   ) : (
                     <span className="text-slate-600">{row.unit_name || "—"}</span>
@@ -289,20 +442,29 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
                     <div className="space-y-0.5">
                       <Input
                         type="number"
-                        className={`w-24 h-8 text-sm ${row.rateBlank ? "bg-yellow-50 border-yellow-300" : ""} ${showZeroWarning ? "border-amber-400" : ""}`}
+                        className={`w-24 h-8 text-sm ${row.rateBlank ? "bg-yellow-50 border-yellow-300" : ""} ${
+                          showZeroWarning ? "border-amber-400" : ""
+                        }`}
                         value={row.rate}
-                        onChange={(e) => update(row._key, { rate: e.target.value, rateBlank: false })}
+                        onChange={(e) =>
+                          update(row._key, { rate: e.target.value, rateBlank: false })
+                        }
                         min="0"
                         step="any"
                         placeholder={row.rateBlank ? "No history" : ""}
                         title={row.rateBlank ? "No purchase history — enter rate manually" : ""}
                       />
+                      {row.rateBlank && (
+                        <p className="text-xs text-amber-600 whitespace-nowrap">First purchase — enter rate</p>
+                      )}
                       {showZeroWarning && (
                         <label className="flex items-center gap-1 text-xs text-amber-700 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={row.zeroRateConfirmed}
-                            onChange={(e) => update(row._key, { zeroRateConfirmed: e.target.checked })}
+                            onChange={(e) =>
+                              update(row._key, { zeroRateConfirmed: e.target.checked })
+                            }
                             className="w-3 h-3"
                           />
                           Zero cost — confirm?
@@ -330,14 +492,22 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
                 </td>
 
                 {/* CGST — always shown */}
-                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">{fmt2(row.cgst_amount)}</td>
+                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
+                  {fmt2(row.cgst_amount)}
+                </td>
                 {/* SGST — always shown */}
-                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">{fmt2(row.sgst_amount)}</td>
+                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
+                  {fmt2(row.sgst_amount)}
+                </td>
                 {/* IGST — always shown */}
-                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">{fmt2(row.igst_amount)}</td>
+                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
+                  {fmt2(row.igst_amount)}
+                </td>
 
                 {/* Amount */}
-                <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">{fmt2(row.amount)}</td>
+                <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">
+                  {fmt2(row.amount)}
+                </td>
 
                 {!readOnly && (
                   <td className="px-3 py-1.5">
@@ -377,7 +547,10 @@ export function TransactionGrid({ rows, onChange, suppliers, materials, taxRates
 
 // Exported for compatibility — per-row totals helper
 export function calcRowTotals(rows: LineItemDraft[]) {
-  let subtotal = 0, cgst = 0, sgst = 0, igst = 0;
+  let subtotal = 0,
+    cgst = 0,
+    sgst = 0,
+    igst = 0;
   for (const r of rows) {
     if (!r.material_id) continue;
     subtotal += parseFloat(r.amount) || 0;

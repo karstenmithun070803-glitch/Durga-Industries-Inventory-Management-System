@@ -190,6 +190,8 @@ export const materialIssues = pgTable("material_issues", {
   margin_percentage: numeric("margin_percentage", { precision: 5, scale: 2 }).default("0"),
   total_amount: numeric("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   financial_year: text("financial_year").notNull(),
+  // 'Draft' = editable, 'Issued' = triggers stock deduction
+  status: text("status").notNull().default("Draft"),
   ...timestamps,
 }, (t) => [
   unique("slip_number_fy_unique").on(t.slip_number, t.financial_year),
@@ -216,6 +218,8 @@ export const materialIssueItems = pgTable("material_issue_items", {
   contractor_id: uuid("contractor_id").references(() => contractors.id),
   // FALSE = pass-through / service item — no stock movement on save
   affects_inventory: boolean("affects_inventory").notNull().default(true),
+  // frozen at save time — "CGST_SGST" | "IGST"
+  gst_type: text("gst_type"),
   ...timestamps,
 });
 

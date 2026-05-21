@@ -37,6 +37,7 @@ interface MaterialOption {
   hsn_code: string | null;
   tax_rate_id: string | null;
   purchase_unit_id: string | null;
+  sales_unit_id?: string | null;
   current_stock: string;
 }
 
@@ -72,6 +73,7 @@ function poItemsToRows(po: PurchaseOrderWithDetails): LineItemDraft[] {
     material_id: item.material_id,
     material_name: item.material_name,
     material_no: item.material_no ?? 0,
+    hsn_code: item.hsn_code ?? "",
     supplier_id: item.supplier_id ?? "",
     supplier_name: item.supplier_name ?? "",
     gst_type: item.gst_type ?? "IGST",
@@ -86,6 +88,9 @@ function poItemsToRows(po: PurchaseOrderWithDetails): LineItemDraft[] {
     amount: item.amount,
     rateBlank: false,
     zeroRateConfirmed: true,
+    contractor_id: "",
+    contractor_name: "",
+    affects_inventory: true,
   }));
 }
 

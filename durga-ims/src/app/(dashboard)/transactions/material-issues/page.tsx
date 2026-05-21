@@ -1,1 +1,9 @@
-export default function Page() { return <div>TODO</div> }
+import { getCurrentFinancialYear } from "@/types";
+import { getMaterialIssues } from "@/lib/actions/material-issues.actions";
+import { MaterialIssuesClient } from "./material-issues-client";
+
+export default async function MaterialIssuesPage() {
+  const fy = getCurrentFinancialYear();
+  const rows = await getMaterialIssues(fy);
+  return <MaterialIssuesClient rows={rows} />;
+}

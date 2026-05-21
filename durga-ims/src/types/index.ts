@@ -107,6 +107,7 @@ export interface LineItemDraft {
   material_id: string;
   material_name: string;
   material_no: number;
+  hsn_code: string;
   supplier_id: string;
   supplier_name: string;
   gst_type: string; // "CGST_SGST" | "IGST"
@@ -119,8 +120,96 @@ export interface LineItemDraft {
   sgst_amount: string;
   igst_amount: string;
   amount: string;
-  rateBlank: boolean;       // true when no purchase history exists
+  rateBlank: boolean;         // true when no purchase history exists
   zeroRateConfirmed: boolean; // user must check this when rate = 0
+  // Material Issue fields (ignored in purchase-order mode)
+  contractor_id: string;
+  contractor_name: string;
+  affects_inventory: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Material Issue rich joined types
+// ---------------------------------------------------------------------------
+
+// Flat row returned by getMaterialIssues() list query — one row per line item
+export interface MaterialIssueRow {
+  // header
+  id: string;
+  slip_number: number;
+  issue_date: string;
+  financial_year: string;
+  status: string;
+  margin_percentage: string;
+  total_amount: string;
+  vehicle_id: string;
+  vehicle_name: string;
+  job_ref_no: number;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_gstin: string | null;
+  customer_state: string | null;
+  // item
+  item_id: string;
+  material_id: string;
+  material_name: string;
+  material_no: number;
+  hsn_code: string | null;
+  contractor_id: string | null;
+  contractor_name: string | null;
+  qty: string;
+  unit_id: string | null;
+  unit_name: string | null;
+  rate: string;
+  tax_percentage: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  amount: string;
+  gst_type: string | null;
+  affects_inventory: boolean;
+}
+
+// Per-item type used in the detail fetch (getMaterialIssueById)
+export interface MaterialIssueItemWithDetails {
+  id: string;
+  issue_id: string;
+  material_id: string;
+  material_name: string;
+  material_no: number;
+  hsn_code: string | null;
+  contractor_id: string | null;
+  contractor_name: string | null;
+  qty: string;
+  unit_id: string | null;
+  unit_name: string | null;
+  rate: string;
+  tax_percentage: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  amount: string;
+  gst_type: string | null;
+  affects_inventory: boolean;
+}
+
+// Full detail type returned by getMaterialIssueById
+export interface MaterialIssueWithDetails {
+  id: string;
+  slip_number: number;
+  issue_date: string;
+  financial_year: string;
+  status: string;
+  margin_percentage: string;
+  total_amount: string;
+  vehicle_id: string;
+  vehicle_name: string;
+  job_ref_no: number;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_gstin: string | null;
+  customer_state: string | null;
+  items: MaterialIssueItemWithDetails[];
 }
 
 // ---------------------------------------------------------------------------

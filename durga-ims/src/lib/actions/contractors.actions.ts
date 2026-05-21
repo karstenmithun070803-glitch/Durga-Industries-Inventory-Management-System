@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { contractors } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { contractors, materialIssueItems, materialIssues } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getContractors() {
@@ -40,6 +40,24 @@ export async function updateContractor(
 }
 
 export async function deleteContractor(id: string) {
+  // Guard: block if assigned to any Draft issue slip
+  const [con] = await db.select({ name: contractors.name }).from(contractors).where(eq(contractors.id, id));
+  const inUse = await db
+    .select({ id: materialIssueItems.id })
+    .from(materialIssueItems)
+    .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
+    .where(
+      and(
+        eq(materialIssueItems.contractor_id, id),
+        eq(materialIssues.status, "Draft")
+      )
+    )
+    .limit(1);
+  if (inUse.length > 0)
+    throw new Error(
+      `Cannot deactivate "${con?.name ?? "this contractor"}": assigned to a Draft issue slip. Complete or delete that slip first.`
+    );
+
   await db.update(contractors).set({ is_active: false }).where(eq(contractors.id, id));
   revalidatePath("/masters/contractors");
 }
