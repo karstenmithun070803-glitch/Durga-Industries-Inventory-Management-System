@@ -48,7 +48,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
   function handleSubmit() {
     startTransition(async () => {
       try {
-        editing ? await updateMaterial(editing.id, form) : await createMaterial(form);
+        if (editing) { await updateMaterial(editing.id, form); } else { await createMaterial(form); }
         toast.success(editing ? "Material updated" : "Material added");
         resetForm();
       } catch (e: unknown) {

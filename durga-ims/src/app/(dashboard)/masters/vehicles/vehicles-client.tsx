@@ -43,7 +43,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   function handleSubmit() {
     startTransition(async () => {
       try {
-        editing ? await updateVehicle(editing.id, form) : await createVehicle(form);
+        if (editing) { await updateVehicle(editing.id, form); } else { await createVehicle(form); }
         toast.success(editing ? "Vehicle updated" : "Vehicle added");
         resetForm();
       } catch (e: unknown) {

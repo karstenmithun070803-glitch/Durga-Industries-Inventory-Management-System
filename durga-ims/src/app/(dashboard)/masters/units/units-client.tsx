@@ -32,7 +32,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
     if (!name.trim()) return;
     startTransition(async () => {
       try {
-        editing ? await updateUnit(editing.id, name) : await createUnit(name);
+        if (editing) { await updateUnit(editing.id, name); } else { await createUnit(name); }
         toast.success(editing ? "Unit updated" : "Unit added");
         resetForm();
       } catch (e: unknown) {

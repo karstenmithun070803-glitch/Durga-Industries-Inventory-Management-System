@@ -35,7 +35,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
   function handleSubmit() {
     startTransition(async () => {
       try {
-        editing ? await updateContractor(editing.id, form) : await createContractor(form);
+        if (editing) { await updateContractor(editing.id, form); } else { await createContractor(form); }
         toast.success(editing ? "Contractor updated" : "Contractor added");
         resetForm();
       } catch (e: unknown) {

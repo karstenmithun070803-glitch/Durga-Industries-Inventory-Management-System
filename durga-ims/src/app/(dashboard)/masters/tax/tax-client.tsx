@@ -39,7 +39,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
   function handleSubmit() {
     startTransition(async () => {
       try {
-        editing ? await updateTaxRate(editing.id, form) : await createTaxRate(form);
+        if (editing) { await updateTaxRate(editing.id, form); } else { await createTaxRate(form); }
         toast.success(editing ? "Tax rate updated" : "Tax rate added");
         resetForm();
       } catch (e: unknown) {

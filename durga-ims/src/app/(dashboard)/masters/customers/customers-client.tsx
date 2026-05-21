@@ -45,7 +45,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
   function handleSubmit() {
     startTransition(async () => {
       try {
-        editing ? await updateCustomer(editing.id, form) : await createCustomer(form);
+        if (editing) { await updateCustomer(editing.id, form); } else { await createCustomer(form); }
         toast.success(editing ? "Customer updated" : "Customer added");
         resetForm();
       } catch (e: unknown) {

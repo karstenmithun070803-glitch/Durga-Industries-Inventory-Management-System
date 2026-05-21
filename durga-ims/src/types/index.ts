@@ -63,6 +63,64 @@ export type StockLedgerType =
   | "ADJUSTMENT"; // manual correction via Stock Dashboard (requires CONFIRM)
 
 // ---------------------------------------------------------------------------
+// Rich joined types (used by PO form and list)
+// ---------------------------------------------------------------------------
+
+export interface PurchaseOrderWithDetails {
+  id: string;
+  po_number: number;
+  po_date: Date | string;
+  supplier_id: string;
+  supplier_name: string;
+  supplier_gstin: string | null;
+  supplier_state: string | null;
+  supplier_address: string | null;
+  total_amount: string;
+  status: string;
+  financial_year: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+  items: PurchaseOrderItemWithDetails[];
+}
+
+export interface PurchaseOrderItemWithDetails {
+  id: string;
+  po_id: string;
+  material_id: string;
+  material_name: string;
+  material_no: number;
+  hsn_code: string | null;
+  qty: string;
+  unit_id: string | null;
+  unit_name: string | null;
+  rate: string;
+  tax_percentage: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  amount: string;
+}
+
+// Client-only: unsaved row state in the TransactionGrid
+export interface LineItemDraft {
+  _key: string; // unique row key (uuid v4, client-only)
+  material_id: string;
+  material_name: string;
+  hsn_code: string;
+  qty: string;
+  unit_id: string;
+  unit_name: string;
+  rate: string;
+  tax_percentage: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  amount: string;
+  rateBlank: boolean;       // true when no purchase history exists
+  zeroRateConfirmed: boolean; // user must check this when rate = 0
+}
+
+// ---------------------------------------------------------------------------
 // GST determination
 // ---------------------------------------------------------------------------
 export type GstType = "CGST_SGST" | "IGST";

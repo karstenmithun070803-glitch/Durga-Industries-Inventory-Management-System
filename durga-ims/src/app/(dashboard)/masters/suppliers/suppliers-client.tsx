@@ -45,7 +45,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   function handleSubmit() {
     startTransition(async () => {
       try {
-        editing ? await updateSupplier(editing.id, form) : await createSupplier(form);
+        if (editing) { await updateSupplier(editing.id, form); } else { await createSupplier(form); }
         toast.success(editing ? "Supplier updated" : "Supplier added");
         resetForm();
       } catch (e: unknown) {
