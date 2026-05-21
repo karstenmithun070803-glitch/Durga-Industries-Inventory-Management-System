@@ -18,7 +18,9 @@ import {
   ChevronDown,
   ChevronRight,
   Building2,
+  LogOut,
 } from "lucide-react";
+import { logout } from "@/lib/actions/auth.actions";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -142,8 +144,17 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-slate-700">
+      <div className="px-4 py-3 border-t border-slate-700 space-y-2">
         <p className="text-slate-500 text-xs">FY 2026-2027</p>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex items-center gap-2 text-slate-400 hover:text-white text-xs transition-colors w-full"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign out
+          </button>
+        </form>
       </div>
     </aside>
   );

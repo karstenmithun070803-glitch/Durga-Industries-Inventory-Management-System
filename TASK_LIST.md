@@ -1,5 +1,5 @@
 # Durga Industries IMS — Task List & Progress Tracker
-Last Updated: 2026-05-20
+Last Updated: 2026-05-21
 
 ## STATUS KEY
 [ ] Not started | [→] In progress | [x] Done | [!] Blocked
@@ -7,32 +7,35 @@ Last Updated: 2026-05-20
 ---
 
 ## PHASE 1 — Foundation (Week 1)
-[ ] 1.1 Initialize Next.js 14 App Router project with TypeScript
-[ ] 1.2 Install and configure Tailwind CSS + shadcn/ui
-[ ] 1.3 Install Drizzle ORM + Supabase client (@supabase/supabase-js)
-[ ] 1.4 Install @react-pdf/renderer
-[ ] 1.5 Create Supabase project (get URL + anon key → add to .env.local)
-[ ] 1.6 Create /src/db/schema.ts with all tables (see CLAUDE_CONTEXT.md Section 6)
-[ ] 1.7 Apply all schema rules: UUID PKs, soft deletes, updated_at, GST split columns, tax lock, affects_inventory, composite unique constraints, current_stock CHECK >= 0
+[x] 1.1 Initialize Next.js 14 App Router project with TypeScript
+[x] 1.2 Install and configure Tailwind CSS + shadcn/ui
+[x] 1.3 Install Drizzle ORM + Supabase client (@supabase/supabase-js)
+[x] 1.4 Install @react-pdf/renderer
+[x] 1.5 Create Supabase project + migrate all tables (15 tables live in Supabase)
+[x] 1.6 Create /src/lib/db/schema.ts with all tables (see CLAUDE_CONTEXT.md Section 6)
+[x] 1.7 Apply all schema rules: UUID PKs, soft deletes, updated_at, GST split columns, tax lock, affects_inventory, composite unique constraints, current_stock CHECK >= 0
 [ ] 1.8 Set up Cloudflare Workers deployment with OpenNext adapter
-[ ] 1.9 Set up Supabase Auth + username-to-internal-email mapping (app_users table)
-[ ] 1.10 Create login page (/src/app/(auth)/login/page.tsx) — username + password fields only
-[ ] 1.11 Create full project folder structure (empty placeholder files)
-[ ] 1.12 Create CORE_RULES.md in project root
-[ ] 1.13 OWNER REVIEW: Schema approval before any UI work begins
+[x] 1.9 Set up Supabase Auth integration (@supabase/ssr installed, browser+server clients created, middleware route protection done)
+[x] 1.10 Create login page (/src/app/(auth)/login/page.tsx) — DONE. Auth user created in Supabase (username: mithun, internal email: mithun@durgaindustries.internal, app_users row linked)
+[x] 1.11 Create full project folder structure (empty placeholder files)
+[x] 1.12 Create CORE_RULES.md in project root
+[x] 1.13 OWNER REVIEW: Schema approved ✓
 
 ---
 
 ## PHASE 2 — Masters Module (Week 2)
-[ ] 2.1 Build reusable <MasterLayout /> component (shared by all masters pages)
-[ ] 2.2 Build reusable <DataTable /> component (sortable, searchable, compact, sticky headers)
-[ ] 2.3 Customer Master — form + data table + add/edit/soft-delete
-[ ] 2.4 Supplier Master — form + data table + add/edit/soft-delete
-[ ] 2.5 Unit Master — form + data table
-[ ] 2.6 Tax Master — form + data table (inv_prefix field drives bill number prefix)
-[ ] 2.7 Contractor Master — form + data table (role + contact fields)
-[ ] 2.8 Material Master — form + data table + current_stock as read-only display
-[ ] 2.9 Vehicle/Job Master — form + data table (no contractor assignment here)
+[x] 2.1 Build reusable <MasterLayout /> component (shared by all masters pages)
+[ ] 2.2 Build reusable <DataTable /> component — SKIPPED, each master has inline table (acceptable debt)
+[x] 2.3 Customer Master — form + data table + add/edit/soft-delete
+[x] 2.4 Supplier Master — form + data table + add/edit/soft-delete
+[x] 2.5 Unit Master — form + data table
+[x] 2.6 Tax Master — form + data table (inv_prefix field drives bill number prefix)
+[x] 2.7 Contractor Master — form + data table (role + contact fields)
+[x] 2.8 Material Master — form + data table + current_stock as read-only display
+[x] 2.9 Vehicle/Job Master — form + data table (no contractor assignment here)
+[ ] 2.10 Replace plain <select> with shadcn <Command> combobox across all master forms
+[ ] 2.11 Add delete confirmation <Dialog> to all master pages
+[ ] 2.12 Add Financial Year context provider to dashboard layout
 
 ---
 
@@ -124,9 +127,10 @@ Format: [Date] [Phase] [Description] [Status]
 - Client: Durga Industries (bus body manufacturer)
 - Company state: Tamil Nadu (GST code 33)
 - Financial year: India April 1 → March 31 (current: 2026-2027)
-- Max concurrent users: 4 (same access level)
+- Max concurrent users: 4 (same access level for now, roles deferred to Phase 8)
 - All stock math: server-side only, atomic DB transactions, never client-side
 - Hosting: Cloudflare Workers (free, commercial OK) via OpenNext adapter
 - Database: Supabase free tier (real-time built-in, 500MB, 200 concurrent connections)
-- Auth: Supabase Auth, username-only login (no email shown to users)
+- Auth: Supabase Auth + @supabase/ssr, username-only login (maps to username@durgaindustries.internal)
 - Context document: CLAUDE_CONTEXT.md (paste into every new Claude Code session)
+- RLS: Currently DISABLED on all tables. Safe for now (all DB ops go through server-side Drizzle, not anon key). Enable with policies before any public exposure.

@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createCustomer, updateCustomer, deleteCustomer } from "@/lib/actions/customers.actions";
 import { INDIAN_STATES } from "@/lib/constants";
+import { Combobox } from "@/components/ui/combobox";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Customer } from "@/types";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +17,7 @@ const EMPTY = { customer_name: "", address_1: "", address_2: "", street: "", cit
 export function CustomersClient({ customers }: { customers: Customer[] }) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
 
@@ -55,6 +58,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
   }
 
   return (
+    <>
     <MasterLayout
       title="Customer Master"
       formPanel={
@@ -83,14 +87,13 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">State</label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+              <Combobox
+                options={INDIAN_STATES.map((s) => ({ value: s, label: s }))}
                 value={form.state}
-                onChange={(e) => set("state", e.target.value)}
-              >
-                <option value="">Select state</option>
-                {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+                onChange={(v) => set("state", v)}
+                placeholder="Select state..."
+                searchPlaceholder="Search states..."
+              />
             </div>
           </div>
           <div className="space-y-1.5">
@@ -132,7 +135,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(c)}><Pencil className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50"
-                          onClick={() => startTransition(async () => { await deleteCustomer(c.id); toast.success("Deleted"); })} disabled={isPending}>
+                          onClick={() => setDeletingId(c.id)} disabled={isPending}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -145,5 +148,21 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
         </div>
       }
     />
+    <ConfirmDialog
+      open={deletingId !== null}
+      onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+      title="Delete customer?"
+      description="This will soft-delete the customer. Historical records will be preserved."
+      onConfirm={() => {
+        if (!deletingId) return;
+        startTransition(async () => {
+          await deleteCustomer(deletingId);
+          toast.success("Customer deleted");
+          setDeletingId(null);
+        });
+      }}
+      isPending={isPending}
+    />
+    </>
   );
 }
