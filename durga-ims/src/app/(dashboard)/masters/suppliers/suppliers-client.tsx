@@ -6,26 +6,33 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { createSupplier, updateSupplier, deleteSupplier } from "@/lib/actions/suppliers.actions";
+import { createSupplier, updateSupplier, deleteSupplier, reactivateSupplier } from "@/lib/actions/suppliers.actions";
 import { INDIAN_STATES } from "@/lib/constants";
+import { formatCode, matchesCode } from "@/lib/utils";
 import type { Supplier } from "@/types";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, RotateCcw, UserX } from "lucide-react";
 import { toast } from "sonner";
 
 const EMPTY = { name: "", tin_no: "", cst_no: "", gstin: "", address: "", state: "" };
 
 export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   const [search, setSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
 
-  const filtered = suppliers.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.gstin ?? "").toLowerCase().includes(search.toLowerCase())
-  );
+  const inactive = suppliers.filter((s) => !s.is_active);
+  const visible = (showInactive ? suppliers : suppliers.filter((s) => s.is_active)).filter((s) => {
+    const q = search.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(q) ||
+      (s.gstin ?? "").toLowerCase().includes(q) ||
+      (s.state ?? "").toLowerCase().includes(q) ||
+      matchesCode(search, "S", s.code_no)
+    );
+  });
 
   function startEdit(s: Supplier) {
     setEditing(s);
@@ -44,6 +51,13 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Something went wrong");
       }
+    });
+  }
+
+  function handleReactivate(id: string) {
+    startTransition(async () => {
+      await reactivateSupplier(id);
+      toast.success("Supplier reactivated");
     });
   }
 
@@ -68,13 +82,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
             ))}
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">State</label>
-              <Combobox
-                options={INDIAN_STATES.map((s) => ({ value: s, label: s }))}
-                value={form.state}
-                onChange={(v) => set("state", v)}
-                placeholder="Select state..."
-                searchPlaceholder="Search states..."
-              />
+              <Combobox options={INDIAN_STATES.map((s) => ({ value: s, label: s }))} value={form.state} onChange={(v) => set("state", v)} placeholder="Select state..." searchPlaceholder="Search states..." />
             </div>
             <div className="flex gap-2 pt-1">
               <Button onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
@@ -84,36 +92,46 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
         }
         tablePanel={
           <div className="flex flex-col h-full">
-            <div className="p-3 border-b border-slate-100">
-              <Input placeholder="Search suppliers..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+            <div className="p-3 border-b border-slate-100 flex items-center gap-2">
+              <Input placeholder="Search by name, S001 or just 1, GSTIN..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+              {inactive.length > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
+                  {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
+                </Button>
+              )}
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
-                    {["S.No", "Code", "Supplier Name", "Address", "GSTIN", "Actions"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-600">{h}</th>
+                    {["S.No", "Supplier Code", "Supplier Name", "Address", "State", "GSTIN", "TIN No.", "Actions"].map((h) => (
+                      <th key={h} className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No suppliers found</td></tr>
+                  {visible.length === 0 && (
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">No suppliers found</td></tr>
                   )}
-                  {filtered.map((s, i) => (
-                    <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-2.5 text-slate-500">{i + 1}</td>
-                      <td className="px-4 py-2.5 text-slate-500">{s.code_no}</td>
-                      <td className="px-4 py-2.5 font-medium">{s.name}</td>
-                      <td className="px-4 py-2.5 text-slate-500 max-w-xs truncate">{s.address ?? "—"}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs">{s.gstin ?? "—"}</td>
-                      <td className="px-4 py-2.5">
+                  {visible.map((s, i) => (
+                    <tr key={s.id} className={`border-t border-slate-100 ${!s.is_active ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"}`}>
+                      <td className="px-3 py-2.5 text-slate-500">{i + 1}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("S", s.code_no)}</td>
+                      <td className="px-3 py-2.5 font-medium">{s.name}</td>
+                      <td className="px-3 py-2.5 text-slate-500 max-w-[160px] truncate">{s.address ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-slate-500">{s.state ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-slate-500 font-mono text-xs">{s.gstin ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-slate-500 font-mono text-xs">{s.tin_no ?? "—"}</td>
+                      <td className="px-3 py-2.5">
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(s)}><Pencil className="w-3.5 h-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50"
-                            onClick={() => setDeletingId(s.id)} disabled={isPending}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          {s.is_active ? (
+                            <>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(s)}><Pencil className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:bg-amber-50" onClick={() => setDeactivatingId(s.id)} disabled={isPending}><UserX className="w-3.5 h-3.5" /></Button>
+                            </>
+                          ) : (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs text-emerald-600 hover:bg-emerald-50" onClick={() => handleReactivate(s.id)} disabled={isPending}><RotateCcw className="w-3 h-3 mr-1" />Reactivate</Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -125,16 +143,17 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
         }
       />
       <ConfirmDialog
-        open={deletingId !== null}
-        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
-        title="Delete supplier?"
-        description="This will soft-delete the supplier. Historical records will be preserved."
+        open={deactivatingId !== null}
+        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
+        title="Deactivate supplier?"
+        description="This will deactivate the supplier. They will be hidden from active lists. You can reactivate at any time."
+        confirmLabel="Deactivate"
         onConfirm={() => {
-          if (!deletingId) return;
+          if (!deactivatingId) return;
           startTransition(async () => {
-            await deleteSupplier(deletingId);
-            toast.success("Supplier deleted");
-            setDeletingId(null);
+            await deleteSupplier(deactivatingId);
+            toast.success("Supplier deactivated");
+            setDeactivatingId(null);
           });
         }}
         isPending={isPending}

@@ -36,6 +36,7 @@ const softDelete = {
 
 export const customers = pgTable("customers", {
   id: uuid("id").primaryKey().defaultRandom(),
+  customer_no: serial("customer_no").unique().notNull(),
   customer_name: text("customer_name").notNull(),
   address_1: text("address_1"),
   address_2: text("address_2"),

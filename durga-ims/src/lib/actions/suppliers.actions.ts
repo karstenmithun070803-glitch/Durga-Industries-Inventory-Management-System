@@ -6,7 +6,11 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getSuppliers() {
-  return db.select().from(suppliers).where(eq(suppliers.is_active, true)).orderBy(suppliers.name);
+  return db.select().from(suppliers).where(eq(suppliers.is_active, true)).orderBy(suppliers.code_no);
+}
+
+export async function getAllSuppliers() {
+  return db.select().from(suppliers).orderBy(suppliers.code_no);
 }
 
 export async function createSupplier(data: {
@@ -50,5 +54,10 @@ export async function updateSupplier(id: string, data: {
 
 export async function deleteSupplier(id: string) {
   await db.update(suppliers).set({ is_active: false }).where(eq(suppliers.id, id));
+  revalidatePath("/masters/suppliers");
+}
+
+export async function reactivateSupplier(id: string) {
+  await db.update(suppliers).set({ is_active: true }).where(eq(suppliers.id, id));
   revalidatePath("/masters/suppliers");
 }

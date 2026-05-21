@@ -1,7 +1,7 @@
-import { getContractors } from "@/lib/actions/contractors.actions";
+import { getAllContractors } from "@/lib/actions/contractors.actions";
 import { ContractorsClient } from "./contractors-client";
 
 export default async function ContractorsPage() {
-  const contractors = await getContractors();
+  const contractors = await getAllContractors();
   return <ContractorsClient contractors={contractors} />;
 }

@@ -9,6 +9,10 @@ export async function getMaterials() {
   return db.select().from(materials).where(eq(materials.is_active, true)).orderBy(materials.material_no);
 }
 
+export async function getAllMaterials() {
+  return db.select().from(materials).orderBy(materials.material_no);
+}
+
 export async function createMaterial(data: {
   name: string;
   hsn_code?: string;
@@ -61,5 +65,10 @@ export async function updateMaterial(id: string, data: {
 
 export async function deleteMaterial(id: string) {
   await db.update(materials).set({ is_active: false }).where(eq(materials.id, id));
+  revalidatePath("/masters/materials");
+}
+
+export async function reactivateMaterial(id: string) {
+  await db.update(materials).set({ is_active: true }).where(eq(materials.id, id));
   revalidatePath("/masters/materials");
 }

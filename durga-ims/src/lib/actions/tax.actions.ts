@@ -9,6 +9,10 @@ export async function getTaxRates() {
   return db.select().from(taxRates).where(eq(taxRates.is_active, true)).orderBy(taxRates.vat_code);
 }
 
+export async function getAllTaxRates() {
+  return db.select().from(taxRates).orderBy(taxRates.vat_code);
+}
+
 export async function createTaxRate(data: {
   tax_percentage: string;
   description: string;
@@ -37,5 +41,10 @@ export async function updateTaxRate(
 
 export async function deleteTaxRate(id: string) {
   await db.update(taxRates).set({ is_active: false }).where(eq(taxRates.id, id));
+  revalidatePath("/masters/tax");
+}
+
+export async function reactivateTaxRate(id: string) {
+  await db.update(taxRates).set({ is_active: true }).where(eq(taxRates.id, id));
   revalidatePath("/masters/tax");
 }

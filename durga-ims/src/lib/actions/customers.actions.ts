@@ -5,9 +5,12 @@ import { customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-
 export async function getCustomers() {
-  return db.select().from(customers).where(eq(customers.is_active, true)).orderBy(customers.customer_name);
+  return db.select().from(customers).where(eq(customers.is_active, true)).orderBy(customers.customer_no);
+}
+
+export async function getAllCustomers() {
+  return db.select().from(customers).orderBy(customers.customer_no);
 }
 
 export async function createCustomer(data: {
@@ -55,5 +58,10 @@ export async function updateCustomer(id: string, data: {
 
 export async function deleteCustomer(id: string) {
   await db.update(customers).set({ is_active: false }).where(eq(customers.id, id));
+  revalidatePath("/masters/customers");
+}
+
+export async function reactivateCustomer(id: string) {
+  await db.update(customers).set({ is_active: true }).where(eq(customers.id, id));
   revalidatePath("/masters/customers");
 }

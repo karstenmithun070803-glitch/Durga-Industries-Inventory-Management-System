@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { createVehicle, updateVehicle, deleteVehicle } from "@/lib/actions/vehicles.actions";
+import { createVehicle, updateVehicle, deleteVehicle, reactivateVehicle } from "@/lib/actions/vehicles.actions";
+import { formatCode, matchesCode } from "@/lib/utils";
 import type { Customer } from "@/types";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, RotateCcw, UserX } from "lucide-react";
 import { toast } from "sonner";
 
 type VehicleRow = { id: string; job_ref_no: number; vehicle_name: string; type: string; customer_id: string | null; customer_name: string | null; is_active: boolean; created_at: Date; updated_at: Date };
@@ -19,23 +20,23 @@ interface Props { vehicles: VehicleRow[]; customers: Customer[]; }
 
 export function VehiclesClient({ vehicles, customers }: Props) {
   const [search, setSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<VehicleRow | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
 
-  const filtered = vehicles.filter(
-    (v) =>
-      v.vehicle_name.toLowerCase().includes(search.toLowerCase()) ||
-      (v.customer_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      v.job_ref_no.toString().includes(search)
-  );
+  const inactive = vehicles.filter((v) => !v.is_active);
+  const visible = (showInactive ? vehicles : vehicles.filter((v) => v.is_active)).filter((v) => {
+    const q = search.toLowerCase();
+    return (
+      v.vehicle_name.toLowerCase().includes(q) ||
+      (v.customer_name ?? "").toLowerCase().includes(q) ||
+      matchesCode(search, "J", v.job_ref_no, 5)
+    );
+  });
 
-  function startEdit(v: VehicleRow) {
-    setEditing(v);
-    setForm({ vehicle_name: v.vehicle_name, type: v.type, customer_id: v.customer_id ?? "" });
-  }
-
+  function startEdit(v: VehicleRow) { setEditing(v); setForm({ vehicle_name: v.vehicle_name, type: v.type, customer_id: v.customer_id ?? "" }); }
   function resetForm() { setEditing(null); setForm(EMPTY); }
   function set(key: string, val: string) { setForm((f) => ({ ...f, [key]: val })); }
 
@@ -48,6 +49,13 @@ export function VehiclesClient({ vehicles, customers }: Props) {
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Something went wrong");
       }
+    });
+  }
+
+  function handleReactivate(id: string) {
+    startTransition(async () => {
+      await reactivateVehicle(id);
+      toast.success("Vehicle reactivated");
     });
   }
 
@@ -77,11 +85,11 @@ export function VehiclesClient({ vehicles, customers }: Props) {
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Customer</label>
               <Combobox
-                options={customers.map((c) => ({ value: c.id, label: c.customer_name }))}
+                options={customers.map((c) => ({ value: c.id, label: `${formatCode("C", c.customer_no)} — ${c.customer_name}` }))}
                 value={form.customer_id}
                 onChange={(v) => set("customer_id", v)}
                 placeholder="Select customer..."
-                searchPlaceholder="Search customers..."
+                searchPlaceholder="Search by name or C001..."
               />
             </div>
             <div className="flex gap-2 pt-1">
@@ -92,26 +100,31 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         }
         tablePanel={
           <div className="flex flex-col h-full">
-            <div className="p-3 border-b border-slate-100">
-              <Input placeholder="Search by vehicle name, job no, customer..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+            <div className="p-3 border-b border-slate-100 flex items-center gap-2">
+              <Input placeholder="Search by vehicle, J00042 or just 42, customer..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+              {inactive.length > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
+                  {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
+                </Button>
+              )}
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
-                    {["S.No", "Job No", "Vehicle Name", "Type", "Customer", "Actions"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-600">{h}</th>
+                    {["S.No", "Job Code", "Vehicle Name", "Type", "Customer", "Actions"].map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 && (
+                  {visible.length === 0 && (
                     <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No vehicles found</td></tr>
                   )}
-                  {filtered.map((v, i) => (
-                    <tr key={v.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  {visible.map((v, i) => (
+                    <tr key={v.id} className={`border-t border-slate-100 ${!v.is_active ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"}`}>
                       <td className="px-4 py-2.5 text-slate-500">{i + 1}</td>
-                      <td className="px-4 py-2.5 font-mono font-medium">{String(v.job_ref_no).padStart(5, "0")}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("J", v.job_ref_no, 5)}</td>
                       <td className="px-4 py-2.5 font-medium">{v.vehicle_name}</td>
                       <td className="px-4 py-2.5">
                         <Badge variant={v.type === "New" ? "default" : "secondary"}>{v.type}</Badge>
@@ -119,11 +132,14 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                       <td className="px-4 py-2.5 text-slate-500">{v.customer_name ?? "—"}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(v)}><Pencil className="w-3.5 h-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50"
-                            onClick={() => setDeletingId(v.id)} disabled={isPending}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          {v.is_active ? (
+                            <>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(v)}><Pencil className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:bg-amber-50" onClick={() => setDeactivatingId(v.id)} disabled={isPending}><UserX className="w-3.5 h-3.5" /></Button>
+                            </>
+                          ) : (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs text-emerald-600 hover:bg-emerald-50" onClick={() => handleReactivate(v.id)} disabled={isPending}><RotateCcw className="w-3 h-3 mr-1" />Reactivate</Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -135,16 +151,17 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         }
       />
       <ConfirmDialog
-        open={deletingId !== null}
-        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
-        title="Delete vehicle?"
-        description="This will soft-delete the vehicle / job record. Historical material issues will be preserved."
+        open={deactivatingId !== null}
+        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
+        title="Deactivate vehicle?"
+        description="This will deactivate the vehicle / job record. Historical material issues will be preserved. You can reactivate at any time."
+        confirmLabel="Deactivate"
         onConfirm={() => {
-          if (!deletingId) return;
+          if (!deactivatingId) return;
           startTransition(async () => {
-            await deleteVehicle(deletingId);
-            toast.success("Vehicle deleted");
-            setDeletingId(null);
+            await deleteVehicle(deactivatingId);
+            toast.success("Vehicle deactivated");
+            setDeactivatingId(null);
           });
         }}
         isPending={isPending}

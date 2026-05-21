@@ -9,6 +9,10 @@ export async function getContractors() {
   return db.select().from(contractors).where(eq(contractors.is_active, true)).orderBy(contractors.code_no);
 }
 
+export async function getAllContractors() {
+  return db.select().from(contractors).orderBy(contractors.code_no);
+}
+
 export async function createContractor(data: {
   name: string;
   role?: string;
@@ -37,5 +41,10 @@ export async function updateContractor(
 
 export async function deleteContractor(id: string) {
   await db.update(contractors).set({ is_active: false }).where(eq(contractors.id, id));
+  revalidatePath("/masters/contractors");
+}
+
+export async function reactivateContractor(id: string) {
+  await db.update(contractors).set({ is_active: true }).where(eq(contractors.id, id));
   revalidatePath("/masters/contractors");
 }
