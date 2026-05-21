@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { purchaseOrders, purchaseOrderItems, materials, stockLedger } from "@/lib/db/schema";
 import { suppliers, units } from "@/lib/db/schema";
-import { eq, and, max, desc, inArray } from "drizzle-orm";
+import { eq, and, max, desc } from "drizzle-orm";
 import type { PurchaseOrderWithDetails, PurchaseOrderItemWithDetails } from "@/types";
 
 const REVALIDATE_PATH = "/transactions/purchase-orders";
@@ -22,6 +22,7 @@ export async function getPurchaseOrders(financialYear: string) {
       po_date: purchaseOrders.po_date,
       status: purchaseOrders.status,
       financial_year: purchaseOrders.financial_year,
+      affects_stock: purchaseOrders.affects_stock,
       // line item
       item_id: purchaseOrderItems.id,
       material_id: purchaseOrderItems.material_id,
@@ -64,6 +65,7 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
       total_amount: purchaseOrders.total_amount,
       status: purchaseOrders.status,
       financial_year: purchaseOrders.financial_year,
+      affects_stock: purchaseOrders.affects_stock,
       created_at: purchaseOrders.created_at,
       updated_at: purchaseOrders.updated_at,
     })
@@ -205,6 +207,8 @@ interface LineItemInput {
   qty: string;
   unit_id: string;
   rate: string;
+  rate_blank: boolean;
+  zero_rate_confirmed: boolean;
   tax_percentage: string;
   cgst_amount: string;
   sgst_amount: string;
@@ -213,10 +217,35 @@ interface LineItemInput {
   gst_type: string | null;
 }
 
+function validateItems(items: LineItemInput[]) {
+  if (items.length === 0) throw new Error("Add at least one material.");
+  for (const item of items) {
+    if (!item.supplier_id) throw new Error("All items must have a supplier selected.");
+  }
+  const seen = new Set<string>();
+  for (const item of items) {
+    const rate = parseFloat(item.rate || "0").toFixed(2);
+    const key = `${item.material_id}|${item.supplier_id ?? ""}|${rate}`;
+    if (seen.has(key))
+      throw new Error("Duplicate entry detected: same material, same supplier, and same rate already exists on this PO. Combine into one row or adjust the rate.");
+    seen.add(key);
+  }
+  for (const item of items) {
+    if (item.rate === "0" && !item.rate_blank && !item.zero_rate_confirmed)
+      throw new Error("One or more items have a zero rate without confirmation. Check 'Zero cost — confirm?' for each.");
+  }
+}
+
+function deriveHeaderSupplierId(items: LineItemInput[]): string | null {
+  const ids = Array.from(new Set(items.map((i) => i.supplier_id).filter((id): id is string => !!id)));
+  return ids.length === 1 ? ids[0] : null;
+}
+
 interface POHeaderInput {
   po_date: string;
   financial_year: string;
   total_amount: string;
+  affects_stock: boolean;
   items: LineItemInput[];
 }
 
@@ -242,6 +271,7 @@ function itemValues(poId: string, item: LineItemInput) {
 // ---------------------------------------------------------------------------
 
 export async function createPurchaseOrder(data: POHeaderInput): Promise<string> {
+  validateItems(data.items);
   const poNumber = await getNextPoNumber(data.financial_year);
 
   const [po] = await db
@@ -249,10 +279,11 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
     .values({
       po_number: poNumber,
       po_date: new Date(data.po_date),
-      supplier_id: null,
+      supplier_id: deriveHeaderSupplierId(data.items),
       total_amount: data.total_amount,
       status: "Draft",
       financial_year: data.financial_year,
+      affects_stock: data.affects_stock,
     })
     .returning({ id: purchaseOrders.id });
 
@@ -269,11 +300,14 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
 // ---------------------------------------------------------------------------
 
 export async function updatePurchaseOrder(id: string, data: Omit<POHeaderInput, "financial_year">): Promise<void> {
+  validateItems(data.items);
   await db
     .update(purchaseOrders)
     .set({
       po_date: new Date(data.po_date),
+      supplier_id: deriveHeaderSupplierId(data.items),
       total_amount: data.total_amount,
+      affects_stock: data.affects_stock,
       updated_at: new Date(),
     })
     .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.status, "Draft")));
@@ -312,27 +346,29 @@ export async function receivePurchaseOrder(id: string): Promise<void> {
       .set({ status: "Received", updated_at: new Date() })
       .where(eq(purchaseOrders.id, id));
 
-    for (const item of items) {
-      const [mat] = await tx
-        .select({ current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, item.material_id));
+    if (po.affects_stock) {
+      for (const item of items) {
+        const [mat] = await tx
+          .select({ current_stock: materials.current_stock })
+          .from(materials)
+          .where(eq(materials.id, item.material_id));
 
-      const newStock = (parseFloat(mat.current_stock) + parseFloat(item.qty)).toString();
+        const newStock = (parseFloat(mat.current_stock) + parseFloat(item.qty)).toString();
 
-      await tx
-        .update(materials)
-        .set({ current_stock: newStock, updated_at: new Date() })
-        .where(eq(materials.id, item.material_id));
+        await tx
+          .update(materials)
+          .set({ current_stock: newStock, updated_at: new Date() })
+          .where(eq(materials.id, item.material_id));
 
-      await tx.insert(stockLedger).values({
-        material_id: item.material_id,
-        transaction_type: "PO_INWARD",
-        reference_id: id,
-        reference_type: "purchase_order",
-        qty_change: item.qty,
-        stock_after: newStock,
-      });
+        await tx.insert(stockLedger).values({
+          material_id: item.material_id,
+          transaction_type: "PO_INWARD",
+          reference_id: id,
+          reference_type: "purchase_order",
+          qty_change: item.qty,
+          stock_after: newStock,
+        });
+      }
     }
   });
 
@@ -344,6 +380,7 @@ export async function receivePurchaseOrder(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeaderInput, "financial_year">): Promise<void> {
+  validateItems(data.items);
   await db.transaction(async (tx) => {
     const [po] = await tx
       .select()
@@ -357,36 +394,40 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
       .from(purchaseOrderItems)
       .where(eq(purchaseOrderItems.po_id, id));
 
-    // Reverse old stock
-    for (const item of oldItems) {
-      const [mat] = await tx
-        .select({ current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, item.material_id));
+    // Reverse old stock (only if the PO originally updated stock)
+    if (po.affects_stock) {
+      for (const item of oldItems) {
+        const [mat] = await tx
+          .select({ current_stock: materials.current_stock })
+          .from(materials)
+          .where(eq(materials.id, item.material_id));
 
-      const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
+        const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
 
-      await tx
-        .update(materials)
-        .set({ current_stock: newStock, updated_at: new Date() })
-        .where(eq(materials.id, item.material_id));
+        await tx
+          .update(materials)
+          .set({ current_stock: newStock, updated_at: new Date() })
+          .where(eq(materials.id, item.material_id));
 
-      await tx.insert(stockLedger).values({
-        material_id: item.material_id,
-        transaction_type: "REVERSAL",
-        reference_id: id,
-        reference_type: "purchase_order",
-        qty_change: (-parseFloat(item.qty)).toString(),
-        stock_after: newStock,
-      });
+        await tx.insert(stockLedger).values({
+          material_id: item.material_id,
+          transaction_type: "REVERSAL",
+          reference_id: id,
+          reference_type: "purchase_order",
+          qty_change: (-parseFloat(item.qty)).toString(),
+          stock_after: newStock,
+        });
+      }
     }
 
-    // Update header date and total
+    // Update header date, total, affects_stock, and derived supplier
     await tx
       .update(purchaseOrders)
       .set({
         po_date: new Date(data.po_date),
+        supplier_id: deriveHeaderSupplierId(data.items),
         total_amount: data.total_amount,
+        affects_stock: data.affects_stock,
         updated_at: new Date(),
       })
       .where(eq(purchaseOrders.id, id));
@@ -398,28 +439,30 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
       await tx.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item)));
     }
 
-    // Apply new stock
-    for (const item of data.items) {
-      const [mat] = await tx
-        .select({ current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, item.material_id));
+    // Apply new stock (only if new affects_stock is true)
+    if (data.affects_stock) {
+      for (const item of data.items) {
+        const [mat] = await tx
+          .select({ current_stock: materials.current_stock })
+          .from(materials)
+          .where(eq(materials.id, item.material_id));
 
-      const newStock = (parseFloat(mat.current_stock) + parseFloat(item.qty)).toString();
+        const newStock = (parseFloat(mat.current_stock) + parseFloat(item.qty)).toString();
 
-      await tx
-        .update(materials)
-        .set({ current_stock: newStock, updated_at: new Date() })
-        .where(eq(materials.id, item.material_id));
+        await tx
+          .update(materials)
+          .set({ current_stock: newStock, updated_at: new Date() })
+          .where(eq(materials.id, item.material_id));
 
-      await tx.insert(stockLedger).values({
-        material_id: item.material_id,
-        transaction_type: "PO_INWARD",
-        reference_id: id,
-        reference_type: "purchase_order",
-        qty_change: item.qty,
-        stock_after: newStock,
-      });
+        await tx.insert(stockLedger).values({
+          material_id: item.material_id,
+          transaction_type: "PO_INWARD",
+          reference_id: id,
+          reference_type: "purchase_order",
+          qty_change: item.qty,
+          stock_after: newStock,
+        });
+      }
     }
   });
 
@@ -444,65 +487,58 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
     return;
   }
 
-  // Received PO — check if any items have been issued
-  const items = await db
-    .select({ material_id: purchaseOrderItems.material_id })
-    .from(purchaseOrderItems)
-    .where(eq(purchaseOrderItems.po_id, id));
-
-  const materialIds = items.map((i) => i.material_id);
-
-  if (materialIds.length > 0) {
-    const { materialIssueItems, materialIssues, vehicles } = await import("@/lib/db/schema");
-
-    const issued = await db
+  // Received PO — check that stock reversal would not go negative
+  if (po.affects_stock) {
+    const stockCheck = await db
       .select({
-        material_id: materialIssueItems.material_id,
-        job_ref_no: vehicles.job_ref_no,
-        vehicle_name: vehicles.vehicle_name,
+        name: materials.name,
+        current_stock: materials.current_stock,
+        qty: purchaseOrderItems.qty,
       })
-      .from(materialIssueItems)
-      .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
-      .innerJoin(vehicles, eq(materialIssues.vehicle_id, vehicles.id))
-      .where(inArray(materialIssueItems.material_id, materialIds))
-      .limit(1);
+      .from(purchaseOrderItems)
+      .innerJoin(materials, eq(purchaseOrderItems.material_id, materials.id))
+      .where(eq(purchaseOrderItems.po_id, id));
 
-    if (issued.length > 0) {
-      const job = issued[0];
-      throw new Error(
-        `Cannot delete. A material from this PO has already been issued to Job J${String(job.job_ref_no).padStart(5, "0")} (${job.vehicle_name}). Delete the material issue slip first.`
-      );
+    for (const item of stockCheck) {
+      const afterReversal = parseFloat(item.current_stock) - parseFloat(item.qty);
+      if (afterReversal < 0) {
+        throw new Error(
+          `Cannot delete: reversing this PO would bring ${item.name} stock to ${afterReversal.toFixed(2)} (current: ${parseFloat(item.current_stock).toFixed(2)}, removing: ${parseFloat(item.qty).toFixed(2)}). Reduce issued quantities first.`
+        );
+      }
     }
   }
 
-  // Safe to delete — atomic stock reversal
+  // Safe to delete — atomic stock reversal (skip if PO never updated stock)
   await db.transaction(async (tx) => {
-    const poItems = await tx
-      .select()
-      .from(purchaseOrderItems)
-      .where(eq(purchaseOrderItems.po_id, id));
+    if (po.affects_stock) {
+      const poItems = await tx
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.po_id, id));
 
-    for (const item of poItems) {
-      const [mat] = await tx
-        .select({ current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, item.material_id));
+      for (const item of poItems) {
+        const [mat] = await tx
+          .select({ current_stock: materials.current_stock })
+          .from(materials)
+          .where(eq(materials.id, item.material_id));
 
-      const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
+        const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
 
-      await tx
-        .update(materials)
-        .set({ current_stock: newStock, updated_at: new Date() })
-        .where(eq(materials.id, item.material_id));
+        await tx
+          .update(materials)
+          .set({ current_stock: newStock, updated_at: new Date() })
+          .where(eq(materials.id, item.material_id));
 
-      await tx.insert(stockLedger).values({
-        material_id: item.material_id,
-        transaction_type: "REVERSAL",
-        reference_id: id,
-        reference_type: "purchase_order",
-        qty_change: (-parseFloat(item.qty)).toString(),
-        stock_after: newStock,
-      });
+        await tx.insert(stockLedger).values({
+          material_id: item.material_id,
+          transaction_type: "REVERSAL",
+          reference_id: id,
+          reference_type: "purchase_order",
+          qty_change: (-parseFloat(item.qty)).toString(),
+          stock_after: newStock,
+        });
+      }
     }
 
     await tx.delete(purchaseOrders).where(eq(purchaseOrders.id, id));

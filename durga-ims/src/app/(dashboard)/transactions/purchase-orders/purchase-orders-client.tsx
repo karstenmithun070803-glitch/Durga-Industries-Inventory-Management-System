@@ -17,6 +17,7 @@ type ItemRow = {
   po_number: number;
   po_date: Date | string;
   status: string;
+  affects_stock: boolean;
   // line item
   item_id: string | null;
   material_id: string | null;
@@ -286,6 +287,9 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
                     }`}>
                       {r.status}
                     </span>
+                    {!r.affects_stock && (
+                      <span className="ml-1.5 text-xs text-slate-400 italic">no stock</span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex gap-1">

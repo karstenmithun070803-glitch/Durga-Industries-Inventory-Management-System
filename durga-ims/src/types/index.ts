@@ -74,6 +74,7 @@ export interface PurchaseOrderWithDetails {
   total_amount: string;
   status: string;
   financial_year: string;
+  affects_stock: boolean;
   created_at: Date | string;
   updated_at: Date | string;
   items: PurchaseOrderItemWithDetails[];

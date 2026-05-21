@@ -148,6 +148,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   // 'Draft' = editable, 'Received' = triggers stock addition
   status: text("status").notNull().default("Draft"),
   financial_year: text("financial_year").notNull(), // e.g. "2026-2027"
+  // false = PO is for accounting only; receiving does not update warehouse stock
+  affects_stock: boolean("affects_stock").notNull().default(true),
   ...timestamps,
 }, (t) => [
   unique("po_number_fy_unique").on(t.po_number, t.financial_year),

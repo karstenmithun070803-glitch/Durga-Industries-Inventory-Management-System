@@ -112,6 +112,7 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
   const [isPending, startTransition] = useTransition();
 
   const [poDate, setPoDate] = useState(po ? toISODate(po.po_date) : toISODate(new Date()));
+  const [affectsStock, setAffectsStock] = useState(po?.affects_stock ?? true);
   const [rows, setRows] = useState<LineItemDraft[]>(po ? poItemsToRows(po) : [newRow()]);
 
   const [showReceiveDialog, setShowReceiveDialog] = useState(false);
@@ -137,12 +138,15 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
     return {
       po_date: poDate,
       total_amount: grand.toFixed(2),
+      affects_stock: affectsStock,
       items: filledRows.map((r) => ({
         material_id: r.material_id,
         supplier_id: r.supplier_id || null,
         qty: r.qty,
         unit_id: r.unit_id,
         rate: r.rate || "0",
+        rate_blank: r.rateBlank,
+        zero_rate_confirmed: r.zeroRateConfirmed,
         tax_percentage: r.tax_percentage || "0",
         cgst_amount: r.cgst_amount,
         sgst_amount: r.sgst_amount,
@@ -270,6 +274,25 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
               <p className="text-sm text-slate-700 py-1">{po?.financial_year ?? activeFY}</p>
             </div>
           </div>
+
+          {/* Update Stock checkbox */}
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <label className={`flex items-center gap-2.5 ${isReadOnly ? "cursor-default" : "cursor-pointer"}`}>
+              <input
+                type="checkbox"
+                checked={affectsStock}
+                onChange={(e) => setAffectsStock(e.target.checked)}
+                disabled={isReadOnly}
+                className="w-4 h-4 accent-slate-700"
+              />
+              <span className="text-sm font-medium text-slate-700">Update Stock</span>
+              <span className="text-xs text-slate-400">
+                {affectsStock
+                  ? "Receiving this PO will add quantities to warehouse stock"
+                  : "Receiving this PO will NOT update warehouse stock (accounting record only)"}
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Line items card */}
@@ -362,7 +385,14 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
               </div>
             ))}
           </div>
-          <p className="text-xs text-slate-500">Stock changes are permanent and recorded in the Stock Ledger.</p>
+          {!affectsStock && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded">
+              Stock update is OFF — quantities will NOT be added to warehouse stock.
+            </p>
+          )}
+          {affectsStock && (
+            <p className="text-xs text-slate-500">Stock changes are permanent and recorded in the Stock Ledger.</p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowReceiveDialog(false)} disabled={isPending}>Cancel</Button>
             <Button onClick={confirmReceive} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-700">
