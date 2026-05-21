@@ -33,22 +33,29 @@ Last Updated: 2026-05-21
 [x] 2.7 Contractor Master — form + data table (role + contact fields)
 [x] 2.8 Material Master — form + data table + current_stock as read-only display
 [x] 2.9 Vehicle/Job Master — form + data table (no contractor assignment here)
-[ ] 2.10 Replace plain <select> with shadcn <Command> combobox across all master forms
-[ ] 2.11 Add delete confirmation <Dialog> to all master pages
-[ ] 2.12 Add Financial Year context provider to dashboard layout
+[x] 2.10 Replace plain <select> with shadcn <Command> combobox across all master forms — DONE (Combobox component at src/components/ui/combobox.tsx, used across all masters)
+[x] 2.11 Add delete confirmation <Dialog> to all master pages — DONE (ConfirmDialog at src/components/ui/confirm-dialog.tsx, deactivate/reactivate pattern replaces hard delete)
+[x] 2.12 Add Financial Year context provider to dashboard layout — DONE (FYProvider + useFY hook at src/lib/financial-year.tsx)
 
 ---
 
 ## PHASE 3 — Purchase Orders (Week 3)
-[ ] 3.1 Build reusable <TransactionGrid /> component (inline editable rows, Tab/Enter keyboard flow)
-[ ] 3.2 Purchase Orders page — header form (supplier dropdown, date, status)
-[ ] 3.3 Purchase Orders — line item grid (material, qty, unit, rate, tax%, amounts)
-[ ] 3.4 Purchase Orders — Save as Draft
-[ ] 3.5 Purchase Orders — Mark as Received (atomic stock addition via Server Action)
-[ ] 3.6 Purchase Orders — Edit received PO (atomic reverse + reapply stock)
-[ ] 3.7 Purchase Orders — Delete received PO (atomic stock reversal, hard block if stock already issued)
-[ ] 3.8 Purchase Orders — PDF generation (CGST+SGST or IGST based on supplier GSTIN)
-[ ] 3.9 Stock Ledger — verify PO_INWARD entries created correctly
+[x] 3.1 Build reusable <TransactionGrid /> component (inline editable rows, Tab/Enter keyboard flow) — DONE (src/components/forms/TransactionGrid.tsx)
+[x] 3.2 Purchase Orders page — per-item supplier (redesigned: each line item has its own supplier, not header-level)
+[x] 3.3 Purchase Orders — line item grid (material code, material name, supplier, qty, unit, rate, tax%, CGST, SGST, IGST, amount — all 3 tax columns always visible)
+[x] 3.4 Purchase Orders — Save as Draft
+[x] 3.5 Purchase Orders — Mark as Received (atomic stock addition via Server Action, respects affects_stock flag)
+[x] 3.6 Purchase Orders — Edit received PO (atomic reverse + reapply stock, amber warning banner)
+[x] 3.7 Purchase Orders — Delete received PO (quantity-aware stock check: blocks only if reversal would cause negative stock, atomic reversal)
+[ ] 3.8 Purchase Orders — PDF generation (CGST+SGST or IGST based on per-item supplier GSTIN)
+[x] 3.9 Stock Ledger — PO_INWARD entries created on receive; REVERSAL entries on edit/delete
+
+### Phase 3 Additional Completed Work
+[x] 3.A "Update Stock" (affects_stock) checkbox on PO header — controls whether receiving updates warehouse stock
+[x] 3.B Per-item GST type — determined from supplier GSTIN (state code 33 = CGST+SGST, else IGST), frozen at entry time
+[x] 3.C PO list shows one row per line item (expanded view with date range filter, status tabs, search)
+[x] 3.D Server-side validation: supplier per item, duplicate detection (material+supplier+rate), zero-rate confirmation, qty > 0
+[x] 3.E Header supplier_id auto-derived (single-supplier PO = populated; mixed = NULL)
 
 ---
 
