@@ -75,6 +75,7 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
   const [deletingStatus, setDeletingStatus] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const [isFetching, setIsFetching] = useState(false);
+  const [showRates, setShowRates] = useState(false);
 
   // Re-fetch when FY changes
   useEffect(() => {
@@ -210,10 +211,18 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
             className="max-w-xs"
           />
           {isFetching && <span className="text-xs text-slate-400">Loading...</span>}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showRates}
+                onChange={(e) => setShowRates(e.target.checked)}
+                className="w-3.5 h-3.5 accent-slate-700"
+              />
+              <span className="text-xs text-slate-500">Include rates</span>
+            </label>
             <PrintButton
-              label={`Print Register (${visible.length})`}
-              filename={`PO-Register-${activeFY}${dateFrom || dateTo ? `-${dateFrom || "start"}-to-${dateTo || "end"}` : ""}.pdf`}
+              label={`Print (${visible.length})`}
               disabled={visible.length === 0}
               getDocument={() => (
                 <PORegisterDocument
@@ -222,6 +231,7 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
                   dateFrom={dateFrom}
                   dateTo={dateTo}
                   statusFilter={statusFilter}
+                  showRates={showRates}
                 />
               )}
             />

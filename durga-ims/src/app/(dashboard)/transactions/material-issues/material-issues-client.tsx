@@ -50,6 +50,7 @@ export function MaterialIssuesClient({ initialRows, initialFY }: Props) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
+  const [showRates, setShowRates] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MaterialIssueRow | null>(null);
 
   // ---- Filter logic ----
@@ -173,10 +174,18 @@ export function MaterialIssuesClient({ initialRows, initialFY }: Props) {
             className="max-w-xs"
           />
           {isFetching && <span className="text-xs text-slate-400">Loading…</span>}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showRates}
+                onChange={(e) => setShowRates(e.target.checked)}
+                className="w-3.5 h-3.5 accent-slate-700"
+              />
+              <span className="text-xs text-slate-500">Include rates</span>
+            </label>
             <PrintButton
-              label={`Print Register (${filtered.length})`}
-              filename={`MI-Register-${activeFY}${dateFrom || dateTo ? `-${dateFrom || "start"}-to-${dateTo || "end"}` : ""}.pdf`}
+              label={`Print (${filtered.length})`}
               disabled={filtered.length === 0}
               getDocument={() => (
                 <MIRegisterDocument
@@ -185,6 +194,7 @@ export function MaterialIssuesClient({ initialRows, initialFY }: Props) {
                   dateFrom={dateFrom}
                   dateTo={dateTo}
                   statusFilter={tab}
+                  showRates={showRates}
                 />
               )}
             />

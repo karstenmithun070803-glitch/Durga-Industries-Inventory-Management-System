@@ -1,29 +1,112 @@
 import { StyleSheet } from "@react-pdf/renderer";
 
 export const COMPANY_NAME = "DURGA INDUSTRIES";
-export const COMPANY_ADDRESS = "Chennai, Tamil Nadu";
-export const COMPANY_GSTIN = "";
+export const COMPANY_ADDRESS = "S.FNO.1994/2, MADURAI NEW BYE PASS RD, NEAR PERIYAR ARCH, KARUR - 639002";
+export const COMPANY_GSTIN = "33AALPU5476B1ZJ";
 
 export const styles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 8,
-    paddingTop: 28,
-    paddingBottom: 32,
-    paddingHorizontal: 28,
-    color: "#1e293b",
+    fontSize: 9,
+    paddingTop: 30,
+    paddingBottom: 40,
+    paddingHorizontal: 32,
+    color: "#000",
   },
 
-  // Company header
-  companyHeader: {
-    marginBottom: 10,
-    borderBottomWidth: 1.5,
-    borderBottomColor: "#1e293b",
-    paddingBottom: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
+  // ── Document-style centered company block ──────────────────────────────────
+  companyNameCentered: {
+    fontSize: 16,
+    fontFamily: "Helvetica-Bold",
+    textAlign: "center",
+    letterSpacing: 1,
+    color: "#000",
   },
+  companyDetailCentered: {
+    fontSize: 8,
+    textAlign: "center",
+    color: "#000",
+    marginTop: 2,
+  },
+  docTypeCentered: {
+    fontSize: 11,
+    fontFamily: "Helvetica-Bold",
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 10,
+    color: "#000",
+  },
+
+  // ── Left-aligned info block (PO No / Date / Supplier) ─────────────────────
+  infoLine: {
+    flexDirection: "row",
+    marginBottom: 3,
+  },
+  infoLineLabel: {
+    fontSize: 8.5,
+    width: 130,
+    color: "#000",
+  },
+  infoLineValue: {
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#000",
+    flex: 1,
+  },
+
+  // ── Solid separator line ───────────────────────────────────────────────────
+  separator: {
+    borderTopWidth: 0.75,
+    borderTopColor: "#000",
+    marginVertical: 5,
+  },
+
+  // ── Plain document table ───────────────────────────────────────────────────
+  table: {
+    width: "100%",
+  },
+  plainTableHead: {
+    flexDirection: "row",
+    paddingVertical: 3,
+  },
+  plainTableHeadCell: {
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#000",
+  },
+  plainTableRow: {
+    flexDirection: "row",
+    paddingVertical: 4,
+  },
+  plainTableCell: {
+    fontSize: 8.5,
+    color: "#000",
+  },
+  plainTableCellBold: {
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#000",
+  },
+
+  // ── Page footer ────────────────────────────────────────────────────────────
+  pageFooter: {
+    position: "absolute",
+    bottom: 18,
+    left: 32,
+    right: 32,
+  },
+  footerLine: {
+    borderTopWidth: 0.5,
+    borderTopColor: "#000",
+    marginBottom: 4,
+  },
+  footerText: {
+    fontSize: 8,
+    textAlign: "right",
+    color: "#000",
+  },
+
+  // ── Legacy styles kept for any future reuse ────────────────────────────────
   companyName: {
     fontSize: 14,
     fontFamily: "Helvetica-Bold",
@@ -35,206 +118,11 @@ export const styles = StyleSheet.create({
     color: "#64748b",
     marginTop: 1,
   },
-  docTitle: {
-    fontSize: 11,
-    fontFamily: "Helvetica-Bold",
-    color: "#0f172a",
-    textAlign: "right",
-  },
-  docMeta: {
-    fontSize: 7.5,
-    color: "#64748b",
-    textAlign: "right",
-    marginTop: 1,
-  },
-
-  // Summary bar
-  summaryBar: {
-    flexDirection: "row",
-    gap: 16,
-    marginBottom: 8,
-    padding: "5 8",
-    backgroundColor: "#f8fafc",
-    borderRadius: 3,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  summaryItem: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  summaryLabel: {
-    color: "#64748b",
-    fontSize: 7.5,
-  },
-  summaryValue: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 7.5,
-    color: "#1e293b",
-  },
-
-  // Table
-  table: {
-    width: "100%",
-  },
-  tableHead: {
-    flexDirection: "row",
-    backgroundColor: "#1e293b",
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: 2,
-    marginBottom: 1,
-  },
-  tableHeadCell: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 7,
-    color: "#f8fafc",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-  tableRow: {
-    flexDirection: "row",
-    paddingVertical: 3.5,
-    paddingHorizontal: 6,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#e2e8f0",
-  },
-  tableRowAlt: {
-    backgroundColor: "#f8fafc",
-  },
-  tableCell: {
-    fontSize: 7.5,
-    color: "#334155",
-  },
-  tableCellBold: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 7.5,
-    color: "#0f172a",
-  },
-  tableCellMono: {
-    fontFamily: "Helvetica",
-    fontSize: 7,
-    color: "#475569",
-  },
   tableCellRight: {
     textAlign: "right",
   },
   tableCellCenter: {
     textAlign: "center",
-  },
-
-  // Group header (PO# / Slip#)
-  groupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#e2e8f0",
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    marginTop: 4,
-    marginBottom: 1,
-    borderRadius: 2,
-  },
-  groupHeaderLabel: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 7.5,
-    color: "#1e293b",
-    flex: 1,
-  },
-  groupHeaderMeta: {
-    fontSize: 7,
-    color: "#475569",
-  },
-
-  // Totals footer
-  totalsSection: {
-    marginTop: 10,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  totalsBox: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 3,
-    padding: "5 10",
-    minWidth: 160,
-  },
-  totalsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 1.5,
-  },
-  totalsLabel: {
-    fontSize: 7.5,
-    color: "#64748b",
-  },
-  totalsValue: {
-    fontSize: 7.5,
-    fontFamily: "Helvetica-Bold",
-    color: "#1e293b",
-    textAlign: "right",
-    minWidth: 60,
-  },
-  totalsDivider: {
-    borderTopWidth: 1,
-    borderTopColor: "#cbd5e1",
-    marginVertical: 2,
-  },
-  grandTotalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 2,
-  },
-  grandTotalLabel: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 9,
-    color: "#0f172a",
-  },
-  grandTotalValue: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 9,
-    color: "#0f172a",
-    textAlign: "right",
-    minWidth: 60,
-  },
-
-  // Footer
-  pageFooter: {
-    position: "absolute",
-    bottom: 14,
-    left: 28,
-    right: 28,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  footerText: {
-    fontSize: 6.5,
-    color: "#94a3b8",
-  },
-
-  // Status badge
-  badgeDraft: {
-    fontSize: 6.5,
-    color: "#475569",
-    backgroundColor: "#f1f5f9",
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 2,
-  },
-  badgeReceived: {
-    fontSize: 6.5,
-    color: "#065f46",
-    backgroundColor: "#d1fae5",
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 2,
-  },
-  badgeIssued: {
-    fontSize: 6.5,
-    color: "#065f46",
-    backgroundColor: "#d1fae5",
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 2,
   },
 });
 
@@ -244,6 +132,13 @@ export function fmtAmt(v: string | null | undefined): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+export function fmtQty(v: string | null | undefined): string {
+  if (!v) return "—";
+  const n = parseFloat(v);
+  if (isNaN(n)) return "—";
+  return n.toFixed(3);
 }
 
 export function fmtDate(d: Date | string | null | undefined): string {
