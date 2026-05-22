@@ -26,6 +26,7 @@ interface MaterialOption {
   name: string;
   hsn_code: string | null;
   tax_rate_id: string | null;
+  tax_percentage?: string | null; // direct from DB join when available (issue mode)
   purchase_unit_id: string | null;
   sales_unit_id?: string | null;
   current_stock: string;
@@ -184,8 +185,12 @@ export function TransactionGrid({
       : mat.purchase_unit_id;
 
     const unit = preferredUnitId ? units.find((u) => u.id === preferredUnitId) : null;
-    const taxRate = mat.tax_rate_id ? taxRates.find((t) => t.id === mat.tax_rate_id) : null;
-    const taxPct = taxRate?.tax_percentage ?? "0";
+    // Prefer tax_percentage embedded on the material (issue mode, from DB JOIN)
+    // Fall back to taxRates array lookup (PO mode)
+    const taxPct =
+      mat.tax_percentage ??
+      (mat.tax_rate_id ? taxRates.find((t) => t.id === mat.tax_rate_id)?.tax_percentage : null) ??
+      "0";
 
     const lastRate = await getLastMaterialRate(materialId);
     const rateBlank = lastRate === null;

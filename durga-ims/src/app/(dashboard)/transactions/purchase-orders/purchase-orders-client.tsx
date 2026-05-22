@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { formatCode } from "@/lib/utils";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { PrintButton } from "@/components/pdf/print-button";
+import { PORegisterDocument } from "@/components/pdf/po-register-pdf";
 
 type ItemRow = {
   // PO header
@@ -112,15 +114,7 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
     );
   });
 
-  // Unique PO IDs present in the full rows list (for status tab counts)
-  const uniquePOs = new Map<string, string>();
-  for (const r of rows) uniquePOs.set(r.id, r.status);
-  const poArray = Array.from(uniquePOs.values());
-  const tabCounts: Record<StatusFilter, number> = {
-    All: uniquePOs.size,
-    Draft: poArray.filter((s) => s === "Draft").length,
-    Received: poArray.filter((s) => s === "Received").length,
-  };
+
 
   function handleDeleteClick(r: ItemRow) {
     setDeletingPoId(r.id);
@@ -181,11 +175,6 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
                 }`}
               >
                 {t}
-                <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${
-                  statusFilter === t ? "bg-slate-700 text-white" : "bg-white text-slate-500"
-                }`}>
-                  {tabCounts[t]}
-                </span>
               </button>
             ))}
           </div>
@@ -221,6 +210,22 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
             className="max-w-xs"
           />
           {isFetching && <span className="text-xs text-slate-400">Loading...</span>}
+          <div className="ml-auto">
+            <PrintButton
+              label={`Print Register (${visible.length})`}
+              filename={`PO-Register-${activeFY}${dateFrom || dateTo ? `-${dateFrom || "start"}-to-${dateTo || "end"}` : ""}.pdf`}
+              disabled={visible.length === 0}
+              getDocument={() => (
+                <PORegisterDocument
+                  rows={visible}
+                  fy={activeFY}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  statusFilter={statusFilter}
+                />
+              )}
+            />
+          </div>
         </div>
 
         {/* Table */}

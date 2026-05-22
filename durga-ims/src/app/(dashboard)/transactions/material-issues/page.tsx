@@ -5,5 +5,5 @@ import { MaterialIssuesClient } from "./material-issues-client";
 export default async function MaterialIssuesPage() {
   const fy = getCurrentFinancialYear();
   const rows = await getMaterialIssues(fy);
-  return <MaterialIssuesClient rows={rows} />;
+  return <MaterialIssuesClient initialRows={rows} initialFY={fy} />;
 }

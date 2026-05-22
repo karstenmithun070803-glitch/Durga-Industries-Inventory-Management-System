@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
-import { deleteMaterialIssue } from "@/lib/actions/material-issues.actions";
+import { deleteMaterialIssue, getMaterialIssues } from "@/lib/actions/material-issues.actions";
 import type { MaterialIssueRow } from "@/types";
 import { formatCode, matchesCode } from "@/lib/utils";
+import { useFY } from "@/lib/financial-year";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,19 +16,37 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Pencil, Trash2, Eye } from "lucide-react";
+import { Pencil, Trash2, Eye, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { PrintButton } from "@/components/pdf/print-button";
+import { MIRegisterDocument } from "@/components/pdf/mi-register-pdf";
 
 interface Props {
-  rows: MaterialIssueRow[];
+  initialRows: MaterialIssueRow[];
+  initialFY: string;
 }
 
-type StatusTab = "all" | "Draft" | "Issued";
+type StatusTab = "All" | "Draft" | "Issued";
 
-export function MaterialIssuesClient({ rows }: Props) {
+export function MaterialIssuesClient({ initialRows, initialFY }: Props) {
+  const { activeFY } = useFY();
+  const [rows, setRows] = useState<MaterialIssueRow[]>(initialRows);
+  const [loadedFY, setLoadedFY] = useState(initialFY);
+  const [isFetching, setIsFetching] = useState(false);
   const [, startTransition] = useTransition();
 
-  const [tab, setTab] = useState<StatusTab>("all");
+  // Re-fetch when FY changes in the sidebar
+  useEffect(() => {
+    if (activeFY === loadedFY) return;
+    setIsFetching(true);
+    getMaterialIssues(activeFY).then((data) => {
+      setRows(data);
+      setLoadedFY(activeFY);
+      setIsFetching(false);
+    });
+  }, [activeFY, loadedFY]);
+
+  const [tab, setTab] = useState<StatusTab>("All");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
@@ -35,7 +54,7 @@ export function MaterialIssuesClient({ rows }: Props) {
 
   // ---- Filter logic ----
   const filtered = rows.filter((r) => {
-    if (tab !== "all" && r.status !== tab) return false;
+    if (tab !== "All" && r.status !== tab) return false;
     if (dateFrom && r.issue_date < dateFrom) return false;
     if (dateTo && r.issue_date > dateTo) return false;
     if (search) {
@@ -55,15 +74,6 @@ export function MaterialIssuesClient({ rows }: Props) {
     return true;
   });
 
-  const counts = {
-    all: rows.length,
-    Draft: rows.filter((r) => r.status === "Draft").length,
-    Issued: rows.filter((r) => r.status === "Issued").length,
-  };
-
-  function handleDelete(row: MaterialIssueRow) {
-    setDeleteTarget(row);
-  }
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -90,250 +100,272 @@ export function MaterialIssuesClient({ rows }: Props) {
     return date.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
   };
 
+  const tabs: StatusTab[] = ["All", "Draft", "Issued"];
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-6 pt-5 pb-3 gap-4 flex-wrap">
-        <h1 className="text-xl font-semibold text-slate-800">Material Issues</h1>
+    <div className="p-6 h-full flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">Material Issues</h1>
+          <p className="text-sm text-slate-500 mt-0.5">FY {activeFY}</p>
+        </div>
         <Link href="/transactions/material-issues/new">
-          <Button size="sm">+ New Issue Slip</Button>
+          <Button className="gap-1.5">
+            <Plus className="w-4 h-4" />
+            New Issue Slip
+          </Button>
         </Link>
       </div>
 
-      {/* Filters */}
-      <div className="px-6 pb-3 flex items-center gap-3 flex-wrap">
-        {/* Status tabs */}
-        <div className="flex rounded-md border border-slate-200 overflow-hidden text-sm">
-          {(["all", "Draft", "Issued"] as StatusTab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 font-medium transition-colors ${
-                tab === t
-                  ? "bg-slate-800 text-white"
-                  : "bg-white text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {t === "all" ? "All" : t}{" "}
-              <span className={`ml-1 text-xs ${tab === t ? "text-slate-300" : "text-slate-400"}`}>
-                {counts[t]}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Date range */}
-        <div className="flex items-center gap-1.5">
-          <label className="text-xs text-slate-500 whitespace-nowrap">From</label>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="h-8 w-36 text-xs"
-          />
-          <label className="text-xs text-slate-500 whitespace-nowrap">To</label>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="h-8 w-36 text-xs"
-          />
-        </div>
-
-        {/* Search */}
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search slip, vehicle, material, customer, contractor…"
-          className="h-8 text-sm w-72"
-        />
-      </div>
-
-      {/* Table */}
-      <div className="flex-1 min-h-0 px-6 pb-6">
-        <div className="h-full bg-white rounded-lg border border-slate-200 flex flex-col min-h-0">
-          <div className="flex-1 overflow-auto min-h-0">
-            <table className="min-w-max text-sm w-full">
-              <thead className="bg-slate-50 sticky top-0 z-10">
-                <tr>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-0 z-20 bg-slate-50 w-12">
-                    S.No
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-12 z-20 bg-slate-50 w-24 border-r border-slate-200">
-                    Date
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">
-                    Slip #
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
-                    Vehicle / Job
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
-                    Customer
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
-                    Mat. Code
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">
-                    HSN
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-44">
-                    Material Name
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
-                    Contractor
-                  </th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-20">
-                    Qty
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-16">
-                    Unit
-                  </th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">
-                    Rate
-                  </th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">
-                    Tax
-                  </th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-28">
-                    Amount
-                  </th>
-                  <th className="px-3 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap w-24">
-                    Stk
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
-                    Status
-                  </th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={17} className="px-6 py-12 text-center text-slate-400 text-sm">
-                      {search || tab !== "all" || dateFrom || dateTo
-                        ? "No issue slips match the current filters."
-                        : "No material issue slips yet. Create the first one."}
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((r, i) => {
-                    const slipLabel = `MI-${String(r.slip_number).padStart(4, "0")}`;
-                    const stickyBg = "bg-white";
-
-                    // Tax amount: prefer IGST, else CGST+SGST combined
-                    const taxAmt =
-                      parseFloat(r.igst_amount) > 0
-                        ? r.igst_amount
-                        : (parseFloat(r.cgst_amount) + parseFloat(r.sgst_amount)).toFixed(2);
-
-                    return (
-                      <tr key={r.item_id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                        {/* Sticky: S.No */}
-                        <td
-                          className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}
-                        >
-                          {i + 1}
-                        </td>
-                        {/* Sticky: Date */}
-                        <td
-                          className={`px-3 py-2.5 text-slate-700 whitespace-nowrap sticky left-12 z-10 w-24 border-r border-slate-200 ${stickyBg}`}
-                        >
-                          {fmtDate(r.issue_date)}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono text-xs font-medium text-slate-700 whitespace-nowrap">
-                          {slipLabel}
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
-                          <span className="text-xs text-slate-400 mr-1">
-                            {formatCode("J", r.job_ref_no, 5)}
-                          </span>
-                          {r.vehicle_name}
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
-                          {r.customer_name ?? "—"}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono text-xs text-slate-600 whitespace-nowrap">
-                          {formatCode("M", r.material_no)}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono text-xs text-slate-500 whitespace-nowrap">
-                          {r.hsn_code ?? "—"}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800 whitespace-nowrap">
-                          {r.material_name}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">
-                          {r.contractor_name ?? "—"}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-slate-700 tabular-nums">
-                          {r.qty}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
-                          {r.unit_name ?? "—"}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-slate-700 tabular-nums">
-                          {fmt2(r.rate)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums">
-                          {fmt2(taxAmt)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-medium text-slate-800 tabular-nums">
-                          ₹{fmt2(r.amount)}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          {r.affects_inventory ? (
-                            <span className="text-emerald-600 text-xs font-medium">✓</span>
-                          ) : (
-                            <span className="text-slate-300 text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              r.status === "Issued"
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1">
-                            <Link
-                              href={`/transactions/material-issues/${r.id}/view`}
-                              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors"
-                              title="View"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </Link>
-                            <Link
-                              href={`/transactions/material-issues/${r.id}/edit`}
-                              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Link>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                              onClick={() => handleDelete(r)}
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+      {/* Table card */}
+      <div className="flex-1 bg-white rounded-lg border border-slate-200 flex flex-col min-h-0">
+        {/* Toolbar inside card */}
+        <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+          {/* Status tabs */}
+          <div className="flex gap-1">
+            {tabs.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  tab === t
+                    ? "bg-slate-800 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
+
+          {/* Date range */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">From</span>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-36 text-xs"
+            />
+            <span className="text-xs text-slate-500">To</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-36 text-xs"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Search */}
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search slip, vehicle, material, customer, contractor…"
+            className="max-w-xs"
+          />
+          {isFetching && <span className="text-xs text-slate-400">Loading…</span>}
+          <div className="ml-auto">
+            <PrintButton
+              label={`Print Register (${filtered.length})`}
+              filename={`MI-Register-${activeFY}${dateFrom || dateTo ? `-${dateFrom || "start"}-to-${dateTo || "end"}` : ""}.pdf`}
+              disabled={filtered.length === 0}
+              getDocument={() => (
+                <MIRegisterDocument
+                  rows={filtered}
+                  fy={activeFY}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  statusFilter={tab}
+                />
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-auto flex-1 min-w-0">
+          <table className="min-w-max text-sm w-full">
+            <thead className="bg-slate-50 sticky top-0 z-10">
+              <tr>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-0 z-20 bg-slate-50 w-12">
+                  S.No
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-12 z-20 bg-slate-50 w-24 border-r border-slate-200">
+                  Date
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">
+                  Slip #
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
+                  Vehicle / Job
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
+                  Customer
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
+                  Mat. Code
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">
+                  HSN
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-44">
+                  Material Name
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
+                  Contractor
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-20">
+                  Qty
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-16">
+                  Unit
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">
+                  Rate
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">
+                  Tax
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-28">
+                  Amount
+                </th>
+                <th className="px-3 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap w-24">
+                  Stk
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
+                  Status
+                </th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={17} className="px-6 py-12 text-center text-slate-400 text-sm">
+                    {search || tab !== "All" || dateFrom || dateTo
+                      ? "No issue slips match the current filters."
+                      : "No material issue slips yet. Create the first one."}
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((r, i) => {
+                  const slipLabel = `MI-${String(r.slip_number).padStart(4, "0")}`;
+                  const stickyBg = "bg-white";
+
+                  const taxAmt =
+                    parseFloat(r.igst_amount) > 0
+                      ? r.igst_amount
+                      : (parseFloat(r.cgst_amount) + parseFloat(r.sgst_amount)).toFixed(2);
+
+                  return (
+                    <tr key={r.item_id} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>
+                        {i + 1}
+                      </td>
+                      <td className={`px-3 py-2.5 text-slate-700 whitespace-nowrap sticky left-12 z-10 w-24 border-r border-slate-200 ${stickyBg}`}>
+                        {fmtDate(r.issue_date)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-xs font-medium text-slate-700 whitespace-nowrap">
+                        {slipLabel}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
+                        <span className="text-xs text-slate-400 mr-1">
+                          {formatCode("J", r.job_ref_no, 5)}
+                        </span>
+                        {r.vehicle_name}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
+                        {r.customer_name ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-slate-600 whitespace-nowrap">
+                        {formatCode("M", r.material_no)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-slate-500 whitespace-nowrap">
+                        {r.hsn_code ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 whitespace-nowrap">
+                        {r.material_name}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">
+                        {r.contractor_name ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-slate-700 tabular-nums">
+                        {r.qty}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
+                        {r.unit_name ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-slate-700 tabular-nums">
+                        {fmt2(r.rate)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums">
+                        {fmt2(taxAmt)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-medium text-slate-800 tabular-nums">
+                        ₹{fmt2(r.amount)}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {r.affects_inventory ? (
+                          <span className="text-emerald-600 text-xs font-medium">✓</span>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            r.status === "Issued"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-1">
+                          <Link
+                            href={`/transactions/material-issues/${r.id}/view`}
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors"
+                            title="View"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Link>
+                          <Link
+                            href={`/transactions/material-issues/${r.id}/edit`}
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Link>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                            onClick={() => setDeleteTarget(r)}
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

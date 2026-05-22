@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { materials } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { materials, materialIssueItems, materialIssues } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getMaterials() {
@@ -77,6 +77,18 @@ export async function deleteMaterial(id: string) {
       `Cannot deactivate "${mat.name}": current stock is ${parseFloat(mat.current_stock).toFixed(2)}. Bring stock to zero before deactivating.`
     );
   }
+
+  // Guard: block if referenced in any Draft issue slip
+  const inUse = await db
+    .select({ slip_number: materialIssues.slip_number })
+    .from(materialIssueItems)
+    .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
+    .where(and(eq(materialIssueItems.material_id, id), eq(materialIssues.status, "Draft")))
+    .limit(1);
+  if (inUse.length > 0)
+    throw new Error(
+      `Cannot deactivate "${mat?.name}": it is used in Draft Issue Slip MI-${String(inUse[0].slip_number).padStart(4, "0")}. Complete or delete that slip first.`
+    );
 
   await db.update(materials).set({ is_active: false }).where(eq(materials.id, id));
   revalidatePath("/masters/materials");

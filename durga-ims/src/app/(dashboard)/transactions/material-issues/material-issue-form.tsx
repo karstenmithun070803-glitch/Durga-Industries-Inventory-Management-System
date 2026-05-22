@@ -54,6 +54,7 @@ interface MaterialOption {
   name: string;
   hsn_code: string | null;
   tax_rate_id: string | null;
+  tax_percentage?: string | null;
   purchase_unit_id: string | null;
   sales_unit_id: string | null;
   current_stock: string;
@@ -244,8 +245,8 @@ export function MaterialIssueForm({
         } else if (mode === "edit-draft") {
           await updateMaterialIssue(issue!.id, buildSubmitData());
         }
-        await issueMaterialIssue(targetId!);
-        toast.success(`MI-${String(nextSlipNumber ?? issue?.slip_number).padStart(4, "0")} issued. Stock updated.`);
+        const slipNumber = await issueMaterialIssue(targetId!);
+        toast.success(`MI-${String(slipNumber).padStart(4, "0")} issued. Stock updated.`);
         router.push("/transactions/material-issues");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to confirm issue.");
@@ -276,6 +277,20 @@ export function MaterialIssueForm({
   // Rows for confirmation dialog
   const stockRows = rows.filter((r) => r.material_id && r.affects_inventory);
   const passRows = rows.filter((r) => r.material_id && !r.affects_inventory);
+
+  // Client-side stock pre-check (approximate — server re-validates)
+  const stockWarnings = stockRows
+    .map((r) => {
+      const mat = materials.find((m) => m.id === r.material_id);
+      if (!mat) return null;
+      const available = parseFloat(mat.current_stock);
+      const requested = parseFloat(r.qty || "0");
+      if (requested > available) {
+        return `${r.material_name}: need ${requested} ${r.unit_name || ""}, only ${available.toFixed(2)} available`;
+      }
+      return null;
+    })
+    .filter(Boolean) as string[];
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
@@ -383,7 +398,10 @@ export function MaterialIssueForm({
               </div>
               {/* Margin % */}
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Margin %</label>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Margin %
+                  <span className="ml-1 font-normal text-slate-400">(applied at invoicing)</span>
+                </label>
                 {isReadOnly ? (
                   <div className="h-9 px-3 w-24 flex items-center rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-700">
                     {marginPct}
@@ -607,6 +625,15 @@ export function MaterialIssueForm({
             </div>
           )}
 
+          {stockWarnings.length > 0 && (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 space-y-1">
+              <p className="text-xs font-medium text-amber-700">⚠ Insufficient stock (based on current levels):</p>
+              {stockWarnings.map((w, i) => (
+                <p key={i} className="text-xs text-amber-700">{w}</p>
+              ))}
+            </div>
+          )}
+
           <p className="text-xs text-slate-400 mt-3">
             Stock changes are permanent and recorded in the Stock Ledger.
           </p>
@@ -618,8 +645,8 @@ export function MaterialIssueForm({
             <Button
               variant="default"
               onClick={handleConfirmIssue}
-              disabled={isPending}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={isPending || stockWarnings.length > 0}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
             >
               {isPending ? "Issuing…" : "Issue Materials"}
             </Button>

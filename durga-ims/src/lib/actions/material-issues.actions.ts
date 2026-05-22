@@ -89,28 +89,6 @@ function validateIssueItems(items: IssueItemInput[]) {
   }
 }
 
-async function checkStockAvailability(items: IssueItemInput[]) {
-  // Aggregate qty by material_id — critical: two rows of same material on one slip are summed
-  const qtyByMaterial = new Map<string, number>();
-  for (const item of items) {
-    if (!item.affects_inventory) continue;
-    const existing = qtyByMaterial.get(item.material_id) ?? 0;
-    qtyByMaterial.set(item.material_id, existing + parseFloat(item.qty || "0"));
-  }
-
-  for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
-    const [mat] = await db
-      .select({ name: materials.name, current_stock: materials.current_stock })
-      .from(materials)
-      .where(eq(materials.id, materialId));
-    if (!mat) throw new Error("Material not found.");
-    if (parseFloat(mat.current_stock) < requestedQty) {
-      throw new Error(
-        `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
-      );
-    }
-  }
-}
 
 function itemValues(issueId: string, item: IssueItemInput) {
   return {
@@ -453,9 +431,9 @@ export async function updateMaterialIssue(id: string, data: IssueHeaderInput): P
 // Write — issue (Draft → Issued, stock deduction)
 // ---------------------------------------------------------------------------
 
-export async function issueMaterialIssue(id: string): Promise<void> {
+export async function issueMaterialIssue(id: string): Promise<number> {
   const [issue] = await db
-    .select({ status: materialIssues.status })
+    .select({ status: materialIssues.status, slip_number: materialIssues.slip_number })
     .from(materialIssues)
     .where(eq(materialIssues.id, id));
 
@@ -471,10 +449,25 @@ export async function issueMaterialIssue(id: string): Promise<void> {
     .from(materialIssueItems)
     .where(eq(materialIssueItems.issue_id, id));
 
-  // Server-side stock check at confirmation time
-  await checkStockAvailability(items.map((i) => ({ ...i, contractor_id: null, hsn_code: "", unit_id: "", rate: "0", rate_blank: false, tax_percentage: "0", cgst_amount: "0", sgst_amount: "0", igst_amount: "0", amount: "0", gst_type: "", zero_rate_confirmed: true })));
-
   await db.transaction(async (tx) => {
+    // Stock availability check inside the transaction — atomic with the deduction
+    const qtyByMaterial = new Map<string, number>();
+    for (const item of items) {
+      if (!item.affects_inventory) continue;
+      qtyByMaterial.set(item.material_id, (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0"));
+    }
+    for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
+      const [mat] = await tx
+        .select({ name: materials.name, current_stock: materials.current_stock })
+        .from(materials)
+        .where(eq(materials.id, materialId));
+      if (!mat) throw new Error("Material not found.");
+      if (parseFloat(mat.current_stock) < requestedQty)
+        throw new Error(
+          `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
+        );
+    }
+
     await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, id));
 
     for (const item of items) {
@@ -498,6 +491,7 @@ export async function issueMaterialIssue(id: string): Promise<void> {
   });
 
   revalidatePath("/transactions/material-issues");
+  return issue.slip_number;
 }
 
 // ---------------------------------------------------------------------------
