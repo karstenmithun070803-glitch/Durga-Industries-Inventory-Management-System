@@ -55,7 +55,7 @@ export function PORegisterDocument({ rows, showRates }: Props) {
 
   return (
     <Document title="Purchase Order">
-      {poGroups.map(([poId, items], groupIdx) => {
+      {poGroups.map(([poId, items]) => {
         const first = items[0];
         const poLabel = formatCode("PO-", first.po_number, 4);
         const supplier = first.supplier_name ?? "—";
