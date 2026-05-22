@@ -174,6 +174,9 @@ export function MaterialIssuesClient({ rows }: Props) {
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
                     Mat. Code
                   </th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">
+                    HSN
+                  </th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-44">
                     Material Name
                   </th>
@@ -209,7 +212,7 @@ export function MaterialIssuesClient({ rows }: Props) {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={16} className="px-6 py-12 text-center text-slate-400 text-sm">
+                    <td colSpan={17} className="px-6 py-12 text-center text-slate-400 text-sm">
                       {search || tab !== "all" || dateFrom || dateTo
                         ? "No issue slips match the current filters."
                         : "No material issue slips yet. Create the first one."}
@@ -254,6 +257,9 @@ export function MaterialIssuesClient({ rows }: Props) {
                         </td>
                         <td className="px-3 py-2.5 font-mono text-xs text-slate-600 whitespace-nowrap">
                           {formatCode("M", r.material_no)}
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-xs text-slate-500 whitespace-nowrap">
+                          {r.hsn_code ?? "—"}
                         </td>
                         <td className="px-3 py-2.5 text-slate-800 whitespace-nowrap">
                           {r.material_name}

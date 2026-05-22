@@ -285,6 +285,11 @@ export function TransactionGrid({
               <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-48">Supplier</th>
             )}
 
+            {/* HSN column — issue mode only */}
+            {isIssueMode && (
+              <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">HSN</th>
+            )}
+
             {/* Contractor column — issue mode only */}
             {isIssueMode && (
               <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-44">Contractor</th>
@@ -334,6 +339,13 @@ export function TransactionGrid({
                     />
                   )}
                 </td>
+
+                {/* HSN — read-only, auto-filled, issue mode only */}
+                {isIssueMode && (
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500 whitespace-nowrap">
+                    {row.hsn_code || "—"}
+                  </td>
+                )}
 
                 {/* Supplier combobox — PO mode only */}
                 {!isIssueMode && (
