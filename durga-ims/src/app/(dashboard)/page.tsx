@@ -1,1 +1,5 @@
-export default function Page() { return <div>TODO</div> }
+import { redirect } from "next/navigation";
+
+export default function DashboardPage() {
+  redirect("/masters/materials");
+}
