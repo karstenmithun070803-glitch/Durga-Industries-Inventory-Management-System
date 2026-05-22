@@ -574,7 +574,63 @@ for (const item of items) {
 
 ---
 
-## 16. Key Files
+## 16. PDF Print Feature
+
+Added after the core PO module shipped. Allows printing individual Purchase Order slips directly from the list view.
+
+### How It Works
+
+1. The list view has a **"Print (N)"** button (where N = number of visible rows after filters).
+2. Clicking it generates a PDF **in the browser** (client-side, using `@react-pdf/renderer`) and opens it in a new tab for print preview.
+3. No file is downloaded automatically — the browser's native PDF viewer opens with its built-in Print button.
+
+### "Include Rates" Checkbox
+
+A checkbox labeled "Include rates" sits next to the Print button. When unchecked (default), the PDF shows only: S.No | Material Name | Qty | Unit — suitable for shop floor use where rates should not be visible. When checked, Rate and Amount columns are added, plus a Total line.
+
+### PDF Layout (per page)
+
+Each PO gets its own page (portrait A4). The layout matches the client's traditional document format:
+
+```
+                    DURGA INDUSTRIES
+   S.FNO.1994/2, MADURAI NEW BYE PASS RD, NEAR PERIYAR ARCH, KARUR - 639002
+                    GSTIN: 33AALPU5476B1ZJ
+
+                      PURCHASE ORDER
+
+PURCHASE ORDER NO.  : PO-0001
+DATE                : 21/05/2026
+SUPPLIER NAME       : Sudharshan
+──────────────────────────────────────────────────
+S No.   Material Name                      Qty     Unit
+──────────────────────────────────────────────────
+  1     BOLT                           10.000       NO
+──────────────────────────────────────────────────
+
+                    Pg.No.:1    For DURGA INDUSTRIES
+```
+
+- Company name: centered, bold, 16pt
+- Address + GSTIN: centered, 8pt
+- Document type: centered, bold, 11pt
+- Info block: left-aligned label:value pairs
+- Table: no colored backgrounds, no alternating row stripes, solid separator lines only
+- Qty formatted to 3 decimal places (`10.000`)
+- Footer: page number + company name (right-aligned, repeats on every page)
+
+### Key Files
+
+```
+src/components/pdf/
+  pdf-styles.ts          ← Shared styles (document-format), company constants, fmtAmt/fmtQty/fmtDate helpers
+  po-register-pdf.tsx    ← PORegisterDocument component (one Page per PO)
+  print-button.tsx       ← PrintButton — lazy PDF generation, window.open() for browser preview
+```
+
+---
+
+## 17. Key Files
 
 ```
 src/lib/actions/
@@ -595,16 +651,21 @@ src/lib/actions/
 
 src/app/(dashboard)/transactions/purchase-orders/
   page.tsx                                ← Server: fetches POs for current FY
-  purchase-orders-client.tsx              ← list view with filters
+  purchase-orders-client.tsx              ← list view with filters + Print button
   po-form.tsx                             ← create / edit / view form + sticky totals bar
 
 src/components/forms/
-  TransactionGrid.tsx                     ← Reusable line-item grid
+  TransactionGrid.tsx                     ← Reusable line-item grid (also used by Phase 4)
+
+src/components/pdf/
+  pdf-styles.ts                           ← Shared document-format styles and helpers
+  po-register-pdf.tsx                     ← PO PDF document component
+  print-button.tsx                        ← Generic print trigger button
 ```
 
 ---
 
-## 17. Verification Checklist
+## 18. Verification Checklist
 
 After any change to PO logic, verify these scenarios manually:
 
