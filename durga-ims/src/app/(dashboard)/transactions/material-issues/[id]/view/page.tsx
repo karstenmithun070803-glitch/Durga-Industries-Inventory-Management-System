@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import { getMaterialIssueById } from "@/lib/actions/material-issues.actions";
 import { MaterialIssueForm } from "../../material-issue-form";

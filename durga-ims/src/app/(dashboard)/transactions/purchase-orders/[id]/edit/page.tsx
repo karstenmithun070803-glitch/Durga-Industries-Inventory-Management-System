@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import { getPurchaseOrderById, getActiveSuppliers, getActiveMaterials, getActiveUnits } from "@/lib/actions/purchase-orders.actions";
 import { getAllTaxRates } from "@/lib/actions/tax.actions";

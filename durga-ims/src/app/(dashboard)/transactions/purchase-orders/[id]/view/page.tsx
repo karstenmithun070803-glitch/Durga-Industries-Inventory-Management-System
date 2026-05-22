@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { notFound } from "next/navigation";
 import { getPurchaseOrderById, getActiveSuppliers } from "@/lib/actions/purchase-orders.actions";
 import { POForm } from "../../po-form";

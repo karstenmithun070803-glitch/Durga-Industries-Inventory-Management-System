@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { getCurrentFinancialYear } from "@/types";
 import { getMaterialIssues } from "@/lib/actions/material-issues.actions";
 import { MaterialIssuesClient } from "./material-issues-client";

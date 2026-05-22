@@ -2,8 +2,6 @@ import { Sidebar } from "@/components/sidebar";
 import { FYProvider } from "@/lib/financial-year";
 import { FYBanner } from "@/components/fy-banner";
 
-export const dynamic = "force-dynamic";
-
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <FYProvider>

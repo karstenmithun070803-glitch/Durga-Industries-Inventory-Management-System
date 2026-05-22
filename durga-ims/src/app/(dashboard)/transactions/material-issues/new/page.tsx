@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { getCurrentFinancialYear } from "@/types";
 import {
   getActiveVehicles,

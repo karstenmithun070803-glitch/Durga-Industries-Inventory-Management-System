@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { getPurchaseOrders } from "@/lib/actions/purchase-orders.actions";
 import { getCurrentFinancialYear } from "@/types";
 import { PurchaseOrdersClient } from "./purchase-orders-client";
