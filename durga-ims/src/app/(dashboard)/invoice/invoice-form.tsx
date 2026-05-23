@@ -26,10 +26,13 @@ import {
   finalizeInvoice,
   revertInvoiceToDraft,
   deleteInvoice,
+  cancelInvoice,
   getIssuedMIsForVehicle,
   getAllIssuedMIItemsForVehicle,
+  getLinkedSlipsForInvoice,
   peekNextBillNumber,
 } from "@/lib/actions/invoices.actions";
+import type { CompanySetting } from "@/lib/actions/settings.actions";
 
 type Mode = "new" | "edit" | "view";
 
@@ -76,6 +79,7 @@ interface Props {
   taxRates: TaxRateOption[];
   materials: MaterialOption[];
   units: UnitOption[];
+  companySetting?: CompanySetting;
 }
 
 interface MISlipMeta {
@@ -92,8 +96,30 @@ interface MISlipWithItems {
   items: InvoiceItemWithDetails[];
 }
 
+function mergeSlipRows(rows: LineItemDraft[]): LineItemDraft[] {
+  const map = new Map<string, LineItemDraft>();
+  for (const row of rows) {
+    const key = `${row.material_id}|${row.rate}|${row.tax_percentage}`;
+    if (map.has(key)) {
+      const ex = map.get(key)!;
+      map.set(key, {
+        ...ex,
+        _slip_id: undefined,
+        qty: (parseFloat(ex.qty) + parseFloat(row.qty)).toString(),
+        amount: (parseFloat(ex.amount) + parseFloat(row.amount)).toFixed(2),
+        cgst_amount: (parseFloat(ex.cgst_amount) + parseFloat(row.cgst_amount)).toFixed(2),
+        sgst_amount: (parseFloat(ex.sgst_amount) + parseFloat(row.sgst_amount)).toFixed(2),
+        igst_amount: (parseFloat(ex.igst_amount) + parseFloat(row.igst_amount)).toFixed(2),
+      });
+    } else {
+      map.set(key, { ...row });
+    }
+  }
+  return Array.from(map.values());
+}
+
 function itemsFromMISlips(slips: MISlipWithItems[], gstType: string): LineItemDraft[] {
-  return slips.flatMap((slip) =>
+  const raw = slips.flatMap((slip) =>
     slip.items.map((item) => ({
       _key: crypto.randomUUID(),
       _slip_id: slip.slip_id,
@@ -120,6 +146,7 @@ function itemsFromMISlips(slips: MISlipWithItems[], gstType: string): LineItemDr
       affects_inventory: true,
     }))
   );
+  return mergeSlipRows(raw);
 }
 
 function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[]): LineItemDraft[] {
@@ -189,7 +216,7 @@ function buildPdfRows(inv: InvoiceWithDetails): InvoiceRow[] {
   }));
 }
 
-export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, units }: Props) {
+export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, units, companySetting }: Props) {
   const router = useRouter();
   const { activeFY: fy } = useFY();
   const [isSaving, setIsSaving] = useState(false);
@@ -238,6 +265,10 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  // ── Linked slips for view mode (read-only checklist) ─────────────────────
+  const [linkedSlips, setLinkedSlips] = useState<MISlipMeta[]>([]);
 
   // ── Derived totals ────────────────────────────────────────────────────────
   const totals = calcRowTotals(rows);
@@ -279,7 +310,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
           }))
         );
 
-      const combined = [...slipRows, ...manualRows];
+      const combined = [...mergeSlipRows(slipRows), ...manualRows];
       return combined.length ? combined : [newRow()];
     },
     []
@@ -366,6 +397,13 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
         .catch(() => {});
     }
   }, [invoice?.vehicle_id, isReadOnly]);
+
+  // Load linked slips for view mode
+  useEffect(() => {
+    if (mode === "view" && invoice?.id) {
+      getLinkedSlipsForInvoice(invoice.id).then(setLinkedSlips).catch(() => {});
+    }
+  }, [mode, invoice?.id]);
 
   // ── Build submit payload ───────────────────────────────────────────────────
   function buildPayload() {
@@ -471,7 +509,23 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     }
   }
 
+  async function handleCancel() {
+    if (!invoice) return;
+    setIsSaving(true);
+    try {
+      await cancelInvoice(invoice.id);
+      toast.success(`${invoice.bill_number} cancelled.`);
+      router.push("/invoice");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to cancel.");
+    } finally {
+      setIsSaving(false);
+      setShowCancelDialog(false);
+    }
+  }
+
   const isFinalized = invoice?.status === "Finalized";
+  const isCancelled = invoice?.status === "Cancelled";
   const fmt2 = (n: number) =>
     n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -508,6 +562,17 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
           <span>
             This invoice is <strong>Finalized</strong>. Editing will update the stored record.
             Since invoices do not affect stock, no stock reversal is needed.
+          </span>
+        </div>
+      )}
+
+      {/* Cancelled banner */}
+      {isCancelled && (
+        <div className="mx-6 mb-3 flex items-start gap-2 bg-rose-50 border border-rose-200 rounded px-4 py-3 text-sm text-rose-800">
+          <span className="mt-0.5">✕</span>
+          <span>
+            This invoice is <strong>Cancelled</strong>. It is a permanent record and cannot be edited or deleted.
+            The MI slips linked to it have been freed and can be used in a corrective invoice.
           </span>
         </div>
       )}
@@ -602,7 +667,26 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
             </div>
           )}
 
-          {/* MI Slip checklist — shown when vehicle selected in non-readonly mode */}
+          {/* MI Slip checklist — editable in edit/new, read-only in view if any slips linked */}
+          {isReadOnly && linkedSlips.length > 0 && (
+            <div>
+              <label className="text-xs text-slate-500 block mb-1.5">Sourced from Issue Slips</label>
+              <div className="border border-slate-200 rounded-md divide-y divide-slate-100">
+                {linkedSlips.map((slip) => (
+                  <div key={slip.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <input type="checkbox" checked readOnly disabled className="w-4 h-4 accent-slate-700 flex-shrink-0 opacity-60" />
+                    <span className="font-mono text-slate-700 text-xs">
+                      MI-{String(slip.slip_number).padStart(4, "0")}
+                    </span>
+                    <span className="text-slate-500 text-xs">
+                      {new Date(slip.issue_date).toLocaleDateString("en-IN")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {!isReadOnly && vehicleId && (
             <div>
               <label className="text-xs text-slate-500 block mb-1.5">
@@ -651,9 +735,19 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
             </div>
           )}
 
-          {/* Row 3: Tax Rate, Rate Date */}
+          {/* Row 3: Tax Rate / Bill Series, Rate Date */}
           <div className="grid grid-cols-3 gap-4">
-            {!invoice && (
+            {invoice ? (
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Bill Series</label>
+                <div className="h-9 px-3 flex items-center bg-slate-50 rounded border border-slate-200 text-sm text-slate-500">
+                  {invoice.bill_number.includes("-")
+                    ? invoice.bill_number.split("-")[0]
+                    : "Numeric only"}
+                  <span className="ml-2 text-xs text-slate-400">(locked at creation)</span>
+                </div>
+              </div>
+            ) : (
               <div>
                 <label className="text-xs text-slate-500 block mb-1">Tax Rate (Bill Series)</label>
                 <Combobox
@@ -804,7 +898,30 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
         </div>
 
         <div className="flex items-center gap-3 px-6 py-3">
-          {mode === "view" ? (
+          {isCancelled ? (
+            // Cancelled: read-only, no actions except PDF print and back
+            <>
+              {invoice && (
+                <>
+                  <PrintButton
+                    label="Insurance PDF"
+                    getDocument={() => (
+                      <InsuranceInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} companySetting={companySetting} />
+                    )}
+                  />
+                  <PrintButton
+                    label="Customer PDF"
+                    getDocument={() => (
+                      <CustomerInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} companySetting={companySetting} />
+                    )}
+                  />
+                </>
+              )}
+              <Button variant="outline" size="sm" onClick={() => router.push("/invoice")}>
+                Back to Invoices
+              </Button>
+            </>
+          ) : mode === "view" ? (
             <>
               <Button
                 variant="outline"
@@ -818,13 +935,13 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
                   <PrintButton
                     label="Insurance PDF"
                     getDocument={() => (
-                      <InsuranceInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} />
+                      <InsuranceInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} companySetting={companySetting} />
                     )}
                   />
                   <PrintButton
                     label="Customer PDF"
                     getDocument={() => (
-                      <CustomerInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} />
+                      <CustomerInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} companySetting={companySetting} />
                     )}
                   />
                 </>
@@ -848,6 +965,17 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
               >
                 Revert to Draft
               </Button>
+              {invoice && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 ml-auto"
+                  onClick={() => setShowCancelDialog(true)}
+                  disabled={isSaving}
+                >
+                  Cancel Invoice
+                </Button>
+              )}
             </>
           ) : (
             <>
@@ -863,27 +991,40 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
                 Finalize Invoice
               </Button>
               {invoice && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-auto"
-                  onClick={() => setShowDeleteDialog(true)}
-                  disabled={isSaving}
-                >
-                  Delete
-                </Button>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                    onClick={() => setShowCancelDialog(true)}
+                    disabled={isSaving}
+                  >
+                    Cancel Invoice
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => setShowDeleteDialog(true)}
+                    disabled={isSaving}
+                  >
+                    Delete
+                  </Button>
+                </div>
               )}
             </>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className={isFinalized ? "ml-auto" : ""}
-            onClick={() => router.push("/invoice")}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
+          {!isCancelled && mode !== "view" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={isFinalized && !invoice ? "ml-auto" : ""}
+              onClick={() => router.push("/invoice")}
+              disabled={isSaving}
+            >
+              Back
+            </Button>
+          )}
         </div>
       </div>
 
@@ -903,6 +1044,15 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
         description="This will permanently delete the invoice and all its line items. This cannot be undone."
         confirmLabel="Delete Invoice"
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        title={`Cancel ${invoice?.bill_number}?`}
+        description="This will permanently cancel the invoice. It cannot be edited or deleted after cancellation. The linked MI slips will be freed for use in a corrective invoice."
+        confirmLabel={isSaving ? "Cancelling…" : "Cancel Invoice"}
+        onConfirm={handleCancel}
       />
     </div>
   );

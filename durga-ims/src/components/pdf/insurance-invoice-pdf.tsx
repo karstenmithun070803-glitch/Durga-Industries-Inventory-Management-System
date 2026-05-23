@@ -12,16 +12,27 @@ import {
 import type { InvoiceRow } from "@/types";
 import { numberToWords } from "@/lib/utils/number-to-words";
 
+interface CompanySetting {
+  company_name: string;
+  address: string | null;
+  gstin: string | null;
+}
+
 interface Props {
   groups: InvoiceRow[][];
   fy: string;
+  companySetting?: CompanySetting;
 }
 
 function formatJobCode(num: number): string {
   return `J${String(num).padStart(5, "0")}`;
 }
 
-export function InsuranceInvoiceDocument({ groups }: Props) {
+export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
+  const coName = companySetting?.company_name ?? COMPANY_NAME;
+  const coAddress = companySetting?.address ?? COMPANY_ADDRESS;
+  const coGstin = companySetting?.gstin ?? COMPANY_GSTIN;
+
   return (
     <Document title="Invoice — Insurance Copy">
       {groups.map((items) => {
@@ -43,9 +54,9 @@ export function InsuranceInvoiceDocument({ groups }: Props) {
 
             {/* ── Company block ── */}
             <View>
-              <Text style={styles.companyNameCentered}>{COMPANY_NAME}</Text>
-              <Text style={styles.companyDetailCentered}>{COMPANY_ADDRESS}</Text>
-              <Text style={styles.companyDetailCentered}>GSTIN: {COMPANY_GSTIN}</Text>
+              <Text style={styles.companyNameCentered}>{coName}</Text>
+              <Text style={styles.companyDetailCentered}>{coAddress}</Text>
+              <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
             </View>
 
             <Text style={styles.docTypeCentered}>INVOICE</Text>
@@ -89,6 +100,12 @@ export function InsuranceInvoiceDocument({ groups }: Props) {
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabel}>ADDRESS</Text>
                 <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
+              </View>
+            )}
+            {first.customer_state && (
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>PLACE OF SUPPLY</Text>
+                <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
               </View>
             )}
             {first.rev_charge_status && (
@@ -171,6 +188,16 @@ export function InsuranceInvoiceDocument({ groups }: Props) {
               <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", marginTop: 4, color: "#374151" }}>
                 {numberToWords(parseFloat(first.net_amount))}
               </Text>
+            </View>
+
+            {/* ── Authorised Signatory ── */}
+            <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "flex-end" }}>
+              <View style={{ alignItems: "center" }}>
+                <View style={{ height: 30 }} />
+                <View style={{ borderTopWidth: 0.5, borderTopColor: "#000", width: 140, marginBottom: 3 }} />
+                <Text style={{ fontSize: 8 }}>For {coName}</Text>
+                <Text style={{ fontSize: 8 }}>Authorised Signatory</Text>
+              </View>
             </View>
 
             {/* ── Page footer ── */}

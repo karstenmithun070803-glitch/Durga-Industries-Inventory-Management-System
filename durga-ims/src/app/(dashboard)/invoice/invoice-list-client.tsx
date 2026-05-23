@@ -13,16 +13,18 @@ import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
 import { formatCode } from "@/lib/utils";
 import { deleteInvoice } from "@/lib/actions/invoices.actions";
 import type { InvoiceRow } from "@/types";
+import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { Pencil, Trash2, Plus } from "lucide-react";
 
 interface Props {
   rows: InvoiceRow[];
   fy: string;
+  companySetting?: CompanySetting;
 }
 
-type StatusFilter = "all" | "Draft" | "Finalized";
+type StatusFilter = "all" | "Draft" | "Finalized" | "Cancelled";
 
-export function InvoiceListClient({ rows, fy }: Props) {
+export function InvoiceListClient({ rows, fy, companySetting }: Props) {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -67,15 +69,13 @@ export function InvoiceListClient({ rows, fy }: Props) {
     return map;
   }, [filtered]);
 
-  // Count per status tab
+  // Count per status tab (unique invoices, not items)
   const counts = useMemo(() => {
-    const draft = rows.filter((r) => r.status === "Draft").length;
-    const finalized = rows.filter((r) => r.status === "Finalized").length;
-    // Unique invoices (not items)
     const uniqueIds = new Set(rows.map((r) => r.id));
     const draftIds = new Set(rows.filter((r) => r.status === "Draft").map((r) => r.id));
     const finalizedIds = new Set(rows.filter((r) => r.status === "Finalized").map((r) => r.id));
-    return { all: uniqueIds.size, draft: draftIds.size, finalized: finalizedIds.size };
+    const cancelledIds = new Set(rows.filter((r) => r.status === "Cancelled").map((r) => r.id));
+    return { all: uniqueIds.size, draft: draftIds.size, finalized: finalizedIds.size, cancelled: cancelledIds.size };
   }, [rows]);
 
   async function handleDelete() {
@@ -125,19 +125,22 @@ export function InvoiceListClient({ rows, fy }: Props) {
         <h1 className="text-lg font-semibold text-slate-800 mr-2">Invoices</h1>
 
         {/* Status tabs */}
-        {(["all", "Draft", "Finalized"] as StatusFilter[]).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-              statusFilter === s
-                ? "bg-slate-800 text-white border-slate-800"
-                : "text-slate-500 border-slate-200 hover:border-slate-400"
-            }`}
-          >
-            {s === "all" ? "All" : s} ({s === "all" ? counts.all : s === "Draft" ? counts.draft : counts.finalized})
-          </button>
-        ))}
+        {(["all", "Draft", "Finalized", "Cancelled"] as StatusFilter[]).map((s) => {
+          const count = s === "all" ? counts.all : s === "Draft" ? counts.draft : s === "Finalized" ? counts.finalized : counts.cancelled;
+          return (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                statusFilter === s
+                  ? "bg-slate-800 text-white border-slate-800"
+                  : "text-slate-500 border-slate-200 hover:border-slate-400"
+              }`}
+            >
+              {s === "all" ? "All" : s} ({count})
+            </button>
+          );
+        })}
 
         <div className="flex items-center gap-2 ml-2">
           <Input
@@ -172,6 +175,7 @@ export function InvoiceListClient({ rows, fy }: Props) {
               <InsuranceInvoiceDocument
                 groups={groupedForPdf}
                 fy={fy}
+                companySetting={companySetting}
               />
             )}
           />
@@ -182,6 +186,7 @@ export function InvoiceListClient({ rows, fy }: Props) {
               <CustomerInvoiceDocument
                 groups={groupedForPdf}
                 fy={fy}
+                companySetting={companySetting}
               />
             )}
           />
@@ -280,6 +285,8 @@ export function InvoiceListClient({ rows, fy }: Props) {
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                             r.status === "Finalized"
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : r.status === "Cancelled"
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
                               : "bg-slate-100 text-slate-600 border border-slate-200"
                           }`}
                         >
@@ -298,7 +305,7 @@ export function InvoiceListClient({ rows, fy }: Props) {
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
                           </Link>
-                          {r.status !== "Finalized" && (
+                          {r.status === "Draft" && (
                             <Button
                               variant="ghost"
                               size="icon"

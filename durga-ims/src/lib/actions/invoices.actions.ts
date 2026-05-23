@@ -522,27 +522,35 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
 
   const billNumber = await getNextBillNumber(data.inv_prefix, data.financial_year);
 
-  const [invoice] = await db
-    .insert(invoices)
-    .values({
-      bill_number: billNumber,
-      bill_date: new Date(data.bill_date),
-      rate_date: data.rate_date ? new Date(data.rate_date) : null,
-      tax_percentage: data.tax_percentage,
-      material_margin: data.material_margin,
-      discount: data.discount,
-      vehicle_id: data.vehicle_id,
-      issue_id: data.issue_id || null,
-      net_amount: data.net_amount,
-      rev_charge_status: data.rev_charge_status,
-      financial_year: data.financial_year,
-      status: "Draft",
-      customer_name: vData?.customer_name ?? null,
-      customer_gstin: vData?.customer_gstin ?? null,
-      customer_state: vData?.customer_state ?? null,
-      customer_address,
-    })
-    .returning({ id: invoices.id });
+  let invoice: { id: string };
+  try {
+    [invoice] = await db
+      .insert(invoices)
+      .values({
+        bill_number: billNumber,
+        bill_date: new Date(data.bill_date),
+        rate_date: data.rate_date ? new Date(data.rate_date) : null,
+        tax_percentage: data.tax_percentage,
+        material_margin: data.material_margin,
+        discount: data.discount,
+        vehicle_id: data.vehicle_id,
+        issue_id: data.issue_id || null,
+        net_amount: data.net_amount,
+        rev_charge_status: data.rev_charge_status,
+        financial_year: data.financial_year,
+        status: "Draft",
+        customer_name: vData?.customer_name ?? null,
+        customer_gstin: vData?.customer_gstin ?? null,
+        customer_state: vData?.customer_state ?? null,
+        customer_address,
+      })
+      .returning({ id: invoices.id });
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes("bill_number_fy_unique")) {
+      throw new Error("Bill number conflict — another invoice was just created with the same number. Please try saving again.");
+    }
+    throw e;
+  }
 
   await db.insert(invoiceItems).values(
     data.items.map((item) => ({
@@ -671,10 +679,48 @@ export async function deleteInvoice(id: string): Promise<void> {
   if (!inv.length) throw new Error("Invoice not found.");
   if (inv[0].status === "Finalized")
     throw new Error(
-      `Finalized invoice ${inv[0].bill_number} cannot be deleted. Revert to Draft first.`
+      `Finalized invoice ${inv[0].bill_number} cannot be deleted. Revert to Draft or Cancel it first.`
+    );
+  if (inv[0].status === "Cancelled")
+    throw new Error(
+      `Cancelled invoice ${inv[0].bill_number} is a permanent record and cannot be deleted.`
     );
 
-  // CASCADE deletes invoice_items
+  // CASCADE deletes invoice_items and invoice_slip_links
   await db.delete(invoices).where(eq(invoices.id, id));
   revalidatePath("/invoice");
+}
+
+export async function cancelInvoice(id: string): Promise<void> {
+  const [inv] = await db
+    .select({ status: invoices.status, bill_number: invoices.bill_number })
+    .from(invoices)
+    .where(eq(invoices.id, id));
+
+  if (!inv) throw new Error("Invoice not found.");
+  if (inv.status === "Cancelled") throw new Error(`${inv.bill_number} is already cancelled.`);
+
+  // Free MI slips so they can be used in a corrective invoice
+  await db.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
+  await db.update(invoices).set({ status: "Cancelled" }).where(eq(invoices.id, id));
+  revalidatePath("/invoice");
+}
+
+export async function getLinkedSlipsForInvoice(invoiceId: string): Promise<{ id: string; slip_number: number; issue_date: string; item_count: number }[]> {
+  const rows = await db
+    .select({
+      id: materialIssues.id,
+      slip_number: materialIssues.slip_number,
+      issue_date: materialIssues.issue_date,
+    })
+    .from(invoiceSlipLinks)
+    .innerJoin(materialIssues, eq(invoiceSlipLinks.slip_id, materialIssues.id))
+    .where(eq(invoiceSlipLinks.invoice_id, invoiceId));
+
+  return rows.map((r) => ({
+    id: r.id,
+    slip_number: r.slip_number,
+    issue_date: r.issue_date.toISOString(),
+    item_count: 0,
+  }));
 }

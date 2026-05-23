@@ -285,6 +285,17 @@ export const invoiceItems = pgTable("invoice_items", {
 });
 
 // ---------------------------------------------------------------------------
+// COMPANY SETTINGS  (single-row settings table)
+// ---------------------------------------------------------------------------
+export const companySettings = pgTable("company_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  company_name: text("company_name").notNull(),
+  address: text("address"),
+  gstin: text("gstin"),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // STOCK LEDGER  (immutable — rows are NEVER updated or deleted)
 // ---------------------------------------------------------------------------
 // transaction_type validated in app layer (not DB CHECK) so new types can be
