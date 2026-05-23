@@ -242,9 +242,23 @@ export const invoices = pgTable("invoices", {
   status: text("status").notNull().default("Draft"),
   // optional reference to the MI slip that was used to auto-populate items
   issue_id: uuid("issue_id").references(() => materialIssues.id),
+  // customer snapshot — frozen at invoice creation; survives master data changes
+  customer_name: text("customer_name"),
+  customer_gstin: text("customer_gstin"),
+  customer_state: text("customer_state"),
+  customer_address: text("customer_address"),
   ...timestamps,
 }, (t) => [
   unique("bill_number_fy_unique").on(t.bill_number, t.financial_year),
+]);
+
+export const invoiceSlipLinks = pgTable("invoice_slip_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  invoice_id: uuid("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  slip_id: uuid("slip_id").notNull().references(() => materialIssues.id, { onDelete: "cascade" }),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  unique().on(t.invoice_id, t.slip_id),
 ]);
 
 export const invoiceItems = pgTable("invoice_items", {

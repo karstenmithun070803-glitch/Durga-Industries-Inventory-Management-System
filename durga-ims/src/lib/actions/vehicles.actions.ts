@@ -85,6 +85,17 @@ export async function deleteVehicle(id: string) {
       `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": has a Draft invoice ${draftInvoice[0].bill_number}. Finalize or delete it first.`
     );
 
+  // Guard: block if referenced in any Finalized invoice (permanent GST record)
+  const finalizedInvoice = await db
+    .select({ bill_number: invoices.bill_number })
+    .from(invoices)
+    .where(and(eq(invoices.vehicle_id, id), eq(invoices.status, "Finalized")))
+    .limit(1);
+  if (finalizedInvoice.length > 0)
+    throw new Error(
+      `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": has a Finalized invoice ${finalizedInvoice[0].bill_number}. Finalized invoices are permanent GST records.`
+    );
+
   await db.update(vehicles).set({ is_active: false }).where(eq(vehicles.id, id));
   revalidatePath("/masters/vehicles");
 }

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import {
   invoices,
   invoiceItems,
+  invoiceSlipLinks,
   materials,
   vehicles,
   customers,
@@ -12,7 +13,7 @@ import {
   materialIssues,
   materialIssueItems,
 } from "@/lib/db/schema";
-import { eq, and, sql, desc, like, max } from "drizzle-orm";
+import { eq, and, sql, desc, like, notExists, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getFinancialYearRange } from "@/types";
 import type { InvoiceWithDetails, InvoiceItemWithDetails, InvoiceRow } from "@/types";
@@ -40,6 +41,7 @@ interface InvoiceItemInput {
 interface InvoiceHeaderInput {
   vehicle_id: string;
   issue_id: string | null;
+  slip_ids: string[];
   bill_date: string;
   rate_date: string | null;
   inv_prefix: string;
@@ -151,7 +153,7 @@ export async function getActiveVehiclesForInvoice() {
   return rows;
 }
 
-export async function getIssuedMIsForVehicle(vehicleId: string) {
+export async function getIssuedMIsForVehicle(vehicleId: string, currentInvoiceId?: string) {
   const rows = await db
     .select({
       id: materialIssues.id,
@@ -159,10 +161,24 @@ export async function getIssuedMIsForVehicle(vehicleId: string) {
       issue_date: materialIssues.issue_date,
     })
     .from(materialIssues)
-    .where(and(eq(materialIssues.vehicle_id, vehicleId), eq(materialIssues.status, "Issued")))
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.status, "Issued"),
+        notExists(
+          db.select().from(invoiceSlipLinks).where(
+            and(
+              eq(invoiceSlipLinks.slip_id, materialIssues.id),
+              currentInvoiceId
+                ? ne(invoiceSlipLinks.invoice_id, currentInvoiceId)
+                : sql`true`
+            )
+          )
+        )
+      )
+    )
     .orderBy(desc(materialIssues.issue_date));
 
-  // count items per MI
   const withCounts = await Promise.all(
     rows.map(async (mi) => {
       const countResult = await db
@@ -226,7 +242,8 @@ export async function getMIItemsForInvoice(issueId: string): Promise<InvoiceItem
 }
 
 // Returns all issued MI items for a vehicle, grouped by slip
-export async function getAllIssuedMIItemsForVehicle(vehicleId: string): Promise<
+// currentInvoiceId: if editing, exclude slips linked to other invoices (but not this one)
+export async function getAllIssuedMIItemsForVehicle(vehicleId: string, currentInvoiceId?: string): Promise<
   { slip_id: string; slip_number: number; issue_date: string; items: InvoiceItemWithDetails[] }[]
 > {
   const slips = await db
@@ -236,7 +253,22 @@ export async function getAllIssuedMIItemsForVehicle(vehicleId: string): Promise<
       issue_date: materialIssues.issue_date,
     })
     .from(materialIssues)
-    .where(and(eq(materialIssues.vehicle_id, vehicleId), eq(materialIssues.status, "Issued")))
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.status, "Issued"),
+        notExists(
+          db.select().from(invoiceSlipLinks).where(
+            and(
+              eq(invoiceSlipLinks.slip_id, materialIssues.id),
+              currentInvoiceId
+                ? ne(invoiceSlipLinks.invoice_id, currentInvoiceId)
+                : sql`true`
+            )
+          )
+        )
+      )
+    )
     .orderBy(desc(materialIssues.issue_date));
 
   const result = await Promise.all(
@@ -307,14 +339,16 @@ export async function getInvoices(financialYear: string): Promise<InvoiceRow[]> 
       net_amount: invoices.net_amount,
       rev_charge_status: invoices.rev_charge_status,
       issue_id: invoices.issue_id,
-      // vehicle + customer
+      // vehicle
       vehicle_id: vehicles.id,
       vehicle_name: vehicles.vehicle_name,
       job_ref_no: vehicles.job_ref_no,
+      // customer snapshot (from invoices table — not live JOIN)
       customer_id: customers.id,
-      customer_name: customers.customer_name,
-      customer_gstin: customers.gstin,
-      customer_state: customers.state,
+      customer_name: invoices.customer_name,
+      customer_gstin: invoices.customer_gstin,
+      customer_state: invoices.customer_state,
+      customer_address: invoices.customer_address,
       // item
       item_id: invoiceItems.id,
       material_id: invoiceItems.material_id,
@@ -369,9 +403,11 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
       vehicle_name: vehicles.vehicle_name,
       job_ref_no: vehicles.job_ref_no,
       customer_id: customers.id,
-      customer_name: customers.customer_name,
-      customer_gstin: customers.gstin,
-      customer_state: customers.state,
+      // customer snapshot — read from invoices row, not live JOIN
+      customer_name: invoices.customer_name,
+      customer_gstin: invoices.customer_gstin,
+      customer_state: invoices.customer_state,
+      customer_address: invoices.customer_address,
     })
     .from(invoices)
     .innerJoin(vehicles, eq(invoices.vehicle_id, vehicles.id))
@@ -426,6 +462,7 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
     customer_name: h.customer_name,
     customer_gstin: h.customer_gstin,
     customer_state: h.customer_state,
+    customer_address: h.customer_address,
     items: itemRows.map((r) => ({
       id: r.id,
       invoice_id: r.invoice_id,
@@ -462,6 +499,27 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
   if (billDate < fyRange.start || billDate > fyRange.end)
     throw new Error("Bill date must fall within the active financial year.");
 
+  // Fetch customer snapshot for this vehicle
+  const [vData] = await db
+    .select({
+      customer_name: customers.customer_name,
+      customer_gstin: customers.gstin,
+      customer_state: customers.state,
+      address_1: customers.address_1,
+      address_2: customers.address_2,
+      street: customers.street,
+      city: customers.city,
+    })
+    .from(vehicles)
+    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+    .where(eq(vehicles.id, data.vehicle_id));
+
+  const customer_address = vData
+    ? [vData.address_1, vData.address_2, vData.street, vData.city, vData.customer_state]
+        .filter(Boolean)
+        .join(", ") || null
+    : null;
+
   const billNumber = await getNextBillNumber(data.inv_prefix, data.financial_year);
 
   const [invoice] = await db
@@ -479,6 +537,10 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
       rev_charge_status: data.rev_charge_status,
       financial_year: data.financial_year,
       status: "Draft",
+      customer_name: vData?.customer_name ?? null,
+      customer_gstin: vData?.customer_gstin ?? null,
+      customer_state: vData?.customer_state ?? null,
+      customer_address,
     })
     .returning({ id: invoices.id });
 
@@ -499,6 +561,12 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
     }))
   );
 
+  if (data.slip_ids.length > 0) {
+    await db.insert(invoiceSlipLinks).values(
+      data.slip_ids.map((slipId) => ({ invoice_id: invoice.id, slip_id: slipId }))
+    );
+  }
+
   revalidatePath("/invoice");
   return invoice.id;
 }
@@ -511,6 +579,27 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
   const billDate = new Date(data.bill_date);
   if (billDate < fyRange.start || billDate > fyRange.end)
     throw new Error("Bill date must fall within the active financial year.");
+
+  // Re-snapshot customer (re-captures if vehicle changes)
+  const [vData] = await db
+    .select({
+      customer_name: customers.customer_name,
+      customer_gstin: customers.gstin,
+      customer_state: customers.state,
+      address_1: customers.address_1,
+      address_2: customers.address_2,
+      street: customers.street,
+      city: customers.city,
+    })
+    .from(vehicles)
+    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+    .where(eq(vehicles.id, data.vehicle_id));
+
+  const customer_address = vData
+    ? [vData.address_1, vData.address_2, vData.street, vData.city, vData.customer_state]
+        .filter(Boolean)
+        .join(", ") || null
+    : null;
 
   // Delete old items, insert new ones (no stock impact ever)
   await db.delete(invoiceItems).where(eq(invoiceItems.invoice_id, id));
@@ -527,6 +616,10 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
       issue_id: data.issue_id || null,
       net_amount: data.net_amount,
       rev_charge_status: data.rev_charge_status,
+      customer_name: vData?.customer_name ?? null,
+      customer_gstin: vData?.customer_gstin ?? null,
+      customer_state: vData?.customer_state ?? null,
+      customer_address,
     })
     .where(eq(invoices.id, id));
 
@@ -546,6 +639,14 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
       gst_type: item.gst_type,
     }))
   );
+
+  // Replace slip links
+  await db.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
+  if (data.slip_ids.length > 0) {
+    await db.insert(invoiceSlipLinks).values(
+      data.slip_ids.map((slipId) => ({ invoice_id: id, slip_id: slipId }))
+    );
+  }
 
   revalidatePath("/invoice");
 }

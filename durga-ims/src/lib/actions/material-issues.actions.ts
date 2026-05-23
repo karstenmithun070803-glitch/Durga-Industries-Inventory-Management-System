@@ -11,6 +11,8 @@ import {
   units,
   taxRates,
   stockLedger,
+  invoiceSlipLinks,
+  invoices,
 } from "@/lib/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -619,9 +621,17 @@ export async function deleteMaterialIssue(id: string): Promise<void> {
     // Simple delete — CASCADE handles items
     await db.delete(materialIssues).where(eq(materialIssues.id, id));
   } else {
-    // TODO Phase 5: Before deleting an Issued slip, check if any invoice references this issue.
-    // Query: SELECT id FROM invoices WHERE issue_id = id AND status != 'Cancelled' LIMIT 1
-    // If found: throw `Cannot delete: this issue is referenced in Invoice INV-XXXX.`
+    // Guard: block deletion if this slip is already billed in an invoice
+    const linkedInvoice = await db
+      .select({ bill_number: invoices.bill_number })
+      .from(invoiceSlipLinks)
+      .innerJoin(invoices, eq(invoiceSlipLinks.invoice_id, invoices.id))
+      .where(eq(invoiceSlipLinks.slip_id, id))
+      .limit(1);
+    if (linkedInvoice.length > 0)
+      throw new Error(
+        `This issue slip has been used in Invoice ${linkedInvoice[0].bill_number}. Delete or revert that invoice first.`
+      );
 
     const items = await db
       .select({

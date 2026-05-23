@@ -241,6 +241,7 @@ export interface InvoiceRow {
   customer_name: string | null;
   customer_gstin: string | null;
   customer_state: string | null;
+  customer_address: string | null;
   // item fields
   item_id: string;
   material_id: string;
@@ -300,6 +301,7 @@ export interface InvoiceWithDetails {
   customer_name: string | null;
   customer_gstin: string | null;
   customer_state: string | null;
+  customer_address: string | null;
   items: InvoiceItemWithDetails[];
 }
 

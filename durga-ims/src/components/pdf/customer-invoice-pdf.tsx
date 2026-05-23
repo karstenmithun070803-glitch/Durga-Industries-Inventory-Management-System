@@ -10,6 +10,7 @@ import {
   fmtDate,
 } from "./pdf-styles";
 import type { InvoiceRow } from "@/types";
+import { numberToWords } from "@/lib/utils/number-to-words";
 
 interface Props {
   groups: InvoiceRow[][];
@@ -26,13 +27,9 @@ export function CustomerInvoiceDocument({ groups }: Props) {
       {groups.map((items) => {
         const first = items[0];
 
-        const subtotal = items.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
-        const cgst = items.reduce((s, r) => s + parseFloat(r.cgst_amount || "0"), 0);
-        const sgst = items.reduce((s, r) => s + parseFloat(r.sgst_amount || "0"), 0);
-        const igst = items.reduce((s, r) => s + parseFloat(r.igst_amount || "0"), 0);
         const discount = parseFloat(first.discount || "0");
-        const gross = subtotal + cgst + sgst + igst;
-        const net = gross - discount;
+        const net = parseFloat(first.net_amount || "0");
+        const gross = discount > 0 ? net + discount : net;
 
         return (
           <Page key={first.id} size="A4" style={styles.page}>
@@ -67,6 +64,18 @@ export function CustomerInvoiceDocument({ groups }: Props) {
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabel}>CUSTOMER</Text>
                 <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
+              </View>
+            )}
+            {first.customer_gstin && (
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>GSTIN</Text>
+                <Text style={styles.infoLineValue}>: {first.customer_gstin}</Text>
+              </View>
+            )}
+            {first.customer_address && (
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
               </View>
             )}
             {first.rev_charge_status && (
@@ -115,9 +124,12 @@ export function CustomerInvoiceDocument({ groups }: Props) {
                 <View style={{ alignItems: "flex-end", gap: 3, minWidth: 90 }}>
                   {discount > 0 && <Text style={styles.plainTableCell}>{fmtAmt(String(gross))}</Text>}
                   {discount > 0 && <Text style={styles.plainTableCell}>- {fmtAmt(String(discount))}</Text>}
-                  <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(String(net))}</Text>
+                  <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>
+              <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", marginTop: 4, color: "#374151" }}>
+                {numberToWords(net)}
+              </Text>
             </View>
 
             {/* ── Page footer ── */}

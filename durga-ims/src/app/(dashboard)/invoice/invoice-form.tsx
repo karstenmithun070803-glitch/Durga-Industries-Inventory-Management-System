@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { TransactionGrid, newRow, calcRowTotals } from "@/components/forms/TransactionGrid";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { PrintButton } from "@/components/pdf/print-button";
+import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
+import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
 import { useFY } from "@/lib/financial-year";
 import { formatCode } from "@/lib/utils";
 
@@ -16,7 +19,7 @@ function toISODate(d: string | Date | null | undefined): string {
   return new Date(d).toISOString().split("T")[0];
 }
 import { determineGstType } from "@/types";
-import type { LineItemDraft, InvoiceWithDetails, InvoiceItemWithDetails } from "@/types";
+import type { LineItemDraft, InvoiceWithDetails, InvoiceItemWithDetails, InvoiceRow } from "@/types";
 import {
   createInvoice,
   updateInvoice,
@@ -146,6 +149,46 @@ function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[]): LineItemDraft
   }));
 }
 
+function buildPdfRows(inv: InvoiceWithDetails): InvoiceRow[] {
+  return inv.items.map((item) => ({
+    id: inv.id,
+    bill_number: inv.bill_number,
+    bill_date: inv.bill_date,
+    rate_date: inv.rate_date,
+    financial_year: inv.financial_year,
+    status: inv.status,
+    tax_percentage: inv.tax_percentage,
+    material_margin: inv.material_margin,
+    discount: inv.discount,
+    net_amount: inv.net_amount,
+    rev_charge_status: inv.rev_charge_status,
+    issue_id: inv.issue_id,
+    vehicle_id: inv.vehicle_id,
+    vehicle_name: inv.vehicle_name,
+    job_ref_no: inv.job_ref_no,
+    customer_id: inv.customer_id,
+    customer_name: inv.customer_name,
+    customer_gstin: inv.customer_gstin,
+    customer_state: inv.customer_state,
+    customer_address: inv.customer_address,
+    item_id: item.id,
+    material_id: item.material_id,
+    material_name: item.material_name,
+    material_no: item.material_no,
+    hsn_code: item.hsn_code,
+    qty: item.qty,
+    unit_id: item.unit_id,
+    unit_name: item.unit_name,
+    rate: item.rate,
+    tax_percentage_item: item.tax_percentage,
+    cgst_amount: item.cgst_amount,
+    sgst_amount: item.sgst_amount,
+    igst_amount: item.igst_amount,
+    amount: item.amount,
+    gst_type: item.gst_type,
+  }));
+}
+
 export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, units }: Props) {
   const router = useRouter();
   const { activeFY: fy } = useFY();
@@ -260,8 +303,8 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     setMiLoading(true);
     try {
       const [slipsMeta, slipsWithItems] = await Promise.all([
-        getIssuedMIsForVehicle(vid),
-        getAllIssuedMIItemsForVehicle(vid),
+        getIssuedMIsForVehicle(vid, invoice?.id),
+        getAllIssuedMIItemsForVehicle(vid, invoice?.id),
       ]);
       setMiSlipsMeta(slipsMeta);
       setMiSlipsItems(slipsWithItems);
@@ -312,8 +355,8 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   useEffect(() => {
     if (invoice?.vehicle_id && !isReadOnly) {
       Promise.all([
-        getIssuedMIsForVehicle(invoice.vehicle_id),
-        getAllIssuedMIItemsForVehicle(invoice.vehicle_id),
+        getIssuedMIsForVehicle(invoice.vehicle_id, invoice.id),
+        getAllIssuedMIItemsForVehicle(invoice.vehicle_id, invoice.id),
       ])
         .then(([meta, items]) => {
           setMiSlipsMeta(meta);
@@ -330,6 +373,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     return {
       vehicle_id: vehicleId,
       issue_id: null, // multi-slip — no single issue_id
+      slip_ids: Array.from(selectedSlipIds),
       bill_date: billDate,
       rate_date: rateDate || null,
       inv_prefix: invPrefix ?? "",
@@ -761,13 +805,31 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
 
         <div className="flex items-center gap-3 px-6 py-3">
           {mode === "view" ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/invoice/${invoice?.id}/edit`)}
-            >
-              Edit
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/invoice/${invoice?.id}/edit`)}
+              >
+                Edit
+              </Button>
+              {invoice && (
+                <>
+                  <PrintButton
+                    label="Insurance PDF"
+                    getDocument={() => (
+                      <InsuranceInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} />
+                    )}
+                  />
+                  <PrintButton
+                    label="Customer PDF"
+                    getDocument={() => (
+                      <CustomerInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} />
+                    )}
+                  />
+                </>
+              )}
+            </>
           ) : isFinalized ? (
             <>
               <Button

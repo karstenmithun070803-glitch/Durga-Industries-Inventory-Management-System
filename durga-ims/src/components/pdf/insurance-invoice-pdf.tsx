@@ -10,6 +10,7 @@ import {
   fmtDate,
 } from "./pdf-styles";
 import type { InvoiceRow } from "@/types";
+import { numberToWords } from "@/lib/utils/number-to-words";
 
 interface Props {
   groups: InvoiceRow[][];
@@ -82,6 +83,12 @@ export function InsuranceInvoiceDocument({ groups }: Props) {
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabel}>GSTIN</Text>
                 <Text style={styles.infoLineValue}>: {first.customer_gstin}</Text>
+              </View>
+            )}
+            {first.customer_address && (
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
               </View>
             )}
             {first.rev_charge_status && (
@@ -161,6 +168,9 @@ export function InsuranceInvoiceDocument({ groups }: Props) {
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>
+              <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", marginTop: 4, color: "#374151" }}>
+                {numberToWords(parseFloat(first.net_amount))}
+              </Text>
             </View>
 
             {/* ── Page footer ── */}
