@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import {
   revertInvoiceToDraft,
   deleteInvoice,
   getIssuedMIsForVehicle,
-  getMIItemsForInvoice,
+  getAllIssuedMIItemsForVehicle,
   peekNextBillNumber,
 } from "@/lib/actions/invoices.actions";
 
@@ -75,31 +75,48 @@ interface Props {
   units: UnitOption[];
 }
 
-function itemsFromMI(miItems: InvoiceItemWithDetails[], gstType: string): LineItemDraft[] {
-  return miItems.map((item) => ({
-    _key: crypto.randomUUID(),
-    material_id: item.material_id,
-    material_name: item.material_name,
-    material_no: item.material_no,
-    hsn_code: item.hsn_code ?? "",
-    supplier_id: "",
-    supplier_name: "",
-    gst_type: gstType,
-    qty: item.qty,
-    unit_id: item.unit_id ?? "",
-    unit_name: item.unit_name ?? "",
-    rate: item.rate,
-    tax_percentage: item.tax_percentage,
-    cgst_amount: item.cgst_amount,
-    sgst_amount: item.sgst_amount,
-    igst_amount: item.igst_amount,
-    amount: item.amount,
-    rateBlank: false,
-    zeroRateConfirmed: parseFloat(item.rate) === 0,
-    contractor_id: "",
-    contractor_name: "",
-    affects_inventory: true,
-  }));
+interface MISlipMeta {
+  id: string;
+  slip_number: number;
+  issue_date: string;
+  item_count: number;
+}
+
+interface MISlipWithItems {
+  slip_id: string;
+  slip_number: number;
+  issue_date: string;
+  items: InvoiceItemWithDetails[];
+}
+
+function itemsFromMISlips(slips: MISlipWithItems[], gstType: string): LineItemDraft[] {
+  return slips.flatMap((slip) =>
+    slip.items.map((item) => ({
+      _key: crypto.randomUUID(),
+      _slip_id: slip.slip_id,
+      material_id: item.material_id,
+      material_name: item.material_name,
+      material_no: item.material_no,
+      hsn_code: item.hsn_code ?? "",
+      supplier_id: "",
+      supplier_name: "",
+      gst_type: gstType,
+      qty: item.qty,
+      unit_id: item.unit_id ?? "",
+      unit_name: item.unit_name ?? "",
+      rate: item.rate,
+      tax_percentage: item.tax_percentage,
+      cgst_amount: item.cgst_amount,
+      sgst_amount: item.sgst_amount,
+      igst_amount: item.igst_amount,
+      amount: item.amount,
+      rateBlank: false,
+      zeroRateConfirmed: parseFloat(item.rate) === 0,
+      contractor_id: "",
+      contractor_name: "",
+      affects_inventory: true,
+    }))
+  );
 }
 
 function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[]): LineItemDraft[] {
@@ -129,7 +146,7 @@ function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[]): LineItemDraft
   }));
 }
 
-export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates, materials, units }: Props) {
+export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, units }: Props) {
   const router = useRouter();
   const { activeFY: fy } = useFY();
   const [isPending, startTransition] = useTransition();
@@ -157,12 +174,13 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
 
   // Tax rate selection (determines bill number prefix)
   const [taxRateId, setTaxRateId] = useState("");
-  const [invPrefix, setInvPrefix] = useState("");
-  const [billNumber, setBillNumber] = useState(invoice?.bill_number ?? nextBillNumber ?? "—");
+  const [invPrefix, setInvPrefix] = useState<string | null>(null);
+  const [billNumber, setBillNumber] = useState(invoice?.bill_number ?? "—");
 
-  // MI slip selection
-  const [issueId, setIssueId] = useState(invoice?.issue_id ?? "");
-  const [miOptions, setMiOptions] = useState<{ id: string; slip_number: number; issue_date: string; item_count: number }[]>([]);
+  // MI slip checklist state
+  const [miSlipsMeta, setMiSlipsMeta] = useState<MISlipMeta[]>([]);
+  const [miSlipsItems, setMiSlipsItems] = useState<MISlipWithItems[]>([]);
+  const [selectedSlipIds, setSelectedSlipIds] = useState<Set<string>>(new Set());
   const [miLoading, setMiLoading] = useState(false);
 
   const [materialMargin, setMaterialMargin] = useState(invoice?.material_margin ?? "0");
@@ -184,84 +202,137 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
   const discountAmt = parseFloat(discount || "0");
   const netAmount = Math.max(0, grossTotal - discountAmt);
 
-  // When vehicle changes: load its MIs and re-derive GST type
+  // Rebuild rows from currently selected slips + any manually added rows
+  const rebuildRowsFromSlips = useCallback(
+    (slipItems: MISlipWithItems[], checkedIds: Set<string>, existingRows: LineItemDraft[], currentGstType: string) => {
+      const manualRows = existingRows.filter((r) => !r._slip_id);
+      const slipRows = slipItems
+        .filter((s) => checkedIds.has(s.slip_id))
+        .flatMap((s) =>
+          s.items.map((item) => ({
+            _key: crypto.randomUUID(),
+            _slip_id: s.slip_id,
+            material_id: item.material_id,
+            material_name: item.material_name,
+            material_no: item.material_no,
+            hsn_code: item.hsn_code ?? "",
+            supplier_id: "",
+            supplier_name: "",
+            gst_type: currentGstType,
+            qty: item.qty,
+            unit_id: item.unit_id ?? "",
+            unit_name: item.unit_name ?? "",
+            rate: item.rate,
+            tax_percentage: item.tax_percentage,
+            cgst_amount: item.cgst_amount,
+            sgst_amount: item.sgst_amount,
+            igst_amount: item.igst_amount,
+            amount: item.amount,
+            rateBlank: false,
+            zeroRateConfirmed: parseFloat(item.rate) === 0,
+            contractor_id: "",
+            contractor_name: "",
+            affects_inventory: true,
+          }))
+        );
+
+      const combined = [...slipRows, ...manualRows];
+      return combined.length ? combined : [newRow()];
+    },
+    []
+  );
+
+  // When vehicle changes: load all MI slips + items, auto-populate grid
   async function handleVehicleChange(vid: string) {
     const v = vehicles.find((x) => x.id === vid);
     setVehicleId(vid);
     setSelectedVehicle(v ?? null);
-    setIssueId("");
+    setMiSlipsMeta([]);
+    setMiSlipsItems([]);
+    setSelectedSlipIds(new Set());
     setRows([newRow()]);
 
-    if (v) {
-      const newGst = determineGstType(v.customer_gstin, v.customer_state);
-      setGstType(newGst);
+    if (!v) return;
 
-      setMiLoading(true);
-      try {
-        const mis = await getIssuedMIsForVehicle(vid);
-        setMiOptions(mis);
-      } catch {
-        setMiOptions([]);
-      } finally {
-        setMiLoading(false);
+    const newGst = determineGstType(v.customer_gstin, v.customer_state);
+    setGstType(newGst);
+
+    setMiLoading(true);
+    try {
+      const [slipsMeta, slipsWithItems] = await Promise.all([
+        getIssuedMIsForVehicle(vid),
+        getAllIssuedMIItemsForVehicle(vid),
+      ]);
+      setMiSlipsMeta(slipsMeta);
+      setMiSlipsItems(slipsWithItems);
+
+      if (slipsWithItems.length > 0) {
+        const allIds = new Set(slipsWithItems.map((s) => s.slip_id));
+        setSelectedSlipIds(allIds);
+        const populated = itemsFromMISlips(slipsWithItems, newGst);
+        setRows(populated.length ? populated : [newRow()]);
+        toast.info(`Auto-populated ${populated.length} item${populated.length !== 1 ? "s" : ""} from ${slipsWithItems.length} issue slip${slipsWithItems.length !== 1 ? "s" : ""}.`);
       }
-    } else {
-      setMiOptions([]);
+    } catch {
+      toast.error("Failed to load issue slips.");
+    } finally {
+      setMiLoading(false);
     }
   }
 
-  // When MI slip is selected: auto-populate grid rows
-  async function handleMISelect(miId: string) {
-    setIssueId(miId);
-    if (!miId) {
-      setRows([newRow()]);
-      return;
-    }
-    try {
-      const miItems = await getMIItemsForInvoice(miId);
-      const newRows = itemsFromMI(miItems, gstType);
-      setRows(newRows.length ? newRows : [newRow()]);
-      toast.success("Items auto-populated from MI slip.");
-    } catch {
-      toast.error("Failed to load MI items.");
-    }
+  // Toggle a slip on/off in the checklist
+  function handleSlipToggle(slipId: string, checked: boolean) {
+    setSelectedSlipIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(slipId); else next.delete(slipId);
+      // Rebuild rows: replace slip rows, keep manual rows
+      setRows((currentRows) => rebuildRowsFromSlips(miSlipsItems, next, currentRows, gstType));
+      return next;
+    });
   }
 
   // When tax rate / prefix changes: update bill number preview
   async function handleTaxRateChange(trId: string) {
     setTaxRateId(trId);
     const tr = taxRates.find((t) => t.id === trId);
-    const prefix = tr?.inv_prefix?.trim().toUpperCase() ?? "";
+    const prefix = tr?.inv_prefix?.trim().toUpperCase() ?? null;
     setInvPrefix(prefix);
 
-    if (!invoice && prefix) {
+    if (!invoice) {
       try {
         const next = await peekNextBillNumber(prefix, fy);
         setBillNumber(next);
       } catch {
-        setBillNumber(`${prefix}-00001`);
+        setBillNumber(prefix ? `${prefix}-00001` : "00001");
       }
     }
   }
 
   // Load initial MIs if editing an existing invoice
   useEffect(() => {
-    if (invoice?.vehicle_id) {
-      getIssuedMIsForVehicle(invoice.vehicle_id)
-        .then(setMiOptions)
-        .catch(() => setMiOptions([]));
+    if (invoice?.vehicle_id && !isReadOnly) {
+      Promise.all([
+        getIssuedMIsForVehicle(invoice.vehicle_id),
+        getAllIssuedMIItemsForVehicle(invoice.vehicle_id),
+      ])
+        .then(([meta, items]) => {
+          setMiSlipsMeta(meta);
+          setMiSlipsItems(items);
+          // For existing invoice, don't auto-check slips — items already loaded from DB
+        })
+        .catch(() => {});
     }
-  }, [invoice?.vehicle_id]);
+  }, [invoice?.vehicle_id, isReadOnly]);
 
   // ── Build submit payload ───────────────────────────────────────────────────
   function buildPayload() {
     const filledRows = rows.filter((r) => r.material_id);
     return {
       vehicle_id: vehicleId,
-      issue_id: issueId || null,
+      issue_id: null, // multi-slip — no single issue_id
       bill_date: billDate,
       rate_date: rateDate || null,
-      inv_prefix: invPrefix,
+      inv_prefix: invPrefix ?? "",
       financial_year: fy,
       tax_percentage: "0",
       material_margin: materialMargin,
@@ -308,7 +379,6 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
     startTransition(async () => {
       try {
         if (invoice) {
-          // Save changes first, then finalize
           await updateInvoice(invoice.id, buildPayload());
           await finalizeInvoice(invoice.id);
           toast.success(`${invoice.bill_number} finalized.`);
@@ -316,7 +386,7 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
         } else {
           const id = await createInvoice(buildPayload());
           await finalizeInvoice(id);
-          toast.success(`${billNumber} created and finalized.`);
+          toast.success(`Invoice created and finalized.`);
           router.push(`/invoice/${id}/view`);
         }
       } catch (e: unknown) {
@@ -362,20 +432,13 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
     label: `${formatCode("J", v.job_ref_no, 5)} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
   }));
 
-  const miSelectOptions = [
-    { value: "", label: "— Enter items manually —" },
-    ...miOptions.map((mi) => ({
-      value: mi.id,
-      label: `MI-${String(mi.slip_number).padStart(4, "0")} (${new Date(mi.issue_date).toLocaleDateString("en-IN")}, ${mi.item_count} item${mi.item_count !== 1 ? "s" : ""})`,
-    })),
-  ];
+  const taxRateOptions = taxRates.map((t) => ({
+    value: t.id,
+    label: t.inv_prefix ? `${t.description} (${t.inv_prefix})` : t.description,
+  }));
 
-  const taxRateOptions = taxRates
-    .filter((t) => t.inv_prefix)
-    .map((t) => ({
-      value: t.id,
-      label: `${t.description} (${t.inv_prefix})`,
-    }));
+  const selectedTaxRate = taxRates.find((t) => t.id === taxRateId);
+  const noPrefixWarning = taxRateId && !selectedTaxRate?.inv_prefix;
 
   return (
     <div className="flex flex-col h-full">
@@ -454,7 +517,6 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
               )}
             </div>
             <div>
-              {/* GST type badge */}
               {selectedVehicle && (
                 <div className="mt-5">
                   <span
@@ -492,38 +554,56 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
             </div>
           )}
 
-          {/* Row 3: MI Slip selector */}
+          {/* MI Slip checklist — shown when vehicle selected in non-readonly mode */}
           {!isReadOnly && vehicleId && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">
-                  Auto-fill from Issue Slip
-                </label>
-                {miLoading ? (
-                  <div className="h-9 px-3 flex items-center text-xs text-slate-400">Loading…</div>
-                ) : miOptions.length === 0 ? (
-                  <div className="h-9 px-3 flex items-center text-xs text-slate-400 bg-slate-50 rounded border border-slate-200">
-                    No confirmed issue slips for this vehicle
-                  </div>
-                ) : (
-                  <Combobox
-                    options={miSelectOptions}
-                    value={issueId}
-                    onChange={handleMISelect}
-                    placeholder="Select issue slip to auto-fill..."
-                    searchPlaceholder="Search slip..."
-                  />
-                )}
-                {issueId && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    ⚠ Items auto-populated from MI slip. You can add, edit, or remove rows.
-                  </p>
-                )}
-              </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1.5">
+                Auto-fill from Issue Slips
+              </label>
+              {miLoading ? (
+                <div className="text-xs text-slate-400 px-1">Loading issue slips…</div>
+              ) : miSlipsMeta.length === 0 ? (
+                <div className="text-xs text-slate-400 px-1 py-2 bg-slate-50 rounded border border-slate-200">
+                  No confirmed issue slips for this vehicle. Enter items manually below.
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-md divide-y divide-slate-100 max-h-40 overflow-y-auto">
+                  {miSlipsMeta.map((slip) => {
+                    const checked = selectedSlipIds.has(slip.id);
+                    return (
+                      <label
+                        key={slip.id}
+                        className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => handleSlipToggle(slip.id, e.target.checked)}
+                          className="w-4 h-4 accent-slate-700 flex-shrink-0"
+                        />
+                        <span className="font-mono text-slate-700 text-xs">
+                          MI-{String(slip.slip_number).padStart(4, "0")}
+                        </span>
+                        <span className="text-slate-500 text-xs">
+                          {new Date(slip.issue_date).toLocaleDateString("en-IN")}
+                        </span>
+                        <span className="text-slate-400 text-xs ml-auto">
+                          {slip.item_count} item{slip.item_count !== 1 ? "s" : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedSlipIds.size > 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  ⚠ Items from {selectedSlipIds.size} slip{selectedSlipIds.size !== 1 ? "s" : ""} auto-populated. You can add, edit, or remove rows.
+                </p>
+              )}
             </div>
           )}
 
-          {/* Row 4: Tax Rate (bill number prefix), Rate Date */}
+          {/* Row 3: Tax Rate, Rate Date */}
           <div className="grid grid-cols-3 gap-4">
             {!invoice && (
               <div>
@@ -535,7 +615,13 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
                   placeholder="Select tax rate..."
                   searchPlaceholder="Search..."
                 />
-                <p className="text-xs text-slate-400 mt-1">Determines bill number prefix</p>
+                {noPrefixWarning ? (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠ No Invoice Prefix on this rate — bill number will be numeric only. Set one in Tax Master if needed.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 mt-1">Determines bill number prefix</p>
+                )}
               </div>
             )}
             <div>
@@ -555,7 +641,7 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
             </div>
           </div>
 
-          {/* Row 5: Margin / Discount / Reverse Charge */}
+          {/* Row 4: Margin / Discount / Reverse Charge */}
           <div className="grid grid-cols-4 gap-4 items-end">
             <div>
               <label className="text-xs text-slate-500 block mb-1">
@@ -621,7 +707,7 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
 
         {/* ── Line Items grid ────────────────────────────────────────────── */}
         <div className="bg-white border border-slate-200 rounded-lg overflow-hidden mb-4">
-          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+          <div className="px-4 py-2.5 border-b border-slate-100">
             <h2 className="text-sm font-medium text-slate-700">Line Items</h2>
           </div>
           <TransactionGrid
@@ -640,7 +726,6 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
 
       {/* ── Sticky totals + action bar ─────────────────────────────────── */}
       <div className="fixed bottom-0 left-64 right-0 z-30 bg-white border-t border-slate-200 shadow-lg">
-        {/* Totals */}
         <div className="flex items-center gap-6 px-6 py-2 border-b border-slate-100 text-sm">
           <span className="text-slate-500">
             Subtotal: <strong className="text-slate-800">₹{fmt2(totals.subtotal)}</strong>
@@ -670,7 +755,6 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
           </span>
         </div>
 
-        {/* Action buttons */}
         <div className="flex items-center gap-3 px-6 py-3">
           {mode === "view" ? (
             <Button
@@ -737,7 +821,6 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
         </div>
       </div>
 
-      {/* ── Finalize confirm dialog ────────────────────────────────────── */}
       <ConfirmDialog
         open={showFinalizeDialog}
         onOpenChange={setShowFinalizeDialog}
@@ -747,7 +830,6 @@ export function InvoiceForm({ mode, invoice, nextBillNumber, vehicles, taxRates,
         onConfirm={handleFinalize}
       />
 
-      {/* ── Delete confirm dialog ──────────────────────────────────────── */}
       <ConfirmDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}

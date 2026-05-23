@@ -1,15 +1,15 @@
 export const dynamic = "force-dynamic";
 
 import { getActiveVehiclesForInvoice, getActiveTaxRatesWithPrefix, getActiveInvoiceMaterials } from "@/lib/actions/invoices.actions";
-import { getCurrentFinancialYear } from "@/types";
+import { getUnits } from "@/lib/actions/units.actions";
 import { InvoiceForm } from "../invoice-form";
 
 export default async function NewInvoicePage() {
-  const fy = getCurrentFinancialYear();
-  const [vehicles, taxRates, materials] = await Promise.all([
+  const [vehicles, taxRates, materials, units] = await Promise.all([
     getActiveVehiclesForInvoice(),
     getActiveTaxRatesWithPrefix(),
     getActiveInvoiceMaterials(),
+    getUnits(),
   ]);
 
   return (
@@ -18,7 +18,7 @@ export default async function NewInvoicePage() {
       vehicles={vehicles}
       taxRates={taxRates}
       materials={materials}
-      units={[]}
+      units={units}
     />
   );
 }

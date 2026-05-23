@@ -126,6 +126,8 @@ export interface LineItemDraft {
   contractor_id: string;
   contractor_name: string;
   affects_inventory: boolean;
+  // Invoice mode: tracks which MI slip this row came from (client-only, not sent to server)
+  _slip_id?: string;
 }
 
 // ---------------------------------------------------------------------------

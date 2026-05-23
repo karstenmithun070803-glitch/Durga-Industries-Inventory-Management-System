@@ -56,32 +56,53 @@ interface InvoiceHeaderInput {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-async function getNextBillNumber(invPrefix: string, financialYear: string): Promise<string> {
-  // Find the highest sequence number already used for this prefix+FY
-  const prefix = invPrefix.trim().toUpperCase();
-  const pattern = `${prefix}-%`;
+function buildBillNumber(prefix: string | null | undefined, seq: number): string {
+  const p = prefix?.trim().toUpperCase() ?? "";
+  if (!p) return String(seq).padStart(5, "0");
+  return `${p}-${String(seq).padStart(5, "0")}`;
+}
 
-  const result = await db
-    .select({ bill_number: invoices.bill_number })
-    .from(invoices)
-    .where(and(eq(invoices.financial_year, financialYear), like(invoices.bill_number, pattern)))
-    .orderBy(desc(invoices.created_at))
-    .limit(100); // get recent ones to find max sequence
+async function getNextBillNumber(invPrefix: string | null | undefined, financialYear: string): Promise<string> {
+  const prefix = invPrefix?.trim().toUpperCase() ?? "";
 
   let maxSeq = 0;
-  for (const row of result) {
-    // parse "D-00042" → 42
-    const parts = row.bill_number.split("-");
-    if (parts.length === 2) {
-      const seq = parseInt(parts[1], 10);
+
+  if (prefix) {
+    const pattern = `${prefix}-%`;
+    const result = await db
+      .select({ bill_number: invoices.bill_number })
+      .from(invoices)
+      .where(and(eq(invoices.financial_year, financialYear), like(invoices.bill_number, pattern)))
+      .orderBy(desc(invoices.created_at))
+      .limit(100);
+
+    for (const row of result) {
+      // parse "D-00042" → 42
+      const parts = row.bill_number.split("-");
+      if (parts.length === 2) {
+        const seq = parseInt(parts[1], 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    }
+  } else {
+    // No prefix — find max purely-numeric bill numbers for this FY
+    const result = await db
+      .select({ bill_number: invoices.bill_number })
+      .from(invoices)
+      .where(eq(invoices.financial_year, financialYear))
+      .orderBy(desc(invoices.created_at))
+      .limit(100);
+
+    for (const row of result) {
+      const seq = parseInt(row.bill_number, 10);
       if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
     }
   }
 
-  return `${prefix}-${String(maxSeq + 1).padStart(5, "0")}`;
+  return buildBillNumber(prefix, maxSeq + 1);
 }
 
-export async function peekNextBillNumber(invPrefix: string, financialYear: string): Promise<string> {
+export async function peekNextBillNumber(invPrefix: string | null | undefined, financialYear: string): Promise<string> {
   return getNextBillNumber(invPrefix, financialYear);
 }
 
@@ -214,6 +235,35 @@ export async function getMIItemsForInvoice(issueId: string): Promise<InvoiceItem
     amount: r.amount,
     gst_type: r.gst_type,
   }));
+}
+
+// Returns all issued MI items for a vehicle, grouped by slip
+export async function getAllIssuedMIItemsForVehicle(vehicleId: string): Promise<
+  { slip_id: string; slip_number: number; issue_date: string; items: InvoiceItemWithDetails[] }[]
+> {
+  const slips = await db
+    .select({
+      id: materialIssues.id,
+      slip_number: materialIssues.slip_number,
+      issue_date: materialIssues.issue_date,
+    })
+    .from(materialIssues)
+    .where(and(eq(materialIssues.vehicle_id, vehicleId), eq(materialIssues.status, "Issued")))
+    .orderBy(desc(materialIssues.issue_date));
+
+  const result = await Promise.all(
+    slips.map(async (slip) => {
+      const items = await getMIItemsForInvoice(slip.id);
+      return {
+        slip_id: slip.id,
+        slip_number: slip.slip_number,
+        issue_date: slip.issue_date.toISOString(),
+        items,
+      };
+    })
+  );
+
+  return result;
 }
 
 export async function getActiveTaxRatesWithPrefix() {
@@ -424,10 +474,7 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
   if (billDate < fyRange.start || billDate > fyRange.end)
     throw new Error("Bill date must fall within the active financial year.");
 
-  const prefix = data.inv_prefix?.trim().toUpperCase();
-  if (!prefix) throw new Error("Please select a Tax Rate to determine the bill number prefix.");
-
-  const billNumber = await getNextBillNumber(prefix, data.financial_year);
+  const billNumber = await getNextBillNumber(data.inv_prefix, data.financial_year);
 
   const [invoice] = await db
     .insert(invoices)
