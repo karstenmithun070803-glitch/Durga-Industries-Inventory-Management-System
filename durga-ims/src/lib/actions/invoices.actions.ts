@@ -114,18 +114,6 @@ function validateInvoiceItems(items: InvoiceItemInput[], discount: string) {
     if (parseFloat(item.qty || "0") <= 0) throw new Error("All quantities must be greater than zero.");
   }
 
-  // Duplicate check: material_id | normalized_rate
-  const seen = new Set<string>();
-  for (const item of items) {
-    const rate = parseFloat(item.rate || "0").toFixed(2);
-    const key = `${item.material_id}|${rate}`;
-    if (seen.has(key))
-      throw new Error(
-        "Duplicate entry detected: same material at the same rate already exists. Combine into one row or adjust the rate."
-      );
-    seen.add(key);
-  }
-
   // Zero-rate check
   for (const item of items) {
     if (item.rate === "0" && !item.rate_blank && !item.zero_rate_confirmed)

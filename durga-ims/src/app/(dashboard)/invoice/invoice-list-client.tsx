@@ -55,6 +55,18 @@ export function InvoiceListClient({ rows, fy }: Props) {
     return result;
   }, [rows, statusFilter, dateFrom, dateTo, search]);
 
+  // Deduplicate: one row per invoice (first item only)
+  const invoiceRows = useMemo(
+    () => filtered.filter((row, idx, arr) => arr.findIndex((r) => r.id === row.id) === idx),
+    [filtered]
+  );
+  // Item count per invoice id (for the "+N more" badge)
+  const itemCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of filtered) map.set(r.id, (map.get(r.id) ?? 0) + 1);
+    return map;
+  }, [filtered]);
+
   // Count per status tab
   const counts = useMemo(() => {
     const draft = rows.filter((r) => r.status === "Draft").length;
@@ -206,15 +218,16 @@ export function InvoiceListClient({ rows, fy }: Props) {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {invoiceRows.length === 0 ? (
                 <tr>
                   <td colSpan={15} className="px-3 py-12 text-center text-slate-400">
                     No invoices found.
                   </td>
                 </tr>
               ) : (
-                filtered.map((r, i) => {
+                invoiceRows.map((r, i) => {
                   const stickyBg = "bg-white";
+                  const extraItems = (itemCounts.get(r.id) ?? 1) - 1;
                   return (
                     <tr key={r.item_id} className="border-t border-slate-100 hover:bg-slate-50">
                       <td className={`px-3 py-2.5 text-slate-400 text-xs sticky left-0 z-10 ${stickyBg}`}>
@@ -240,6 +253,9 @@ export function InvoiceListClient({ rows, fy }: Props) {
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 text-xs">
                         {r.material_name}
+                        {extraItems > 0 && (
+                          <span className="ml-1.5 text-slate-400">(+{extraItems} more)</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-xs text-slate-400 whitespace-nowrap">
                         {r.hsn_code ?? "—"}
@@ -257,7 +273,7 @@ export function InvoiceListClient({ rows, fy }: Props) {
                         {parseFloat(r.tax_percentage_item || "0").toFixed(0)}%
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium text-slate-800 text-xs whitespace-nowrap">
-                        ₹{fmt2(r.amount)}
+                        ₹{fmt2(r.net_amount)}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <span
@@ -303,9 +319,9 @@ export function InvoiceListClient({ rows, fy }: Props) {
           </table>
         </div>
 
-        {filtered.length > 0 && (
+        {invoiceRows.length > 0 && (
           <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400 bg-slate-50 rounded-b-lg flex items-center justify-between">
-            <span>{filtered.length} line item{filtered.length !== 1 ? "s" : ""} across {filteredInvoiceCount} invoice{filteredInvoiceCount !== 1 ? "s" : ""}</span>
+            <span>{filteredInvoiceCount} invoice{filteredInvoiceCount !== 1 ? "s" : ""}</span>
           </div>
         )}
       </div>

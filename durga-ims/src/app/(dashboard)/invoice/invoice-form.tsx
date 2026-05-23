@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -149,7 +149,7 @@ function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[]): LineItemDraft
 export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, units }: Props) {
   const router = useRouter();
   const { activeFY: fy } = useFY();
-  const [isPending, startTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
   const isReadOnly = mode === "view";
 
   // ── Header state ──────────────────────────────────────────────────────────
@@ -357,70 +357,74 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     };
   }
 
-  function handleSaveDraft() {
-    startTransition(async () => {
-      try {
-        const payload = buildPayload();
-        if (invoice) {
-          await updateInvoice(invoice.id, payload);
-          toast.success("Invoice saved.");
-        } else {
-          const id = await createInvoice(payload);
-          toast.success(`${billNumber} created.`);
-          router.push(`/invoice/${id}/edit`);
-        }
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to save invoice.");
+  async function handleSaveDraft() {
+    setIsSaving(true);
+    try {
+      const payload = buildPayload();
+      if (invoice) {
+        await updateInvoice(invoice.id, payload);
+        toast.success("Invoice saved.");
+      } else {
+        const id = await createInvoice(payload);
+        toast.success(`${billNumber} created.`);
+        router.push(`/invoice/${id}/edit`);
       }
-    });
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to save invoice.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function handleFinalize() {
-    startTransition(async () => {
-      try {
-        if (invoice) {
-          await updateInvoice(invoice.id, buildPayload());
-          await finalizeInvoice(invoice.id);
-          toast.success(`${invoice.bill_number} finalized.`);
-          router.refresh();
-        } else {
-          const id = await createInvoice(buildPayload());
-          await finalizeInvoice(id);
-          toast.success(`Invoice created and finalized.`);
-          router.push(`/invoice/${id}/view`);
-        }
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to finalize invoice.");
-      }
-      setShowFinalizeDialog(false);
-    });
-  }
-
-  function handleRevertToDraft() {
-    if (!invoice) return;
-    startTransition(async () => {
-      try {
-        await revertInvoiceToDraft(invoice.id);
-        toast.success("Reverted to Draft.");
+  async function handleFinalize() {
+    setIsSaving(true);
+    try {
+      if (invoice) {
+        await updateInvoice(invoice.id, buildPayload());
+        await finalizeInvoice(invoice.id);
+        toast.success(`${invoice.bill_number} finalized.`);
         router.refresh();
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to revert.");
+      } else {
+        const id = await createInvoice(buildPayload());
+        await finalizeInvoice(id);
+        toast.success(`Invoice created and finalized.`);
+        router.push(`/invoice/${id}/view`);
       }
-    });
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to finalize invoice.");
+    } finally {
+      setIsSaving(false);
+      setShowFinalizeDialog(false);
+    }
   }
 
-  function handleDelete() {
+  async function handleRevertToDraft() {
     if (!invoice) return;
-    startTransition(async () => {
-      try {
-        await deleteInvoice(invoice.id);
-        toast.success("Invoice deleted.");
-        router.push("/invoice");
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Failed to delete.");
-      }
+    setIsSaving(true);
+    try {
+      await revertInvoiceToDraft(invoice.id);
+      toast.success("Reverted to Draft.");
+      router.refresh();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to revert.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!invoice) return;
+    setIsSaving(true);
+    try {
+      await deleteInvoice(invoice.id);
+      toast.success("Invoice deleted.");
+      router.push("/invoice");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete.");
+    } finally {
+      setIsSaving(false);
       setShowDeleteDialog(false);
-    });
+    }
   }
 
   const isFinalized = invoice?.status === "Finalized";
@@ -769,29 +773,29 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
               <Button
                 size="sm"
                 onClick={handleSaveDraft}
-                disabled={isPending}
+                disabled={isSaving}
                 className="bg-amber-600 hover:bg-amber-700 text-white"
               >
-                {isPending ? "Saving…" : "Save Changes"}
+                {isSaving ? "Saving…" : "Save Changes"}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRevertToDraft}
-                disabled={isPending}
+                disabled={isSaving}
               >
                 Revert to Draft
               </Button>
             </>
           ) : (
             <>
-              <Button size="sm" onClick={handleSaveDraft} disabled={isPending} variant="outline">
-                {isPending ? "Saving…" : "Save Draft"}
+              <Button size="sm" onClick={handleSaveDraft} disabled={isSaving} variant="outline">
+                {isSaving ? "Saving…" : "Save Draft"}
               </Button>
               <Button
                 size="sm"
                 onClick={() => setShowFinalizeDialog(true)}
-                disabled={isPending}
+                disabled={isSaving}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 Finalize Invoice
@@ -802,7 +806,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
                   size="sm"
                   className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-auto"
                   onClick={() => setShowDeleteDialog(true)}
-                  disabled={isPending}
+                  disabled={isSaving}
                 >
                   Delete
                 </Button>
@@ -814,7 +818,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
             size="sm"
             className={isFinalized ? "ml-auto" : ""}
             onClick={() => router.push("/invoice")}
-            disabled={isPending}
+            disabled={isSaving}
           >
             Cancel
           </Button>
