@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { vehicles, customers, materialIssues } from "@/lib/db/schema";
+import { vehicles, customers, materialIssues, invoices } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -72,6 +72,17 @@ export async function deleteVehicle(id: string) {
   if (inUse.length > 0)
     throw new Error(
       `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": referenced in a Draft issue slip. Complete or delete that slip first.`
+    );
+
+  // Guard: block if referenced in any Draft invoice
+  const draftInvoice = await db
+    .select({ bill_number: invoices.bill_number })
+    .from(invoices)
+    .where(and(eq(invoices.vehicle_id, id), eq(invoices.status, "Draft")))
+    .limit(1);
+  if (draftInvoice.length > 0)
+    throw new Error(
+      `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": has a Draft invoice ${draftInvoice[0].bill_number}. Finalize or delete it first.`
     );
 
   await db.update(vehicles).set({ is_active: false }).where(eq(vehicles.id, id));

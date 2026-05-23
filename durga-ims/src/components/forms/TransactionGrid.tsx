@@ -29,7 +29,7 @@ interface MaterialOption {
   tax_percentage?: string | null; // direct from DB join when available (issue mode)
   purchase_unit_id: string | null;
   sales_unit_id?: string | null;
-  current_stock: string;
+  current_stock?: string;
 }
 
 interface TaxRateOption {
@@ -57,10 +57,10 @@ interface Props {
   taxRates: TaxRateOption[];
   units: UnitOption[];
   readOnly?: boolean;
-  // Material issue mode props
-  mode?: "purchase-order" | "material-issue";
+  // Material issue / invoice mode props
+  mode?: "purchase-order" | "material-issue" | "invoice";
   contractors?: ContractorOption[];
-  gstType?: string; // header-level GST type (all rows share it in material-issue mode)
+  gstType?: string; // header-level GST type (all rows share it in material-issue / invoice mode)
 }
 
 export function newRow(): LineItemDraft {
@@ -135,14 +135,17 @@ export function TransactionGrid({
 }: Props) {
   const gridRef = useRef<HTMLTableElement>(null);
   const isIssueMode = mode === "material-issue";
+  const isInvoiceMode = mode === "invoice";
+  // Both issue and invoice modes use header-level GST type
+  const isHeaderGstMode = isIssueMode || isInvoiceMode;
 
-  // In material-issue mode, gstType is header-level (same for all rows)
-  const effectiveGstType = isIssueMode ? (gstType ?? "CGST_SGST") : undefined;
+  // In material-issue / invoice mode, gstType is header-level (same for all rows)
+  const effectiveGstType = isHeaderGstMode ? (gstType ?? "CGST_SGST") : undefined;
 
-  // Recalculate all rows when header-level gstType changes (issue mode only)
+  // Recalculate all rows when header-level gstType changes (issue / invoice mode only)
   const prevGstTypeRef = useRef(effectiveGstType);
   useEffect(() => {
-    if (!isIssueMode || !effectiveGstType) return;
+    if (!isHeaderGstMode || !effectiveGstType) return;
     if (effectiveGstType === prevGstTypeRef.current) return;
     prevGstTypeRef.current = effectiveGstType;
     const recalculated = rows.map((r) => {
@@ -159,7 +162,7 @@ export function TransactionGrid({
         rows.map((r) => {
           if (r._key !== key) return r;
           const updated = { ...r, ...patch };
-          const gstForCalc = effectiveGstType ?? updated.gst_type;
+          const gstForCalc = (isHeaderGstMode ? effectiveGstType : null) ?? updated.gst_type;
           const amounts = calcAmountsForRow(updated.qty, updated.rate, updated.tax_percentage, gstForCalc);
           return { ...updated, gst_type: gstForCalc, ...amounts };
         })
@@ -178,9 +181,9 @@ export function TransactionGrid({
       if (existing) toast.warning(`${mat.name} is already in this PO`);
     }
 
-    // Issue mode: prefer sales unit → fallback purchase unit → amber warning
+    // Issue / invoice mode: prefer sales unit → fallback purchase unit → amber warning
     // PO mode: always use purchase unit
-    const preferredUnitId = isIssueMode
+    const preferredUnitId = isHeaderGstMode
       ? (mat.sales_unit_id ?? mat.purchase_unit_id)
       : mat.purchase_unit_id;
 
@@ -206,8 +209,8 @@ export function TransactionGrid({
       rate: lastRate ?? "",
       rateBlank,
       zeroRateConfirmed: false,
-      // In issue mode, apply header gstType; in PO mode gst_type set by supplier select
-      ...(isIssueMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
+      // In issue/invoice mode, apply header gstType; in PO mode gst_type set by supplier select
+      ...(isHeaderGstMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
     });
   }
 
@@ -286,21 +289,21 @@ export function TransactionGrid({
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-56">Material Name</th>
 
             {/* Supplier column — PO mode only */}
-            {!isIssueMode && (
+            {!isIssueMode && !isInvoiceMode && (
               <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-48">Supplier</th>
             )}
 
-            {/* HSN column — issue mode only */}
-            {isIssueMode && (
+            {/* HSN column — issue mode and invoice mode */}
+            {(isIssueMode || isInvoiceMode) && (
               <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">HSN</th>
             )}
 
-            {/* Contractor column — issue mode only */}
+            {/* Contractor column — issue mode only (not invoice mode) */}
             {isIssueMode && (
               <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-44">Contractor</th>
             )}
 
-            {/* Affects Stock column — issue mode only */}
+            {/* Affects Stock column — issue mode only (not invoice mode) */}
             {isIssueMode && (
               <th className="px-3 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap w-24">Affects Stock</th>
             )}
@@ -345,15 +348,15 @@ export function TransactionGrid({
                   )}
                 </td>
 
-                {/* HSN — read-only, auto-filled, issue mode only */}
-                {isIssueMode && (
+                {/* HSN — read-only, auto-filled, issue mode and invoice mode */}
+                {(isIssueMode || isInvoiceMode) && (
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-500 whitespace-nowrap">
                     {row.hsn_code || "—"}
                   </td>
                 )}
 
                 {/* Supplier combobox — PO mode only */}
-                {!isIssueMode && (
+                {!isIssueMode && !isInvoiceMode && (
                   <td className="px-3 py-1.5">
                     {readOnly ? (
                       <span className="text-slate-600">{row.supplier_name || "—"}</span>
@@ -439,7 +442,7 @@ export function TransactionGrid({
                     <span
                       className="text-xs text-amber-600"
                       title={
-                        isIssueMode
+                        isHeaderGstMode
                           ? "No sales or purchase unit set — edit in Materials master"
                           : "No purchase unit set — edit in Materials master"
                       }

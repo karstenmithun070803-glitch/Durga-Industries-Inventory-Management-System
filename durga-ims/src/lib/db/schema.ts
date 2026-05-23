@@ -225,7 +225,7 @@ export const materialIssueItems = pgTable("material_issue_items", {
 
 export const invoices = pgTable("invoices", {
   id: uuid("id").primaryKey().defaultRandom(),
-  // text e.g. "D1800005" — prefix from tax_rates.inv_prefix + sequential integer
+  // text e.g. "D-00001" — prefix from tax_rates.inv_prefix + 5-digit padded sequence
   bill_number: text("bill_number").notNull(),
   bill_date: timestamp("bill_date", { withTimezone: true }).notNull().defaultNow(),
   rate_date: timestamp("rate_date", { withTimezone: true }),
@@ -238,6 +238,10 @@ export const invoices = pgTable("invoices", {
   net_amount: numeric("net_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   rev_charge_status: boolean("rev_charge_status").notNull().default(false),
   financial_year: text("financial_year").notNull(),
+  // 'Draft' | 'Finalized' — finalized shows amber warning on edit but still allows it
+  status: text("status").notNull().default("Draft"),
+  // optional reference to the MI slip that was used to auto-populate items
+  issue_id: uuid("issue_id").references(() => materialIssues.id),
   ...timestamps,
 }, (t) => [
   unique("bill_number_fy_unique").on(t.bill_number, t.financial_year),
@@ -261,6 +265,8 @@ export const invoiceItems = pgTable("invoice_items", {
   sgst_amount: numeric("sgst_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   igst_amount: numeric("igst_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  // frozen at save time — "CGST_SGST" | "IGST" (historical integrity)
+  gst_type: text("gst_type"),
   ...timestamps,
 });
 
@@ -406,6 +412,10 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   vehicle: one(vehicles, {
     fields: [invoices.vehicle_id],
     references: [vehicles.id],
+  }),
+  materialIssue: one(materialIssues, {
+    fields: [invoices.issue_id],
+    references: [materialIssues.id],
   }),
   items: many(invoiceItems),
 }));

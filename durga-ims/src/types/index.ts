@@ -213,6 +213,95 @@ export interface MaterialIssueWithDetails {
 }
 
 // ---------------------------------------------------------------------------
+// INVOICE TYPES
+// ---------------------------------------------------------------------------
+
+// Flat row returned by getInvoices() — one row per line item (for list view)
+export interface InvoiceRow {
+  // header fields
+  id: string;
+  bill_number: string;
+  bill_date: string;
+  rate_date: string | null;
+  financial_year: string;
+  status: string;
+  tax_percentage: string | null;
+  material_margin: string | null;
+  discount: string | null;
+  net_amount: string;
+  rev_charge_status: boolean;
+  issue_id: string | null;
+  // vehicle + customer (via JOIN)
+  vehicle_id: string;
+  vehicle_name: string;
+  job_ref_no: number;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_gstin: string | null;
+  customer_state: string | null;
+  // item fields
+  item_id: string;
+  material_id: string;
+  material_name: string;
+  material_no: number;
+  hsn_code: string | null;
+  qty: string;
+  unit_id: string | null;
+  unit_name: string | null;
+  rate: string;
+  tax_percentage_item: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  amount: string;
+  gst_type: string | null;
+}
+
+// Per-item type used in the edit form
+export interface InvoiceItemWithDetails {
+  id: string;
+  invoice_id: string;
+  material_id: string;
+  material_name: string;
+  material_no: number;
+  hsn_code: string | null;
+  qty: string;
+  unit_id: string | null;
+  unit_name: string | null;
+  rate: string;
+  tax_percentage: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  amount: string;
+  gst_type: string | null;
+}
+
+// Full detail returned by getInvoiceById()
+export interface InvoiceWithDetails {
+  id: string;
+  bill_number: string;
+  bill_date: string;
+  rate_date: string | null;
+  financial_year: string;
+  status: string;
+  tax_percentage: string | null;
+  material_margin: string | null;
+  discount: string | null;
+  net_amount: string;
+  rev_charge_status: boolean;
+  issue_id: string | null;
+  vehicle_id: string;
+  vehicle_name: string;
+  job_ref_no: number;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_gstin: string | null;
+  customer_state: string | null;
+  items: InvoiceItemWithDetails[];
+}
+
+// ---------------------------------------------------------------------------
 // GST determination
 // ---------------------------------------------------------------------------
 export type GstType = "CGST_SGST" | "IGST";
