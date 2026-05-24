@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
+import { getCurrentFY } from "@/lib/fy";
 import {
   getActiveVehiclesForReports,
   getActiveSuppliersForReports,
   getActiveMaterialsForReports,
   getActiveCustomersForReports,
-  getCurrentFY,
 } from "@/lib/actions/reports.actions";
 import { getCompanySettings } from "@/lib/actions/settings.actions";
 import { ReportsClient } from "./reports-client";

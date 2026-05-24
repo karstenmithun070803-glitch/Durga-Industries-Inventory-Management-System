@@ -15,9 +15,6 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, gte, lte, sql, desc, asc } from "drizzle-orm";
 
-// Re-export pure helpers so existing callers don't need to change their import path
-export { getCurrentFY, fyDateRange } from "@/lib/fy";
-
 // ---------------------------------------------------------------------------
 // Invoice Summary Report
 // ---------------------------------------------------------------------------
