@@ -147,9 +147,9 @@ export function InvoiceSummaryReport({ vehicles, customers, currentFY, companySe
           <Button onClick={runReport} disabled={isLoading} className="h-9">
             {isLoading ? "Loading…" : "Run Report"}
           </Button>
-          {(customerId || vehicleId || dateFrom || dateTo || status !== "Finalized") && (
+          {(customerId || vehicleId || dateFrom || dateTo || status !== "Finalized" || fy !== currentFY) && (
             <button
-              onClick={() => { setCustomerId(""); setVehicleId(""); setDateFrom(""); setDateTo(""); setStatus("Finalized"); }}
+              onClick={() => { setCustomerId(""); setVehicleId(""); setDateFrom(""); setDateTo(""); setStatus("Finalized"); setFy(currentFY); }}
               className="text-xs text-blue-600 underline h-9 px-1"
             >
               Clear filters

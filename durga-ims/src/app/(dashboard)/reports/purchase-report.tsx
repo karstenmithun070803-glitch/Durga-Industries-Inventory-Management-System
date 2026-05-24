@@ -81,6 +81,7 @@ export function PurchaseReport({ suppliers, materials, currentFY, companySetting
   const totals = useMemo(() => {
     const active = rows.filter((r) => r.status === "Received");
     return {
+      qty: active.reduce((s, r) => s + r.qty, 0),
       taxable: active.reduce((s, r) => s + r.taxable_amount, 0),
       cgst: active.reduce((s, r) => s + r.cgst_amount, 0),
       sgst: active.reduce((s, r) => s + r.sgst_amount, 0),
@@ -161,9 +162,9 @@ export function PurchaseReport({ suppliers, materials, currentFY, companySetting
           <Button onClick={runReport} disabled={isLoading} className="h-9">
             {isLoading ? "Loading…" : "Run Report"}
           </Button>
-          {(supplierId || materialId || dateFrom || dateTo || status !== "Received") && (
+          {(supplierId || materialId || dateFrom || dateTo || status !== "Received" || fy !== currentFY) && (
             <button
-              onClick={() => { setSupplierId(""); setMaterialId(""); setDateFrom(""); setDateTo(""); setStatus("Received"); }}
+              onClick={() => { setSupplierId(""); setMaterialId(""); setDateFrom(""); setDateTo(""); setStatus("Received"); setFy(currentFY); }}
               className="text-xs text-blue-600 underline h-9 px-1"
             >
               Clear filters
@@ -250,9 +251,12 @@ export function PurchaseReport({ suppliers, materials, currentFY, companySetting
               </tbody>
               <tfoot className="bg-slate-100 sticky bottom-0">
                 <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={7} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
+                  <td colSpan={4} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
                     TOTAL {rows.filter((r) => r.status !== "Received").length > 0 && "(Received only)"}
                   </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.qty)}</td>
+                  <td />
+                  <td />
                   <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{totals.cgst > 0 ? fmtAmt(totals.cgst) : "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{totals.sgst > 0 ? fmtAmt(totals.sgst) : "—"}</td>

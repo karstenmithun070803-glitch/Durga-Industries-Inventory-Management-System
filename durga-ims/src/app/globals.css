@@ -53,3 +53,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .line-through-cells td {
+    text-decoration: line-through;
+  }
+}

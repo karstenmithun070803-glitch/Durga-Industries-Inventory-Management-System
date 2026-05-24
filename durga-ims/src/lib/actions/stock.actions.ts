@@ -136,7 +136,8 @@ export async function getStockDashboardMaterials(): Promise<{
     .from(purchaseOrderItems)
     .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
     .where(eq(purchaseOrders.status, "Received"))
-    .orderBy(desc(purchaseOrders.po_date));
+    .orderBy(desc(purchaseOrders.po_date))
+    .limit(2000);
 
   // Keep only the first (most recent) rate per material
   const rateMap = new Map<string, string>();

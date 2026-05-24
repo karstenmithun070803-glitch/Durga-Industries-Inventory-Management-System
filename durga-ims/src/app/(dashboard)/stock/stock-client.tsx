@@ -97,6 +97,13 @@ const LEDGER_TYPE_COLOR: Record<string, string> = {
   ADJUSTMENT: "bg-red-100 text-red-700",
 };
 
+const LEDGER_TYPE_LABELS: Record<string, string> = {
+  PO_INWARD: "PO Receipt",
+  ISSUE: "Material Issue",
+  REVERSAL: "Reversal",
+  ADJUSTMENT: "Manual Adjustment",
+};
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -118,7 +125,6 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
   const [rows, setRows] = useState(initialRows);
   const [summary, setSummary] = useState(initialSummary);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Table filters
   const [tab, setTab] = useState<TabFilter>("all");
@@ -149,10 +155,8 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
   // ---------------------------------------------------------------------------
 
   async function handleRefresh() {
-    setIsRefreshing(true);
     await new Promise<void>((resolve) => startTransition(() => { router.refresh(); resolve(); }));
     setLastUpdated(new Date());
-    setIsRefreshing(false);
   }
 
   // ---------------------------------------------------------------------------
@@ -206,16 +210,17 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
   // ---------------------------------------------------------------------------
 
   async function openAdjust(mat: StockMaterialRow) {
+    const initialQty = parseFloat(mat.current_stock).toString();
     setAdjustMaterial(mat);
     setAdjustFreshStock(null);
-    setNewQty(parseFloat(mat.current_stock).toString());
+    setNewQty(initialQty);
     setAdjustReason("");
     setAdjustOpen(true);
-    // Fetch live stock to ensure dialog shows current value
+    // Fetch live stock — only update the input if the user hasn't changed the pre-fill yet
     const fresh = await getStockForMaterial(mat.id);
     if (fresh) {
       setAdjustFreshStock(fresh.current_stock);
-      setNewQty(parseFloat(fresh.current_stock).toString());
+      setNewQty((prev) => (prev === initialQty ? parseFloat(fresh.current_stock).toString() : prev));
     }
   }
 
@@ -294,9 +299,9 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
             size="sm"
             className="h-8 text-xs gap-1.5"
             onClick={handleRefresh}
-            disabled={isRefreshing}
+            disabled={isPending}
           >
-            <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
+            <RefreshCw className={cn("w-3.5 h-3.5", isPending && "animate-spin")} />
             Refresh
           </Button>
         </div>
@@ -352,7 +357,7 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
           {(["all", "low", "out", "inactive"] as TabFilter[]).map((t) => {
             const label =
-              t === "all" ? `Active (${summary.totalMaterials})`
+              t === "all" ? `Active (${search.trim() ? filtered.length : summary.totalMaterials})`
               : t === "low" ? `Low Stock (${tabCounts.low})`
               : t === "out" ? `Out of Stock (${tabCounts.out})`
               : `Inactive with Stock (${tabCounts.inactive})`;
@@ -542,7 +547,7 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
                             <td className="px-2 py-1.5 whitespace-nowrap text-slate-500">{fmtDateTime(e.created_at)}</td>
                             <td className="px-2 py-1.5 whitespace-nowrap">
                               <span className={cn("px-1.5 py-0.5 rounded text-xs font-medium", LEDGER_TYPE_COLOR[e.transaction_type] ?? "bg-slate-100 text-slate-600")}>
-                                {e.transaction_type.replace("_", " ")}
+                                {LEDGER_TYPE_LABELS[e.transaction_type] ?? e.transaction_type.replace("_", " ")}
                               </span>
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">{e.reference_label}</td>
@@ -550,8 +555,8 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
                               {isPos ? "+" : ""}{fmtQty(e.qty_change)}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-right text-slate-700">{fmtQty(e.stock_after)}</td>
-                            <td className="px-2 py-1.5 text-slate-400 max-w-[160px] truncate" title={e.reason ?? ""}>
-                              {e.reason ? e.reason.split(" — ")[0] : "—"}
+                            <td className="px-2 py-1.5 text-slate-400 max-w-[200px] truncate" title={e.reason ?? ""}>
+                              {e.reason ? (e.reason.length > 80 ? e.reason.slice(0, 80) + "…" : e.reason) : "—"}
                             </td>
                           </tr>
                         );
@@ -712,10 +717,6 @@ function JobCostPanel({
   open: boolean;
   onToggle: () => void;
 }) {
-  function fmtAmt(v: number) {
-    return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
   return (
     <div className="bg-white border border-slate-200 rounded-lg">
       <button

@@ -370,6 +370,7 @@ export async function getActiveVehiclesForReports() {
   return db
     .select({ id: vehicles.id, vehicle_name: vehicles.vehicle_name, job_ref_no: vehicles.job_ref_no })
     .from(vehicles)
+    .where(eq(vehicles.is_active, true))
     .orderBy(vehicles.job_ref_no);
 }
 
