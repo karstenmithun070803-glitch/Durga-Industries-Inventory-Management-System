@@ -12,6 +12,7 @@ import { Pencil, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PrintButton } from "@/components/pdf/print-button";
 import { PORegisterDocument } from "@/components/pdf/po-register-pdf";
+import type { CompanySetting } from "@/lib/actions/settings.actions";
 
 type ItemRow = {
   // PO header
@@ -42,6 +43,7 @@ type StatusFilter = "All" | "Draft" | "Received";
 interface Props {
   initialRows: ItemRow[];
   initialFY: string;
+  companySetting?: CompanySetting;
 }
 
 function formatDate(d: Date | string): string {
@@ -63,7 +65,7 @@ function taxDisplay(row: ItemRow): string {
   return "—";
 }
 
-export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
+export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }: Props) {
   const { activeFY } = useFY();
   const [rows, setRows] = useState<ItemRow[]>(initialRows);
   const [loadedFY, setLoadedFY] = useState(initialFY);
@@ -146,6 +148,41 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
 
   const tabs: StatusFilter[] = ["All", "Draft", "Received"];
 
+  function downloadCsv() {
+    const headers = ["PO #", "Date", "Supplier", "Material", "Qty", "Unit", "Rate", "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount", "Stock Updated", "Status"];
+    const csvRows = visible.map((r) => {
+      const taxable = parseFloat(r.amount ?? "0");
+      const cgst = parseFloat(r.cgst_amount ?? "0");
+      const sgst = parseFloat(r.sgst_amount ?? "0");
+      const igst = parseFloat(r.igst_amount ?? "0");
+      return [
+        `PO-${String(r.po_number).padStart(4, "0")}`,
+        new Date(r.po_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        r.supplier_name ?? "",
+        r.material_name ?? "",
+        r.qty ?? "",
+        r.unit_name ?? "",
+        parseFloat(r.rate ?? "0").toFixed(2),
+        taxable.toFixed(2),
+        cgst.toFixed(2),
+        sgst.toFixed(2),
+        igst.toFixed(2),
+        (taxable + cgst + sgst + igst).toFixed(2),
+        r.affects_stock ? "Yes" : "No",
+        r.status,
+      ];
+    });
+    const bom = "﻿";
+    const csv = bom + [headers, ...csvRows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `purchase-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="p-6 h-full flex flex-col gap-4">
       {/* Header */}
@@ -221,6 +258,15 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
               />
               <span className="text-xs text-slate-500">Include rates</span>
             </label>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              onClick={downloadCsv}
+              disabled={visible.length === 0}
+            >
+              Export CSV ({visible.length})
+            </Button>
             <PrintButton
               label={`Print (${visible.length})`}
               disabled={visible.length === 0}
@@ -232,6 +278,7 @@ export function PurchaseOrdersClient({ initialRows, initialFY }: Props) {
                   dateTo={dateTo}
                   statusFilter={statusFilter}
                   showRates={showRates}
+                  companySetting={companySetting}
                 />
               )}
             />

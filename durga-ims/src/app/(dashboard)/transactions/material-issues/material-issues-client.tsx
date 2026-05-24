@@ -20,15 +20,17 @@ import { Pencil, Trash2, Eye, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PrintButton } from "@/components/pdf/print-button";
 import { MIRegisterDocument } from "@/components/pdf/mi-register-pdf";
+import type { CompanySetting } from "@/lib/actions/settings.actions";
 
 interface Props {
   initialRows: MaterialIssueRow[];
   initialFY: string;
+  companySetting?: CompanySetting;
 }
 
 type StatusTab = "All" | "Draft" | "Issued";
 
-export function MaterialIssuesClient({ initialRows, initialFY }: Props) {
+export function MaterialIssuesClient({ initialRows, initialFY, companySetting }: Props) {
   const { activeFY } = useFY();
   const [rows, setRows] = useState<MaterialIssueRow[]>(initialRows);
   const [loadedFY, setLoadedFY] = useState(initialFY);
@@ -102,6 +104,32 @@ export function MaterialIssuesClient({ initialRows, initialFY }: Props) {
   };
 
   const tabs: StatusTab[] = ["All", "Draft", "Issued"];
+
+  function downloadCsv() {
+    const headers = ["Slip #", "Date", "Vehicle", "Job Ref", "Material", "Qty", "Unit", "Rate", "Amount", "Contractor", "Status"];
+    const csvRows = filtered.map((r) => [
+      `MI-${String(r.slip_number).padStart(4, "0")}`,
+      new Date(r.issue_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      r.vehicle_name,
+      `J${String(r.job_ref_no).padStart(5, "0")}`,
+      r.material_name,
+      r.qty,
+      r.unit_name ?? "",
+      parseFloat(r.rate).toFixed(2),
+      parseFloat(r.amount).toFixed(2),
+      r.contractor_name ?? "",
+      r.status,
+    ]);
+    const bom = "﻿";
+    const csv = bom + [headers, ...csvRows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `material-issues-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="p-6 h-full flex flex-col gap-4">
@@ -184,6 +212,15 @@ export function MaterialIssuesClient({ initialRows, initialFY }: Props) {
               />
               <span className="text-xs text-slate-500">Include rates</span>
             </label>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              onClick={downloadCsv}
+              disabled={filtered.length === 0}
+            >
+              Export CSV ({filtered.length})
+            </Button>
             <PrintButton
               label={`Print (${filtered.length})`}
               disabled={filtered.length === 0}
@@ -195,6 +232,7 @@ export function MaterialIssuesClient({ initialRows, initialFY }: Props) {
                   dateTo={dateTo}
                   statusFilter={tab}
                   showRates={showRates}
+                  companySetting={companySetting}
                 />
               )}
             />

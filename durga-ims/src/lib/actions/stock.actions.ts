@@ -1,0 +1,493 @@
+"use server";
+
+import { db } from "@/lib/db";
+import {
+  materials,
+  units,
+  stockLedger,
+  purchaseOrders,
+  purchaseOrderItems,
+  materialIssues,
+  materialIssueItems,
+  contractors,
+  vehicles,
+  customers,
+  invoices,
+  invoiceSlipLinks,
+} from "@/lib/db/schema";
+import { eq, and, desc, sql, lt, gte, lte, inArray } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface StockMaterialRow {
+  id: string;
+  material_no: number;
+  name: string;
+  unit_name: string | null;
+  current_stock: string;
+  min_level: string | null;
+  max_level: string | null;
+  last_po_rate: string | null;
+  is_active: boolean;
+}
+
+export interface StockSummary {
+  totalMaterials: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+  totalStockValue: number;
+  materialsExcludedFromValue: number;
+}
+
+export interface StockLedgerEntry {
+  id: string;
+  created_at: Date;
+  transaction_type: string;
+  qty_change: string;
+  stock_after: string;
+  reason: string | null;
+  adjusted_by: string | null;
+  reference_label: string;
+}
+
+export interface VehicleSearchRow {
+  id: string;
+  job_ref_no: number;
+  vehicle_name: string;
+  customer_name: string | null;
+  is_active: boolean;
+}
+
+export interface JobCostRow {
+  material_name: string;
+  material_no: number;
+  contractor_name: string | null;
+  unit_name: string | null;
+  total_qty: number;
+  rate: number;
+  total_amount: number;
+  billed_amount: number;
+  unbilled_amount: number;
+}
+
+export interface JobCostResult {
+  vehicle: {
+    job_ref_no: number;
+    vehicle_name: string;
+    customer_name: string | null;
+  };
+  rows: JobCostRow[];
+  totals: {
+    total_cost: number;
+    total_billed: number;
+    total_unbilled: number;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// getStockDashboardMaterials
+// ---------------------------------------------------------------------------
+
+export async function getStockDashboardMaterials(): Promise<{
+  rows: StockMaterialRow[];
+  summary: StockSummary;
+}> {
+  // Fetch all materials: active ones + deactivated ones with stock > 0
+  const allMats = await db
+    .select({
+      id: materials.id,
+      material_no: materials.material_no,
+      name: materials.name,
+      current_stock: materials.current_stock,
+      min_level: materials.min_level,
+      max_level: materials.max_level,
+      is_active: materials.is_active,
+      unit_id: materials.sales_unit_id,
+    })
+    .from(materials)
+    .where(
+      sql`${materials.is_active} = true OR (${materials.is_active} = false AND ${materials.current_stock} > 0)`
+    )
+    .orderBy(materials.material_no);
+
+  if (allMats.length === 0) {
+    return {
+      rows: [],
+      summary: { totalMaterials: 0, lowStockCount: 0, outOfStockCount: 0, totalStockValue: 0, materialsExcludedFromValue: 0 },
+    };
+  }
+
+  // Fetch unit names
+  const unitRows = await db.select({ id: units.id, unit_name: units.unit_name }).from(units);
+  const unitMap = new Map(unitRows.map((u) => [u.id, u.unit_name]));
+
+  // For each material, get the last received PO rate via a lateral-style subquery.
+  // We do one query: get all latest PO rates grouped by material_id
+  const poRates = await db
+    .select({
+      material_id: purchaseOrderItems.material_id,
+      rate: purchaseOrderItems.rate,
+      po_date: purchaseOrders.po_date,
+    })
+    .from(purchaseOrderItems)
+    .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
+    .where(eq(purchaseOrders.status, "Received"))
+    .orderBy(desc(purchaseOrders.po_date));
+
+  // Keep only the first (most recent) rate per material
+  const rateMap = new Map<string, string>();
+  for (const row of poRates) {
+    if (row.material_id && !rateMap.has(row.material_id)) {
+      rateMap.set(row.material_id, row.rate);
+    }
+  }
+
+  const rows: StockMaterialRow[] = allMats.map((m) => ({
+    id: m.id,
+    material_no: m.material_no,
+    name: m.name,
+    unit_name: m.unit_id ? (unitMap.get(m.unit_id) ?? null) : null,
+    current_stock: m.current_stock,
+    min_level: m.min_level,
+    max_level: m.max_level,
+    last_po_rate: rateMap.get(m.id) ?? null,
+    is_active: m.is_active,
+  }));
+
+  // Summary metrics (active materials only)
+  const activeMats = rows.filter((r) => r.is_active);
+  const totalMaterials = activeMats.length;
+
+  const lowStockCount = activeMats.filter((r) => {
+    const stock = parseFloat(r.current_stock);
+    const minL = parseFloat(r.min_level ?? "0");
+    return stock > 0 && minL > 0 && stock < minL;
+  }).length;
+
+  const outOfStockCount = activeMats.filter((r) => parseFloat(r.current_stock) === 0).length;
+
+  let totalStockValue = 0;
+  let materialsExcludedFromValue = 0;
+  for (const r of activeMats) {
+    if (r.last_po_rate) {
+      totalStockValue += parseFloat(r.current_stock) * parseFloat(r.last_po_rate);
+    } else {
+      materialsExcludedFromValue++;
+    }
+  }
+
+  return {
+    rows,
+    summary: { totalMaterials, lowStockCount, outOfStockCount, totalStockValue, materialsExcludedFromValue },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// getStockMovementHistory
+// ---------------------------------------------------------------------------
+
+export async function getStockMovementHistory(
+  materialId: string,
+  limit = 50
+): Promise<StockLedgerEntry[]> {
+  const ledger = await db
+    .select({
+      id: stockLedger.id,
+      created_at: stockLedger.created_at,
+      transaction_type: stockLedger.transaction_type,
+      qty_change: stockLedger.qty_change,
+      stock_after: stockLedger.stock_after,
+      reason: stockLedger.reason,
+      adjusted_by: stockLedger.adjusted_by,
+      reference_id: stockLedger.reference_id,
+      reference_type: stockLedger.reference_type,
+    })
+    .from(stockLedger)
+    .where(eq(stockLedger.material_id, materialId))
+    .orderBy(desc(stockLedger.created_at))
+    .limit(limit);
+
+  if (ledger.length === 0) return [];
+
+  // Build reference labels: fetch PO numbers and slip numbers for references
+  const poIds = ledger.filter((e) => e.reference_type === "purchase_order" && e.reference_id).map((e) => e.reference_id!);
+  const miIds = ledger.filter((e) => e.reference_type === "material_issue" && e.reference_id).map((e) => e.reference_id!);
+
+  const poMap = new Map<string, number>();
+  const miMap = new Map<string, number>();
+
+  if (poIds.length > 0) {
+    const pos = await db.select({ id: purchaseOrders.id, po_number: purchaseOrders.po_number }).from(purchaseOrders).where(inArray(purchaseOrders.id, poIds));
+    for (const p of pos) poMap.set(p.id, p.po_number);
+  }
+  if (miIds.length > 0) {
+    const mis = await db.select({ id: materialIssues.id, slip_number: materialIssues.slip_number }).from(materialIssues).where(inArray(materialIssues.id, miIds));
+    for (const m of mis) miMap.set(m.id, m.slip_number);
+  }
+
+  return ledger.map((e) => {
+    let reference_label = "Manual";
+    if (e.reference_type === "purchase_order" && e.reference_id) {
+      const num = poMap.get(e.reference_id);
+      reference_label = num ? `PO-${String(num).padStart(4, "0")}` : "PO";
+    } else if (e.reference_type === "material_issue" && e.reference_id) {
+      const num = miMap.get(e.reference_id);
+      reference_label = num ? `MI-${String(num).padStart(4, "0")}` : "MI Slip";
+    }
+    return {
+      id: e.id,
+      created_at: e.created_at,
+      transaction_type: e.transaction_type,
+      qty_change: e.qty_change,
+      stock_after: e.stock_after,
+      reason: e.reason,
+      adjusted_by: e.adjusted_by,
+      reference_label,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// adjustStock
+// ---------------------------------------------------------------------------
+
+export async function adjustStock(
+  materialId: string,
+  newQty: number,
+  reason: string
+): Promise<{ success: boolean; error?: string }> {
+  if (newQty < 0) return { success: false, error: "Stock cannot go below zero." };
+  if (!reason || reason.trim().length < 10) return { success: false, error: "Reason must be at least 10 characters." };
+
+  // Get current username from session
+  let username = "system";
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    username = data.user?.email?.split("@")[0] ?? "system";
+  } catch {
+    // proceed with "system" if auth unavailable
+  }
+
+  // Read current stock
+  const [mat] = await db
+    .select({ current_stock: materials.current_stock })
+    .from(materials)
+    .where(eq(materials.id, materialId));
+
+  if (!mat) return { success: false, error: "Material not found." };
+
+  const currentQty = parseFloat(mat.current_stock);
+  const delta = newQty - currentQty;
+  const fullReason = `${reason.trim()} — Adjusted from ${currentQty} to ${newQty} by ${username}`;
+
+  // Atomic update with optimistic concurrency check
+  await db
+    .update(materials)
+    .set({ current_stock: String(newQty) })
+    .where(and(eq(materials.id, materialId), eq(materials.current_stock, mat.current_stock)));
+
+  // Verify the update actually landed — re-read current_stock.
+  // If another user changed it between our read and write, the WHERE clause above
+  // would have matched 0 rows and newQty would differ from what's stored now.
+  const [verify] = await db
+    .select({ current_stock: materials.current_stock })
+    .from(materials)
+    .where(eq(materials.id, materialId));
+
+  if (!verify || Math.abs(parseFloat(verify.current_stock) - newQty) > 0.0001) {
+    return { success: false, error: "Stock was changed by another user — please refresh and try again." };
+  }
+
+  // Only insert ledger entry once we've confirmed the update succeeded
+  await db.insert(stockLedger).values({
+    material_id: materialId,
+    transaction_type: "ADJUSTMENT",
+    qty_change: String(delta),
+    stock_after: String(newQty),
+    reason: fullReason,
+    adjusted_by: username,
+  });
+
+  revalidatePath("/stock");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// getStockForMaterial — lightweight single-row fetch for adjustment dialog
+// ---------------------------------------------------------------------------
+
+export async function getStockForMaterial(
+  materialId: string
+): Promise<{ current_stock: string } | null> {
+  const [row] = await db
+    .select({ current_stock: materials.current_stock })
+    .from(materials)
+    .where(eq(materials.id, materialId));
+  return row ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// getVehiclesForJobSearch
+// ---------------------------------------------------------------------------
+
+export async function getVehiclesForJobSearch(): Promise<VehicleSearchRow[]> {
+  const rows = await db
+    .select({
+      id: vehicles.id,
+      job_ref_no: vehicles.job_ref_no,
+      vehicle_name: vehicles.vehicle_name,
+      customer_name: customers.customer_name,
+      is_active: vehicles.is_active,
+    })
+    .from(vehicles)
+    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+    .orderBy(desc(vehicles.job_ref_no));
+
+  return rows.map((r) => ({
+    id: r.id,
+    job_ref_no: r.job_ref_no,
+    vehicle_name: r.vehicle_name,
+    customer_name: r.customer_name ?? null,
+    is_active: r.is_active,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// getJobCostData
+// ---------------------------------------------------------------------------
+
+export async function getJobCostData(vehicleId: string): Promise<JobCostResult | null> {
+  // Vehicle info
+  const [veh] = await db
+    .select({
+      job_ref_no: vehicles.job_ref_no,
+      vehicle_name: vehicles.vehicle_name,
+      customer_name: customers.customer_name,
+    })
+    .from(vehicles)
+    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+    .where(eq(vehicles.id, vehicleId));
+
+  if (!veh) return null;
+
+  // All Issued MI items for this vehicle where affects_inventory = true
+  const miItems = await db
+    .select({
+      slip_id: materialIssues.id,
+      material_id: materialIssueItems.material_id,
+      material_name: materials.name,
+      material_no: materials.material_no,
+      contractor_id: materialIssueItems.contractor_id,
+      contractor_name: contractors.name,
+      unit_name: units.unit_name,
+      qty: materialIssueItems.qty,
+      rate: materialIssueItems.rate,
+      amount: materialIssueItems.amount,
+    })
+    .from(materialIssueItems)
+    .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
+    .innerJoin(materials, eq(materialIssueItems.material_id, materials.id))
+    .leftJoin(contractors, eq(materialIssueItems.contractor_id, contractors.id))
+    .leftJoin(units, eq(materialIssueItems.unit_id, units.id))
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.status, "Issued"),
+        eq(materialIssueItems.affects_inventory, true)
+      )
+    );
+
+  if (miItems.length === 0) {
+    return {
+      vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, customer_name: veh.customer_name ?? null },
+      rows: [],
+      totals: { total_cost: 0, total_billed: 0, total_unbilled: 0 },
+    };
+  }
+
+  // Determine which slip IDs are linked to a Finalized invoice
+  const seenSlips = new Set<string>();
+  for (const i of miItems) seenSlips.add(i.slip_id);
+  const uniqueSlipIds = Array.from(seenSlips);
+  const billedLinks = await db
+    .select({ slip_id: invoiceSlipLinks.slip_id })
+    .from(invoiceSlipLinks)
+    .innerJoin(invoices, eq(invoiceSlipLinks.invoice_id, invoices.id))
+    .where(
+      and(
+        inArray(invoiceSlipLinks.slip_id, uniqueSlipIds),
+        eq(invoices.status, "Finalized")
+      )
+    );
+  const billedSlipIds = new Set(billedLinks.map((l) => l.slip_id));
+
+  // Group by material_id + contractor_id + rate
+  type GroupKey = string;
+  const groupMap = new Map<
+    GroupKey,
+    {
+      material_name: string;
+      material_no: number;
+      contractor_name: string | null;
+      unit_name: string | null;
+      rate: number;
+      total_qty: number;
+      total_amount: number;
+      billed_amount: number;
+      unbilled_amount: number;
+    }
+  >();
+
+  for (const item of miItems) {
+    const key: GroupKey = `${item.material_id}|${item.contractor_id ?? "none"}|${item.rate}`;
+    const qty = parseFloat(item.qty);
+    const amount = parseFloat(item.amount);
+    const isBilled = billedSlipIds.has(item.slip_id);
+
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        material_name: item.material_name,
+        material_no: item.material_no,
+        contractor_name: item.contractor_name ?? null,
+        unit_name: item.unit_name ?? null,
+        rate: parseFloat(item.rate),
+        total_qty: 0,
+        total_amount: 0,
+        billed_amount: 0,
+        unbilled_amount: 0,
+      });
+    }
+    const g = groupMap.get(key)!;
+    g.total_qty += qty;
+    g.total_amount += amount;
+    if (isBilled) g.billed_amount += amount;
+    else g.unbilled_amount += amount;
+  }
+
+  const rows: JobCostRow[] = Array.from(groupMap.values()).map((g) => ({
+    material_name: g.material_name,
+    material_no: g.material_no,
+    contractor_name: g.contractor_name,
+    unit_name: g.unit_name,
+    total_qty: g.total_qty,
+    rate: g.rate,
+    total_amount: g.total_amount,
+    billed_amount: g.billed_amount,
+    unbilled_amount: g.unbilled_amount,
+  }));
+
+  const total_cost = rows.reduce((s, r) => s + r.total_amount, 0);
+  const total_billed = rows.reduce((s, r) => s + r.billed_amount, 0);
+  const total_unbilled = rows.reduce((s, r) => s + r.unbilled_amount, 0);
+
+  return {
+    vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, customer_name: veh.customer_name ?? null },
+    rows,
+    totals: { total_cost, total_billed, total_unbilled },
+  };
+}

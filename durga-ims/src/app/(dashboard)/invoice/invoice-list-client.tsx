@@ -102,6 +102,29 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
   const fmtDate = (d: string) =>
     new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
 
+  function downloadCsv() {
+    const headers = ["Bill #", "Date", "Vehicle", "Job Ref", "Customer", "GSTIN", "Net Amount", "Status"];
+    const csvRows = invoiceRows.map((r) => [
+      r.bill_number,
+      fmtDate(r.bill_date),
+      r.vehicle_name ?? "",
+      r.job_ref_no != null ? `J${String(r.job_ref_no).padStart(5, "0")}` : "",
+      r.customer_name ?? "",
+      r.customer_gstin ?? "",
+      parseFloat(r.net_amount ?? "0").toFixed(2),
+      r.status,
+    ]);
+    const bom = "﻿";
+    const csv = bom + [headers, ...csvRows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Group rows by invoice id for PDF generation (one page per invoice)
   const groupedForPdf = useMemo(() => {
     const map = new Map<string, InvoiceRow[]>();
@@ -190,6 +213,15 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
               />
             )}
           />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs gap-1"
+            onClick={downloadCsv}
+            disabled={invoiceRows.length === 0}
+          >
+            Export CSV ({invoiceRows.length})
+          </Button>
           <Link href="/invoice/new">
             <Button size="sm" className="h-8 text-xs gap-1">
               <Plus className="w-3.5 h-3.5" />

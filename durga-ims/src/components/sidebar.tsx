@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Building2,
   LogOut,
+  Warehouse,
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth.actions";
 import { useState } from "react";
@@ -52,6 +53,7 @@ const nav = [
     ],
   },
   { label: "Invoice", href: "/invoice", icon: FileText },
+  { label: "Stock", href: "/stock", icon: Warehouse },
   { label: "Reports", href: "/reports", icon: BarChart2 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];

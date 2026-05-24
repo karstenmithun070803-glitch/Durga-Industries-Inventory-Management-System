@@ -9,6 +9,7 @@ import {
   fmtQty,
   fmtDate,
 } from "./pdf-styles";
+import type { CompanySetting } from "@/lib/actions/settings.actions";
 
 type MaterialIssueRow = {
   id: string;
@@ -52,13 +53,17 @@ interface Props {
   dateTo?: string;
   statusFilter?: string;
   showRates: boolean;
+  companySetting?: CompanySetting;
 }
 
 function formatCode(prefix: string, num: number, pad = 3): string {
   return `${prefix}${String(num).padStart(pad, "0")}`;
 }
 
-export function MIRegisterDocument({ rows, showRates }: Props) {
+export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
+  const coName    = companySetting?.company_name ?? COMPANY_NAME;
+  const coAddress = companySetting?.address      ?? COMPANY_ADDRESS;
+  const coGstin   = companySetting?.gstin        ?? COMPANY_GSTIN;
   const slipMap = new Map<string, MaterialIssueRow[]>();
   for (const r of rows) {
     if (!slipMap.has(r.id)) slipMap.set(r.id, []);
@@ -79,9 +84,9 @@ export function MIRegisterDocument({ rows, showRates }: Props) {
 
             {/* ── Centered company block ── */}
             <View>
-              <Text style={styles.companyNameCentered}>{COMPANY_NAME}</Text>
-              <Text style={styles.companyDetailCentered}>{COMPANY_ADDRESS}</Text>
-              <Text style={styles.companyDetailCentered}>GSTIN: {COMPANY_GSTIN}</Text>
+              <Text style={styles.companyNameCentered}>{coName}</Text>
+              <Text style={styles.companyDetailCentered}>{coAddress}</Text>
+              <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
             </View>
 
             {/* ── Document type ── */}
@@ -173,7 +178,7 @@ export function MIRegisterDocument({ rows, showRates }: Props) {
               <Text
                 style={styles.footerText}
                 render={({ pageNumber, totalPages }) =>
-                  `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          For ${COMPANY_NAME}`
+                  `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          For ${coName}`
                 }
               />
             </View>

@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { customers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { customers, vehicles } from "@/lib/db/schema";
+import { eq, and, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getCustomers() {
@@ -57,6 +57,17 @@ export async function updateCustomer(id: string, data: {
 }
 
 export async function deleteCustomer(id: string) {
+  const [{ activeVehicles }] = await db
+    .select({ activeVehicles: count() })
+    .from(vehicles)
+    .where(and(eq(vehicles.customer_id, id), eq(vehicles.is_active, true)));
+
+  if (activeVehicles > 0) {
+    throw new Error(
+      `Cannot deactivate — ${activeVehicles} active vehicle(s) are linked to this customer. Deactivate those vehicles first.`
+    );
+  }
+
   await db.update(customers).set({ is_active: false }).where(eq(customers.id, id));
   revalidatePath("/masters/customers");
 }
