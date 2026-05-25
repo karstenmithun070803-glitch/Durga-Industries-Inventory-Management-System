@@ -13,9 +13,9 @@ import {
   materialIssues,
   materialIssueItems,
 } from "@/lib/db/schema";
-import { eq, and, sql, desc, like, notExists, ne } from "drizzle-orm";
+import { eq, and, sql, desc, like, notExists, ne, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getFinancialYearRange } from "@/types";
+import { fyDateRange } from "@/lib/fy";
 import type { InvoiceWithDetails, InvoiceItemWithDetails, InvoiceRow } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -179,20 +179,25 @@ export async function getIssuedMIsForVehicle(vehicleId: string, currentInvoiceId
     )
     .orderBy(desc(materialIssues.issue_date));
 
-  const withCounts = await Promise.all(
-    rows.map(async (mi) => {
-      const countResult = await db
-        .select({ cnt: sql<number>`COUNT(*)` })
-        .from(materialIssueItems)
-        .where(eq(materialIssueItems.issue_id, mi.id));
-      return {
-        ...mi,
-        issue_date: mi.issue_date.toISOString(),
-        item_count: Number(countResult[0]?.cnt ?? 0),
-      };
+  if (rows.length === 0) return [];
+
+  // Single GROUP BY query instead of one COUNT per slip (N+1 → 1 query)
+  const counts = await db
+    .select({
+      issue_id: materialIssueItems.issue_id,
+      cnt: sql<number>`COUNT(*)`,
     })
-  );
-  return withCounts;
+    .from(materialIssueItems)
+    .where(inArray(materialIssueItems.issue_id, rows.map((r) => r.id)))
+    .groupBy(materialIssueItems.issue_id);
+
+  const countMap = new Map(counts.map((c) => [c.issue_id, Number(c.cnt)]));
+
+  return rows.map((mi) => ({
+    ...mi,
+    issue_date: mi.issue_date.toISOString(),
+    item_count: countMap.get(mi.id) ?? 0,
+  }));
 }
 
 export async function getMIItemsForInvoice(issueId: string): Promise<InvoiceItemWithDetails[]> {
@@ -494,7 +499,7 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
   validateInvoiceItems(data.items, data.discount);
 
   // Date within FY
-  const fyRange = getFinancialYearRange(data.financial_year);
+  const fyRange = fyDateRange(data.financial_year);
   const billDate = new Date(data.bill_date);
   if (billDate < fyRange.start || billDate > fyRange.end)
     throw new Error("Bill date must fall within the active financial year.");
@@ -522,29 +527,57 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
 
   const billNumber = await getNextBillNumber(data.inv_prefix, data.financial_year);
 
-  let invoice: { id: string };
+  // All writes are atomic: if items or slip links fail, the invoice header is rolled back
+  let invoiceId: string;
   try {
-    [invoice] = await db
-      .insert(invoices)
-      .values({
-        bill_number: billNumber,
-        bill_date: new Date(data.bill_date),
-        rate_date: data.rate_date ? new Date(data.rate_date) : null,
-        tax_percentage: data.tax_percentage,
-        material_margin: data.material_margin,
-        discount: data.discount,
-        vehicle_id: data.vehicle_id,
-        issue_id: data.issue_id || null,
-        net_amount: data.net_amount,
-        rev_charge_status: data.rev_charge_status,
-        financial_year: data.financial_year,
-        status: "Draft",
-        customer_name: vData?.customer_name ?? null,
-        customer_gstin: vData?.customer_gstin ?? null,
-        customer_state: vData?.customer_state ?? null,
-        customer_address,
-      })
-      .returning({ id: invoices.id });
+    invoiceId = await db.transaction(async (tx) => {
+      const [newInvoice] = await tx
+        .insert(invoices)
+        .values({
+          bill_number: billNumber,
+          bill_date: new Date(data.bill_date),
+          rate_date: data.rate_date ? new Date(data.rate_date) : null,
+          tax_percentage: data.tax_percentage,
+          material_margin: data.material_margin,
+          discount: data.discount,
+          vehicle_id: data.vehicle_id,
+          issue_id: data.issue_id || null,
+          net_amount: data.net_amount,
+          rev_charge_status: data.rev_charge_status,
+          financial_year: data.financial_year,
+          status: "Draft",
+          customer_name: vData?.customer_name ?? null,
+          customer_gstin: vData?.customer_gstin ?? null,
+          customer_state: vData?.customer_state ?? null,
+          customer_address,
+        })
+        .returning({ id: invoices.id });
+
+      await tx.insert(invoiceItems).values(
+        data.items.map((item) => ({
+          invoice_id: newInvoice.id,
+          material_id: item.material_id,
+          hsn_code: item.hsn_code || null,
+          qty: item.qty,
+          unit_id: item.unit_id || null,
+          rate: item.rate || "0",
+          tax_percentage: item.tax_percentage,
+          cgst_amount: item.cgst_amount,
+          sgst_amount: item.sgst_amount,
+          igst_amount: item.igst_amount,
+          amount: item.amount,
+          gst_type: item.gst_type,
+        }))
+      );
+
+      if (data.slip_ids.length > 0) {
+        await tx.insert(invoiceSlipLinks).values(
+          data.slip_ids.map((slipId) => ({ invoice_id: newInvoice.id, slip_id: slipId }))
+        );
+      }
+
+      return newInvoice.id;
+    });
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("bill_number_fy_unique")) {
       throw new Error("Bill number conflict — another invoice was just created with the same number. Please try saving again.");
@@ -552,38 +585,15 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
     throw e;
   }
 
-  await db.insert(invoiceItems).values(
-    data.items.map((item) => ({
-      invoice_id: invoice.id,
-      material_id: item.material_id,
-      hsn_code: item.hsn_code || null,
-      qty: item.qty,
-      unit_id: item.unit_id || null,
-      rate: item.rate || "0",
-      tax_percentage: item.tax_percentage,
-      cgst_amount: item.cgst_amount,
-      sgst_amount: item.sgst_amount,
-      igst_amount: item.igst_amount,
-      amount: item.amount,
-      gst_type: item.gst_type,
-    }))
-  );
-
-  if (data.slip_ids.length > 0) {
-    await db.insert(invoiceSlipLinks).values(
-      data.slip_ids.map((slipId) => ({ invoice_id: invoice.id, slip_id: slipId }))
-    );
-  }
-
   revalidatePath("/invoice");
-  return invoice.id;
+  return invoiceId;
 }
 
 export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promise<void> {
   if (!data.vehicle_id) throw new Error("Vehicle is required.");
   validateInvoiceItems(data.items, data.discount);
 
-  const fyRange = getFinancialYearRange(data.financial_year);
+  const fyRange = fyDateRange(data.financial_year);
   const billDate = new Date(data.bill_date);
   if (billDate < fyRange.start || billDate > fyRange.end)
     throw new Error("Bill date must fall within the active financial year.");
@@ -609,52 +619,55 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
         .join(", ") || null
     : null;
 
-  // Delete old items, insert new ones (no stock impact ever)
-  await db.delete(invoiceItems).where(eq(invoiceItems.invoice_id, id));
+  // All writes are atomic: if any step fails the entire update rolls back
+  await db.transaction(async (tx) => {
+    // Delete old items then re-insert — no stock impact on invoices
+    await tx.delete(invoiceItems).where(eq(invoiceItems.invoice_id, id));
 
-  await db
-    .update(invoices)
-    .set({
-      bill_date: new Date(data.bill_date),
-      rate_date: data.rate_date ? new Date(data.rate_date) : null,
-      tax_percentage: data.tax_percentage,
-      material_margin: data.material_margin,
-      discount: data.discount,
-      vehicle_id: data.vehicle_id,
-      issue_id: data.issue_id || null,
-      net_amount: data.net_amount,
-      rev_charge_status: data.rev_charge_status,
-      customer_name: vData?.customer_name ?? null,
-      customer_gstin: vData?.customer_gstin ?? null,
-      customer_state: vData?.customer_state ?? null,
-      customer_address,
-    })
-    .where(eq(invoices.id, id));
+    await tx
+      .update(invoices)
+      .set({
+        bill_date: new Date(data.bill_date),
+        rate_date: data.rate_date ? new Date(data.rate_date) : null,
+        tax_percentage: data.tax_percentage,
+        material_margin: data.material_margin,
+        discount: data.discount,
+        vehicle_id: data.vehicle_id,
+        issue_id: data.issue_id || null,
+        net_amount: data.net_amount,
+        rev_charge_status: data.rev_charge_status,
+        customer_name: vData?.customer_name ?? null,
+        customer_gstin: vData?.customer_gstin ?? null,
+        customer_state: vData?.customer_state ?? null,
+        customer_address,
+      })
+      .where(eq(invoices.id, id));
 
-  await db.insert(invoiceItems).values(
-    data.items.map((item) => ({
-      invoice_id: id,
-      material_id: item.material_id,
-      hsn_code: item.hsn_code || null,
-      qty: item.qty,
-      unit_id: item.unit_id || null,
-      rate: item.rate || "0",
-      tax_percentage: item.tax_percentage,
-      cgst_amount: item.cgst_amount,
-      sgst_amount: item.sgst_amount,
-      igst_amount: item.igst_amount,
-      amount: item.amount,
-      gst_type: item.gst_type,
-    }))
-  );
-
-  // Replace slip links
-  await db.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
-  if (data.slip_ids.length > 0) {
-    await db.insert(invoiceSlipLinks).values(
-      data.slip_ids.map((slipId) => ({ invoice_id: id, slip_id: slipId }))
+    await tx.insert(invoiceItems).values(
+      data.items.map((item) => ({
+        invoice_id: id,
+        material_id: item.material_id,
+        hsn_code: item.hsn_code || null,
+        qty: item.qty,
+        unit_id: item.unit_id || null,
+        rate: item.rate || "0",
+        tax_percentage: item.tax_percentage,
+        cgst_amount: item.cgst_amount,
+        sgst_amount: item.sgst_amount,
+        igst_amount: item.igst_amount,
+        amount: item.amount,
+        gst_type: item.gst_type,
+      }))
     );
-  }
+
+    // Replace slip links
+    await tx.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
+    if (data.slip_ids.length > 0) {
+      await tx.insert(invoiceSlipLinks).values(
+        data.slip_ids.map((slipId) => ({ invoice_id: id, slip_id: slipId }))
+      );
+    }
+  });
 
   revalidatePath("/invoice");
 }
@@ -665,6 +678,9 @@ export async function finalizeInvoice(id: string): Promise<void> {
 }
 
 export async function revertInvoiceToDraft(id: string): Promise<void> {
+  const [inv] = await db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, id));
+  if (!inv) throw new Error("Invoice not found.");
+  if (inv.status === "Cancelled") throw new Error("Cancelled invoices cannot be reverted to Draft.");
   await db.update(invoices).set({ status: "Draft" }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
 }
@@ -700,9 +716,11 @@ export async function cancelInvoice(id: string): Promise<void> {
   if (!inv) throw new Error("Invoice not found.");
   if (inv.status === "Cancelled") throw new Error(`${inv.bill_number} is already cancelled.`);
 
-  // Free MI slips so they can be used in a corrective invoice
-  await db.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
-  await db.update(invoices).set({ status: "Cancelled" }).where(eq(invoices.id, id));
+  // Free MI slips and update status atomically — if status update fails, slip links stay intact
+  await db.transaction(async (tx) => {
+    await tx.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
+    await tx.update(invoices).set({ status: "Cancelled" }).where(eq(invoices.id, id));
+  });
   revalidatePath("/invoice");
 }
 

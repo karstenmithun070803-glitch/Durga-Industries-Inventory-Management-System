@@ -272,7 +272,8 @@ export async function getMonthlyStockReport(params: {
     .from(purchaseOrderItems)
     .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
     .where(eq(purchaseOrders.status, "Received"))
-    .orderBy(desc(purchaseOrders.po_date));
+    .orderBy(desc(purchaseOrders.po_date))
+    .limit(2000);
 
   const rateMap = new Map<string, number>();
   for (const row of poRates) {
@@ -308,12 +309,12 @@ export async function getMonthlyStockReport(params: {
     }
   }
 
-  // Ledger entries in period
-  const periodLedger = await db
+  // Aggregate period movements in SQL — returns at most (materials × 4) rows regardless of history depth
+  const periodAggRows = await db
     .select({
       material_id: stockLedger.material_id,
       transaction_type: stockLedger.transaction_type,
-      qty_change: stockLedger.qty_change,
+      total: sql<string>`SUM(${stockLedger.qty_change})`,
     })
     .from(stockLedger)
     .where(
@@ -322,16 +323,17 @@ export async function getMonthlyStockReport(params: {
         lte(stockLedger.created_at, to),
         materialId ? eq(stockLedger.material_id, materialId) : undefined
       )
-    );
+    )
+    .groupBy(stockLedger.material_id, stockLedger.transaction_type);
 
-  // Aggregate period movements per material
+  // Build movement map from aggregated results
   const movementMap = new Map<string, { inward: number; issues: number; reversals: number; adjustments: number }>();
-  for (const e of periodLedger) {
+  for (const e of periodAggRows) {
     if (!movementMap.has(e.material_id)) {
       movementMap.set(e.material_id, { inward: 0, issues: 0, reversals: 0, adjustments: 0 });
     }
     const m = movementMap.get(e.material_id)!;
-    const qty = parseFloat(e.qty_change);
+    const qty = parseFloat(e.total ?? "0");
     if (e.transaction_type === "PO_INWARD") m.inward += qty;
     else if (e.transaction_type === "ISSUE") m.issues += Math.abs(qty);
     else if (e.transaction_type === "REVERSAL") m.reversals += qty;

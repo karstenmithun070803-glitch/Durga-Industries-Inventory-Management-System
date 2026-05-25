@@ -22,6 +22,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth.actions";
+import { getCurrentFY } from "@/lib/fy";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -147,7 +148,7 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-slate-700 space-y-2">
-        <p className="text-slate-500 text-xs">FY 2026-2027</p>
+        <p className="text-slate-500 text-xs">FY {getCurrentFY()}</p>
         <form action={logout}>
           <button
             type="submit"

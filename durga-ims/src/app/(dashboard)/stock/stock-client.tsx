@@ -245,8 +245,7 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
     }
     setIsSaving(true);
     try {
-      const res = await adjustStock(adjustMaterial.id, adjustedQty, adjustReason);
-      if (!res.success) { toast.error(res.error ?? "Adjustment failed."); return; }
+      await adjustStock(adjustMaterial.id, adjustedQty, adjustReason);
       toast.success(`Stock adjusted for ${adjustMaterial.name}`);
       setAdjustOpen(false);
       router.refresh();

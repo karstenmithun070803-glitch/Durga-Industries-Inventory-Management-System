@@ -260,9 +260,9 @@ export async function adjustStock(
   materialId: string,
   newQty: number,
   reason: string
-): Promise<{ success: boolean; error?: string }> {
-  if (newQty < 0) return { success: false, error: "Stock cannot go below zero." };
-  if (!reason || reason.trim().length < 10) return { success: false, error: "Reason must be at least 10 characters." };
+): Promise<void> {
+  if (newQty < 0) throw new Error("Stock cannot go below zero.");
+  if (!reason || reason.trim().length < 10) throw new Error("Reason must be at least 10 characters.");
 
   // Get current username from session
   let username = "system";
@@ -280,7 +280,7 @@ export async function adjustStock(
     .from(materials)
     .where(eq(materials.id, materialId));
 
-  if (!mat) return { success: false, error: "Material not found." };
+  if (!mat) throw new Error("Material not found.");
 
   const currentQty = parseFloat(mat.current_stock);
   const delta = newQty - currentQty;
@@ -301,7 +301,7 @@ export async function adjustStock(
     .where(eq(materials.id, materialId));
 
   if (!verify || Math.abs(parseFloat(verify.current_stock) - newQty) > 0.0001) {
-    return { success: false, error: "Stock was changed by another user — please refresh and try again." };
+    throw new Error("Stock was changed by another user — please refresh and try again.");
   }
 
   // Only insert ledger entry once we've confirmed the update succeeded
@@ -315,7 +315,6 @@ export async function adjustStock(
   });
 
   revalidatePath("/stock");
-  return { success: true };
 }
 
 // ---------------------------------------------------------------------------

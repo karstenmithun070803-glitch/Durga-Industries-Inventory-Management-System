@@ -316,7 +316,8 @@ export function determineGstType(gstin: string | null | undefined, state: string
   if (gstin && gstin.length >= 2) {
     return gstin.startsWith("33") ? "CGST_SGST" : "IGST";
   }
-  return state === "Tamil Nadu" ? "CGST_SGST" : "IGST";
+  // Default to CGST_SGST when state is unknown — company is TN-based, most customers are local
+  return (state === "Tamil Nadu" || state == null || state === "") ? "CGST_SGST" : "IGST";
 }
 
 // ---------------------------------------------------------------------------
