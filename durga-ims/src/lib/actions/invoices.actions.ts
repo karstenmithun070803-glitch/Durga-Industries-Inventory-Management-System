@@ -18,6 +18,7 @@ import { revalidatePath } from "next/cache";
 import { fyDateRange } from "@/lib/fy";
 import { createClient } from "@/lib/supabase/server";
 import type { InvoiceWithDetails, InvoiceItemWithDetails, InvoiceRow } from "@/types";
+import { INVOICE_STATUS, PAYMENT_STATUS } from "@/lib/constants";
 
 // ---------------------------------------------------------------------------
 // Input interfaces
@@ -75,15 +76,14 @@ async function getNextBillNumber(invPrefix: string | null | undefined, financial
       .select({ bill_number: invoices.bill_number })
       .from(invoices)
       .where(and(eq(invoices.financial_year, financialYear), like(invoices.bill_number, pattern)))
-      .orderBy(desc(invoices.created_at))
-      .limit(100);
+      .orderBy(desc(invoices.bill_number))
+      .limit(1);
 
-    for (const row of result) {
-      // parse "D-00042" → 42
-      const parts = row.bill_number.split("-");
+    if (result[0]) {
+      const parts = result[0].bill_number.split("-");
       if (parts.length === 2) {
         const seq = parseInt(parts[1], 10);
-        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+        if (!isNaN(seq)) maxSeq = seq;
       }
     }
   } else {
@@ -92,12 +92,12 @@ async function getNextBillNumber(invPrefix: string | null | undefined, financial
       .select({ bill_number: invoices.bill_number })
       .from(invoices)
       .where(eq(invoices.financial_year, financialYear))
-      .orderBy(desc(invoices.created_at))
-      .limit(100);
+      .orderBy(desc(invoices.bill_number))
+      .limit(1);
 
-    for (const row of result) {
-      const seq = parseInt(row.bill_number, 10);
-      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    if (result[0]) {
+      const seq = parseInt(result[0].bill_number, 10);
+      if (!isNaN(seq)) maxSeq = seq;
     }
   }
 
@@ -469,7 +469,7 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
     discount: h.discount,
     net_amount: h.net_amount,
     rev_charge_status: h.rev_charge_status,
-    payment_status: h.payment_status ?? "Unpaid",
+    payment_status: h.payment_status ?? PAYMENT_STATUS.UNPAID,
     payment_date: h.payment_date ? (h.payment_date as unknown as Date).toISOString().split("T")[0] : null,
     payment_notes: h.payment_notes ?? null,
     cancelled_by: h.cancelled_by ?? null,
@@ -558,7 +558,7 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
           net_amount: data.net_amount,
           rev_charge_status: data.rev_charge_status,
           financial_year: data.financial_year,
-          status: "Draft",
+          status: INVOICE_STATUS.DRAFT,
           customer_name: vData?.customer_name ?? null,
           customer_gstin: vData?.customer_gstin ?? null,
           customer_state: vData?.customer_state ?? null,
@@ -685,15 +685,15 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
 }
 
 export async function finalizeInvoice(id: string): Promise<void> {
-  await db.update(invoices).set({ status: "Finalized" }).where(eq(invoices.id, id));
+  await db.update(invoices).set({ status: INVOICE_STATUS.FINALIZED }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
 }
 
 export async function revertInvoiceToDraft(id: string): Promise<void> {
   const [inv] = await db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, id));
   if (!inv) throw new Error("Invoice not found.");
-  if (inv.status === "Cancelled") throw new Error("Cancelled invoices cannot be reverted to Draft.");
-  await db.update(invoices).set({ status: "Draft" }).where(eq(invoices.id, id));
+  if (inv.status === INVOICE_STATUS.CANCELLED) throw new Error("Cancelled invoices cannot be reverted to Draft.");
+  await db.update(invoices).set({ status: INVOICE_STATUS.DRAFT }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
 }
 
@@ -705,11 +705,11 @@ export async function deleteInvoice(id: string): Promise<void> {
     .limit(1);
 
   if (!inv.length) throw new Error("Invoice not found.");
-  if (inv[0].status === "Finalized")
+  if (inv[0].status === INVOICE_STATUS.FINALIZED)
     throw new Error(
       `Finalized invoice ${inv[0].bill_number} cannot be deleted. Revert to Draft or Cancel it first.`
     );
-  if (inv[0].status === "Cancelled")
+  if (inv[0].status === INVOICE_STATUS.CANCELLED)
     throw new Error(
       `Cancelled invoice ${inv[0].bill_number} is a permanent record and cannot be deleted.`
     );
@@ -726,7 +726,7 @@ export async function cancelInvoice(id: string): Promise<void> {
     .where(eq(invoices.id, id));
 
   if (!inv) throw new Error("Invoice not found.");
-  if (inv.status === "Cancelled") throw new Error(`${inv.bill_number} is already cancelled.`);
+  if (inv.status === INVOICE_STATUS.CANCELLED) throw new Error(`${inv.bill_number} is already cancelled.`);
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -735,7 +735,7 @@ export async function cancelInvoice(id: string): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
     await tx.update(invoices).set({
-      status: "Cancelled",
+      status: INVOICE_STATUS.CANCELLED,
       cancelled_by: user?.email ?? "unknown",
       cancelled_at: new Date(),
     }).where(eq(invoices.id, id));
@@ -753,19 +753,18 @@ export async function markInvoicePayment(
     .where(eq(invoices.id, id));
 
   if (!inv) throw new Error("Invoice not found.");
-  if (inv.status !== "Finalized")
+  if (inv.status !== INVOICE_STATUS.FINALIZED)
     throw new Error(`Only Finalized invoices can be marked as paid. ${inv.bill_number} is ${inv.status}.`);
-  if (!["Unpaid", "Partial", "Paid"].includes(data.payment_status))
+  if (!(Object.values(PAYMENT_STATUS) as string[]).includes(data.payment_status))
     throw new Error("Invalid payment status.");
 
-  await db.transaction(async (tx) => {
-    await tx.update(invoices).set({
-      payment_status: data.payment_status,
-      payment_date: data.payment_date || null,
-      payment_notes: data.payment_notes || null,
-    }).where(eq(invoices.id, id));
-  });
+  await db.update(invoices).set({
+    payment_status: data.payment_status,
+    payment_date: data.payment_date || null,
+    payment_notes: data.payment_notes || null,
+  }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
+  revalidatePath("/");
 }
 
 export async function getLinkedSlipsForInvoice(invoiceId: string): Promise<{ id: string; slip_number: number; issue_date: string; item_count: number }[]> {

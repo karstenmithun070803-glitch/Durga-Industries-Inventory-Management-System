@@ -21,6 +21,8 @@ type ItemRow = {
   po_date: Date | string;
   status: string;
   affects_stock: boolean;
+  supplier_bill_no: string | null;
+  supplier_bill_date: string | null;
   // line item
   item_id: string | null;
   material_id: string | null;

@@ -15,6 +15,7 @@ import { deleteInvoice, markInvoicePayment } from "@/lib/actions/invoices.action
 import type { InvoiceRow } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { Pencil, Trash2, Plus, CreditCard } from "lucide-react";
+import { INVOICE_STATUS, PAYMENT_STATUS } from "@/lib/constants";
 
 interface Props {
   rows: InvoiceRow[];
@@ -33,11 +34,11 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; bill_number: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [paymentTarget, setPaymentTarget] = useState<{ id: string; bill_number: string; current_status: string } | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState("Unpaid");
+  const [paymentStatus, setPaymentStatus] = useState<string>(PAYMENT_STATUS.UNPAID);
   const [paymentDate, setPaymentDate] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
   const [isSavingPayment, setIsSavingPayment] = useState(false);
-  const [paymentFilter, setPaymentFilter] = useState<"all" | "Unpaid" | "Partial" | "Paid">("all");
+  const [paymentFilter, setPaymentFilter] = useState<"all" | string>("all");
 
   const filtered = useMemo(() => {
     let result = rows;
@@ -79,9 +80,9 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
   // Count per status tab (unique invoices, not items)
   const counts = useMemo(() => {
     const uniqueIds = new Set(rows.map((r) => r.id));
-    const draftIds = new Set(rows.filter((r) => r.status === "Draft").map((r) => r.id));
-    const finalizedIds = new Set(rows.filter((r) => r.status === "Finalized").map((r) => r.id));
-    const cancelledIds = new Set(rows.filter((r) => r.status === "Cancelled").map((r) => r.id));
+    const draftIds = new Set(rows.filter((r) => r.status === INVOICE_STATUS.DRAFT).map((r) => r.id));
+    const finalizedIds = new Set(rows.filter((r) => r.status === INVOICE_STATUS.FINALIZED).map((r) => r.id));
+    const cancelledIds = new Set(rows.filter((r) => r.status === INVOICE_STATUS.CANCELLED).map((r) => r.id));
     return { all: uniqueIds.size, draft: draftIds.size, finalized: finalizedIds.size, cancelled: cancelledIds.size };
   }, [rows]);
 
@@ -134,7 +135,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
 
   async function handleSavePayment() {
     if (!paymentTarget) return;
-    if (paymentStatus === "Paid" && !paymentDate) {
+    if (paymentStatus === PAYMENT_STATUS.PAID && !paymentDate) {
       toast.error("Please enter the payment date.");
       return;
     }
@@ -147,6 +148,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
       });
       toast.success(`${paymentTarget.bill_number} marked as ${paymentStatus}.`);
       setPaymentTarget(null);
+      router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update payment.");
     } finally {
@@ -177,8 +179,8 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
         <h1 className="text-lg font-semibold text-slate-800 mr-2">Invoices</h1>
 
         {/* Status tabs */}
-        {(["all", "Draft", "Finalized", "Cancelled"] as StatusFilter[]).map((s) => {
-          const count = s === "all" ? counts.all : s === "Draft" ? counts.draft : s === "Finalized" ? counts.finalized : counts.cancelled;
+        {(["all", INVOICE_STATUS.DRAFT, INVOICE_STATUS.FINALIZED, INVOICE_STATUS.CANCELLED] as StatusFilter[]).map((s) => {
+          const count = s === "all" ? counts.all : s === INVOICE_STATUS.DRAFT ? counts.draft : s === INVOICE_STATUS.FINALIZED ? counts.finalized : counts.cancelled;
           return (
             <button
               key={s}
@@ -218,9 +220,9 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
           className="h-8 text-xs border border-slate-200 rounded-md px-2 text-slate-600 bg-white"
         >
           <option value="all">All Payments</option>
-          <option value="Unpaid">Unpaid</option>
-          <option value="Partial">Partial</option>
-          <option value="Paid">Paid</option>
+          <option value={PAYMENT_STATUS.UNPAID}>Unpaid</option>
+          <option value={PAYMENT_STATUS.PARTIAL}>Partial</option>
+          <option value={PAYMENT_STATUS.PAID}>Paid</option>
         </select>
 
         <Input
@@ -298,7 +300,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
             <tbody>
               {invoiceRows.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="px-3 py-12 text-center text-slate-400">
+                  <td colSpan={16} className="px-3 py-12 text-center text-slate-400">
                     No invoices found.
                   </td>
                 </tr>
@@ -356,9 +358,9 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            r.status === "Finalized"
+                            r.status === INVOICE_STATUS.FINALIZED
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                              : r.status === "Cancelled"
+                              : r.status === INVOICE_STATUS.CANCELLED
                               ? "bg-rose-50 text-rose-700 border border-rose-200"
                               : "bg-slate-100 text-slate-600 border border-slate-200"
                           }`}
@@ -367,24 +369,24 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
-                        {r.status === "Finalized" ? (
+                        {r.status === INVOICE_STATUS.FINALIZED ? (
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
-                              r.payment_status === "Paid"
+                              r.payment_status === PAYMENT_STATUS.PAID
                                 ? "bg-green-50 text-green-700 border border-green-200"
-                                : r.payment_status === "Partial"
+                                : r.payment_status === PAYMENT_STATUS.PARTIAL
                                 ? "bg-amber-50 text-amber-700 border border-amber-200"
                                 : "bg-red-50 text-red-700 border border-red-200"
                             }`}
                             onClick={() => {
                               setPaymentTarget({ id: r.id, bill_number: r.bill_number, current_status: r.payment_status });
-                              setPaymentStatus(r.payment_status ?? "Unpaid");
+                              setPaymentStatus(r.payment_status ?? PAYMENT_STATUS.UNPAID);
                               setPaymentDate(r.payment_date ?? "");
                               setPaymentNotes(r.payment_notes ?? "");
                             }}
                             title="Click to update payment"
                           >
-                            {r.payment_status ?? "Unpaid"}
+                            {r.payment_status ?? PAYMENT_STATUS.UNPAID}
                           </span>
                         ) : (
                           <span className="text-slate-300 text-xs">—</span>
@@ -402,7 +404,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
                           </Link>
-                          {r.status === "Finalized" && (
+                          {r.status === INVOICE_STATUS.FINALIZED && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -410,7 +412,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                               title="Update Payment"
                               onClick={() => {
                                 setPaymentTarget({ id: r.id, bill_number: r.bill_number, current_status: r.payment_status });
-                                setPaymentStatus(r.payment_status ?? "Unpaid");
+                                setPaymentStatus(r.payment_status ?? PAYMENT_STATUS.UNPAID);
                                 setPaymentDate(r.payment_date ?? "");
                                 setPaymentNotes(r.payment_notes ?? "");
                               }}
@@ -418,7 +420,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                               <CreditCard className="w-3.5 h-3.5" />
                             </Button>
                           )}
-                          {r.status === "Draft" && (
+                          {r.status === INVOICE_STATUS.DRAFT && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -466,7 +468,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
             <div className="space-y-2">
               <p className="text-xs font-medium text-slate-600">Payment Status</p>
               <div className="flex flex-col gap-2">
-                {(["Unpaid", "Partial", "Paid"] as const).map((s) => (
+                {(Object.values(PAYMENT_STATUS) as string[]).map((s) => (
                   <label key={s} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -477,8 +479,8 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                       className="accent-slate-700"
                     />
                     <span className={`text-xs font-medium ${
-                      s === "Paid" ? "text-green-700"
-                      : s === "Partial" ? "text-amber-700"
+                      s === PAYMENT_STATUS.PAID ? "text-green-700"
+                      : s === PAYMENT_STATUS.PARTIAL ? "text-amber-700"
                       : "text-red-700"
                     }`}>{s}</span>
                   </label>
@@ -488,7 +490,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-slate-600">
-                Payment Date {paymentStatus === "Paid" && <span className="text-red-500">*</span>}
+                Payment Date {paymentStatus === PAYMENT_STATUS.PAID && <span className="text-red-500">*</span>}
               </label>
               <input
                 type="date"

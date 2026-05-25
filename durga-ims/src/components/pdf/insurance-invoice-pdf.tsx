@@ -11,17 +11,7 @@ import {
 } from "./pdf-styles";
 import type { InvoiceRow } from "@/types";
 import { numberToWords } from "@/lib/utils/number-to-words";
-
-interface CompanySetting {
-  company_name: string;
-  address: string | null;
-  gstin: string | null;
-  bank_name?: string | null;
-  bank_account_no?: string | null;
-  bank_ifsc?: string | null;
-  bank_branch?: string | null;
-  invoice_terms?: string | null;
-}
+import type { CompanySetting } from "@/lib/actions/settings.actions";
 
 interface Props {
   groups: InvoiceRow[][];

@@ -17,6 +17,8 @@ type ItemRow = {
   po_date: Date | string;
   status: string;
   affects_stock: boolean;
+  supplier_bill_no: string | null;
+  supplier_bill_date: string | null;
   item_id: string | null;
   material_id: string | null;
   material_name: string | null;
@@ -92,6 +94,14 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
               <Text style={styles.infoLineLabel}>SUPPLIER NAME</Text>
               <Text style={styles.infoLineValue}>: {supplier}</Text>
             </View>
+            {first.supplier_bill_no && (
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>SUPPLIER BILL</Text>
+                <Text style={styles.infoLineValue}>
+                  : {first.supplier_bill_no}{first.supplier_bill_date ? ` dated ${fmtDate(first.supplier_bill_date)}` : ""}
+                </Text>
+              </View>
+            )}
             {!first.affects_stock && (
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabel}>STOCK UPDATE</Text>

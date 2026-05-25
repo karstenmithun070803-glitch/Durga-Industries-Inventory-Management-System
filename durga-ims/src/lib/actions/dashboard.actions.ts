@@ -6,9 +6,12 @@ import {
   purchaseOrders,
   materialIssues,
   materials,
+  suppliers,
+  vehicles,
 } from "@/lib/db/schema";
 import { eq, and, sql, desc, ne } from "drizzle-orm";
 import { getCurrentFY } from "@/lib/fy";
+import { INVOICE_STATUS, PAYMENT_STATUS, PO_STATUS } from "@/lib/constants";
 
 export interface DashboardStats {
   outstandingCount: number;
@@ -39,8 +42,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .select({ count: sql<string>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${invoices.net_amount}), 0)` })
       .from(invoices)
       .where(and(
-        eq(invoices.status, "Finalized"),
-        ne(invoices.payment_status, "Paid"),
+        eq(invoices.status, INVOICE_STATUS.FINALIZED),
+        ne(invoices.payment_status, PAYMENT_STATUS.PAID),
       )),
 
     // This FY total sales
@@ -49,7 +52,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .from(invoices)
       .where(and(
         eq(invoices.financial_year, fy),
-        eq(invoices.status, "Finalized"),
+        eq(invoices.status, INVOICE_STATUS.FINALIZED),
       )),
 
     // This FY total purchases
@@ -58,7 +61,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .from(purchaseOrders)
       .where(and(
         eq(purchaseOrders.financial_year, fy),
-        eq(purchaseOrders.status, "Received"),
+        eq(purchaseOrders.status, PO_STATUS.RECEIVED),
       )),
 
     // Active materials with current_stock and min_level
@@ -74,9 +77,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         po_number: purchaseOrders.po_number,
         po_date: purchaseOrders.po_date,
         status: purchaseOrders.status,
-        supplier_name: sql<string | null>`(SELECT name FROM suppliers WHERE id = ${purchaseOrders.supplier_id} LIMIT 1)`,
+        supplier_name: suppliers.name,
       })
       .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplier_id, suppliers.id))
       .orderBy(desc(purchaseOrders.po_date), desc(purchaseOrders.po_number))
       .limit(5),
 
@@ -87,9 +91,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         slip_number: materialIssues.slip_number,
         issue_date: materialIssues.issue_date,
         status: materialIssues.status,
-        vehicle_name: sql<string | null>`(SELECT vehicle_name FROM vehicles WHERE id = ${materialIssues.vehicle_id} LIMIT 1)`,
+        vehicle_name: vehicles.vehicle_name,
       })
       .from(materialIssues)
+      .leftJoin(vehicles, eq(materialIssues.vehicle_id, vehicles.id))
       .orderBy(desc(materialIssues.issue_date), desc(materialIssues.slip_number))
       .limit(5),
 

@@ -23,6 +23,8 @@ export async function getPurchaseOrders(financialYear: string) {
       status: purchaseOrders.status,
       financial_year: purchaseOrders.financial_year,
       affects_stock: purchaseOrders.affects_stock,
+      supplier_bill_no: purchaseOrders.supplier_bill_no,
+      supplier_bill_date: purchaseOrders.supplier_bill_date,
       // line item
       item_id: purchaseOrderItems.id,
       material_id: purchaseOrderItems.material_id,

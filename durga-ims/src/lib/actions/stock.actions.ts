@@ -78,6 +78,7 @@ export interface JobCostResult {
   vehicle: {
     job_ref_no: number;
     vehicle_name: string;
+    vehicle_type: string;
     customer_name: string | null;
   };
   rows: JobCostRow[];
@@ -367,6 +368,7 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
     .select({
       job_ref_no: vehicles.job_ref_no,
       vehicle_name: vehicles.vehicle_name,
+      vehicle_type: vehicles.type,
       customer_name: customers.customer_name,
     })
     .from(vehicles)
@@ -404,7 +406,7 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
 
   if (miItems.length === 0) {
     return {
-      vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, customer_name: veh.customer_name ?? null },
+      vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, vehicle_type: veh.vehicle_type, customer_name: veh.customer_name ?? null },
       rows: [],
       totals: { total_cost: 0, total_billed: 0, total_unbilled: 0 },
     };
@@ -486,7 +488,7 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
   const total_unbilled = rows.reduce((s, r) => s + r.unbilled_amount, 0);
 
   return {
-    vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, customer_name: veh.customer_name ?? null },
+    vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, vehicle_type: veh.vehicle_type, customer_name: veh.customer_name ?? null },
     rows,
     totals: { total_cost, total_billed, total_unbilled },
   };
