@@ -11,10 +11,10 @@ import { PrintButton } from "@/components/pdf/print-button";
 import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
 import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
 import { formatCode } from "@/lib/utils";
-import { deleteInvoice } from "@/lib/actions/invoices.actions";
+import { deleteInvoice, markInvoicePayment } from "@/lib/actions/invoices.actions";
 import type { InvoiceRow } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, CreditCard } from "lucide-react";
 
 interface Props {
   rows: InvoiceRow[];
@@ -32,11 +32,18 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; bill_number: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<{ id: string; bill_number: string; current_status: string } | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState("Unpaid");
+  const [paymentDate, setPaymentDate] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState<"all" | "Unpaid" | "Partial" | "Paid">("all");
 
   const filtered = useMemo(() => {
     let result = rows;
 
     if (statusFilter !== "all") result = result.filter((r) => r.status === statusFilter);
+    if (paymentFilter !== "all") result = result.filter((r) => r.payment_status === paymentFilter);
 
     if (dateFrom) result = result.filter((r) => r.bill_date >= dateFrom);
     if (dateTo) result = result.filter((r) => r.bill_date <= dateTo + "T23:59:59");
@@ -55,7 +62,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
     }
 
     return result;
-  }, [rows, statusFilter, dateFrom, dateTo, search]);
+  }, [rows, statusFilter, paymentFilter, dateFrom, dateTo, search]);
 
   // Deduplicate: one row per invoice (first item only)
   const invoiceRows = useMemo(
@@ -125,6 +132,28 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
     URL.revokeObjectURL(url);
   }
 
+  async function handleSavePayment() {
+    if (!paymentTarget) return;
+    if (paymentStatus === "Paid" && !paymentDate) {
+      toast.error("Please enter the payment date.");
+      return;
+    }
+    setIsSavingPayment(true);
+    try {
+      await markInvoicePayment(paymentTarget.id, {
+        payment_status: paymentStatus,
+        payment_date: paymentDate || null,
+        payment_notes: paymentNotes || null,
+      });
+      toast.success(`${paymentTarget.bill_number} marked as ${paymentStatus}.`);
+      setPaymentTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update payment.");
+    } finally {
+      setIsSavingPayment(false);
+    }
+  }
+
   // Group rows by invoice id for PDF generation (one page per invoice)
   const groupedForPdf = useMemo(() => {
     const map = new Map<string, InvoiceRow[]>();
@@ -182,6 +211,17 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
             placeholder="To"
           />
         </div>
+
+        <select
+          value={paymentFilter}
+          onChange={(e) => setPaymentFilter(e.target.value as typeof paymentFilter)}
+          className="h-8 text-xs border border-slate-200 rounded-md px-2 text-slate-600 bg-white"
+        >
+          <option value="all">All Payments</option>
+          <option value="Unpaid">Unpaid</option>
+          <option value="Partial">Partial</option>
+          <option value="Paid">Paid</option>
+        </select>
 
         <Input
           value={search}
@@ -251,6 +291,7 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-20">Tax %</th>
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">Amount</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">Status</th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">Payment</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Actions</th>
               </tr>
             </thead>
@@ -325,6 +366,30 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                           {r.status}
                         </span>
                       </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        {r.status === "Finalized" ? (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
+                              r.payment_status === "Paid"
+                                ? "bg-green-50 text-green-700 border border-green-200"
+                                : r.payment_status === "Partial"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-red-50 text-red-700 border border-red-200"
+                            }`}
+                            onClick={() => {
+                              setPaymentTarget({ id: r.id, bill_number: r.bill_number, current_status: r.payment_status });
+                              setPaymentStatus(r.payment_status ?? "Unpaid");
+                              setPaymentDate(r.payment_date ?? "");
+                              setPaymentNotes(r.payment_notes ?? "");
+                            }}
+                            title="Click to update payment"
+                          >
+                            {r.payment_status ?? "Unpaid"}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1">
                           <Link href={`/invoice/${r.id}/edit`}>
@@ -337,6 +402,22 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
                           </Link>
+                          {r.status === "Finalized" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                              title="Update Payment"
+                              onClick={() => {
+                                setPaymentTarget({ id: r.id, bill_number: r.bill_number, current_status: r.payment_status });
+                                setPaymentStatus(r.payment_status ?? "Unpaid");
+                                setPaymentDate(r.payment_date ?? "");
+                                setPaymentNotes(r.payment_notes ?? "");
+                              }}
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           {r.status === "Draft" && (
                             <Button
                               variant="ghost"
@@ -373,6 +454,77 @@ export function InvoiceListClient({ rows, fy, companySetting }: Props) {
         confirmLabel={isDeleting ? "Deleting…" : "Delete Invoice"}
         onConfirm={handleDelete}
       />
+
+      {/* Payment dialog */}
+      {paymentTarget && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-slate-800">
+              Update Payment — {paymentTarget.bill_number}
+            </h2>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-600">Payment Status</p>
+              <div className="flex flex-col gap-2">
+                {(["Unpaid", "Partial", "Paid"] as const).map((s) => (
+                  <label key={s} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="payment_status"
+                      value={s}
+                      checked={paymentStatus === s}
+                      onChange={() => setPaymentStatus(s)}
+                      className="accent-slate-700"
+                    />
+                    <span className={`text-xs font-medium ${
+                      s === "Paid" ? "text-green-700"
+                      : s === "Partial" ? "text-amber-700"
+                      : "text-red-700"
+                    }`}>{s}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-600">
+                Payment Date {paymentStatus === "Paid" && <span className="text-red-500">*</span>}
+              </label>
+              <input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-600">Notes (optional)</label>
+              <textarea
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                placeholder="e.g. Cheque #1234, NEFT ref..."
+                rows={2}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPaymentTarget(null)}
+                disabled={isSavingPayment}
+              >
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSavePayment} disabled={isSavingPayment}>
+                {isSavingPayment ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

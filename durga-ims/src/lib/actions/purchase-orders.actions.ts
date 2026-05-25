@@ -66,6 +66,8 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
       status: purchaseOrders.status,
       financial_year: purchaseOrders.financial_year,
       affects_stock: purchaseOrders.affects_stock,
+      supplier_bill_no: purchaseOrders.supplier_bill_no,
+      supplier_bill_date: purchaseOrders.supplier_bill_date,
       created_at: purchaseOrders.created_at,
       updated_at: purchaseOrders.updated_at,
     })
@@ -246,6 +248,8 @@ interface POHeaderInput {
   financial_year: string;
   total_amount: string;
   affects_stock: boolean;
+  supplier_bill_no: string;
+  supplier_bill_date: string;
   items: LineItemInput[];
 }
 
@@ -284,6 +288,8 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
       status: "Draft",
       financial_year: data.financial_year,
       affects_stock: data.affects_stock,
+      supplier_bill_no: data.supplier_bill_no || null,
+      supplier_bill_date: data.supplier_bill_date || null,
     })
     .returning({ id: purchaseOrders.id });
 
@@ -308,6 +314,8 @@ export async function updatePurchaseOrder(id: string, data: Omit<POHeaderInput, 
       supplier_id: deriveHeaderSupplierId(data.items),
       total_amount: data.total_amount,
       affects_stock: data.affects_stock,
+      supplier_bill_no: data.supplier_bill_no || null,
+      supplier_bill_date: data.supplier_bill_date || null,
       updated_at: new Date(),
     })
     .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.status, "Draft")));

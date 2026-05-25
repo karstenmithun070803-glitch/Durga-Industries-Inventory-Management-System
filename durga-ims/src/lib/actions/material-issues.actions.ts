@@ -16,7 +16,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getFinancialYearRange } from "@/types";
+import { fyDateRange } from "@/lib/fy";
 import type { MaterialIssueWithDetails, MaterialIssueItemWithDetails, MaterialIssueRow } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -371,7 +371,7 @@ export async function createMaterialIssue(data: IssueHeaderInput): Promise<strin
   validateIssueItems(data.items);
 
   const issueDate = new Date(data.issue_date);
-  const fyRange = getFinancialYearRange(data.financial_year);
+  const fyRange = fyDateRange(data.financial_year);
   if (issueDate < fyRange.start || issueDate > fyRange.end)
     throw new Error("Issue date must fall within the active financial year.");
 
@@ -411,7 +411,7 @@ export async function updateMaterialIssue(id: string, data: IssueHeaderInput): P
   validateIssueItems(data.items);
 
   const issueDate = new Date(data.issue_date);
-  const fyRange = getFinancialYearRange(data.financial_year);
+  const fyRange = fyDateRange(data.financial_year);
   if (issueDate < fyRange.start || issueDate > fyRange.end)
     throw new Error("Issue date must fall within the active financial year.");
 
@@ -513,7 +513,7 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
   validateIssueItems(data.items);
 
   const issueDate = new Date(data.issue_date);
-  const fyRange = getFinancialYearRange(data.financial_year);
+  const fyRange = fyDateRange(data.financial_year);
   if (issueDate < fyRange.start || issueDate > fyRange.end)
     throw new Error("Issue date must fall within the active financial year.");
 

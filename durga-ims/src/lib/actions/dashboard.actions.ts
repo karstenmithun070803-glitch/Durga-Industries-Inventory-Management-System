@@ -1,0 +1,149 @@
+"use server";
+
+import { db } from "@/lib/db";
+import {
+  invoices,
+  purchaseOrders,
+  materialIssues,
+  materials,
+} from "@/lib/db/schema";
+import { eq, and, sql, desc, ne } from "drizzle-orm";
+import { getCurrentFY } from "@/lib/fy";
+
+export interface DashboardStats {
+  outstandingCount: number;
+  outstandingTotal: number;
+  lowStockCount: number;
+  outStockCount: number;
+  fyTotalSales: number;
+  fyTotalPurchases: number;
+  recentPOs: { id: string; po_number: number; po_date: string; status: string; supplier_name: string | null }[];
+  recentMIs: { id: string; slip_number: number; vehicle_name: string | null; issue_date: string; status: string }[];
+  recentInvoices: { id: string; bill_number: string; customer_name: string | null; bill_date: string; payment_status: string }[];
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const fy = getCurrentFY();
+
+  const [
+    outstandingRows,
+    salesRow,
+    purchaseRow,
+    stockRows,
+    recentPORows,
+    recentMIRows,
+    recentInvoiceRows,
+  ] = await Promise.all([
+    // Outstanding invoices: Finalized + not Paid
+    db
+      .select({ count: sql<string>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${invoices.net_amount}), 0)` })
+      .from(invoices)
+      .where(and(
+        eq(invoices.status, "Finalized"),
+        ne(invoices.payment_status, "Paid"),
+      )),
+
+    // This FY total sales
+    db
+      .select({ total: sql<string>`COALESCE(SUM(${invoices.net_amount}), 0)` })
+      .from(invoices)
+      .where(and(
+        eq(invoices.financial_year, fy),
+        eq(invoices.status, "Finalized"),
+      )),
+
+    // This FY total purchases
+    db
+      .select({ total: sql<string>`COALESCE(SUM(${purchaseOrders.total_amount}), 0)` })
+      .from(purchaseOrders)
+      .where(and(
+        eq(purchaseOrders.financial_year, fy),
+        eq(purchaseOrders.status, "Received"),
+      )),
+
+    // Active materials with current_stock and min_level
+    db
+      .select({ current_stock: materials.current_stock, min_level: materials.min_level })
+      .from(materials)
+      .where(eq(materials.is_active, true)),
+
+    // Recent 5 POs
+    db
+      .select({
+        id: purchaseOrders.id,
+        po_number: purchaseOrders.po_number,
+        po_date: purchaseOrders.po_date,
+        status: purchaseOrders.status,
+        supplier_name: sql<string | null>`(SELECT name FROM suppliers WHERE id = ${purchaseOrders.supplier_id} LIMIT 1)`,
+      })
+      .from(purchaseOrders)
+      .orderBy(desc(purchaseOrders.po_date), desc(purchaseOrders.po_number))
+      .limit(5),
+
+    // Recent 5 MI slips
+    db
+      .select({
+        id: materialIssues.id,
+        slip_number: materialIssues.slip_number,
+        issue_date: materialIssues.issue_date,
+        status: materialIssues.status,
+        vehicle_name: sql<string | null>`(SELECT vehicle_name FROM vehicles WHERE id = ${materialIssues.vehicle_id} LIMIT 1)`,
+      })
+      .from(materialIssues)
+      .orderBy(desc(materialIssues.issue_date), desc(materialIssues.slip_number))
+      .limit(5),
+
+    // Recent 5 invoices
+    db
+      .select({
+        id: invoices.id,
+        bill_number: invoices.bill_number,
+        bill_date: invoices.bill_date,
+        customer_name: invoices.customer_name,
+        payment_status: invoices.payment_status,
+      })
+      .from(invoices)
+      .orderBy(desc(invoices.bill_date), desc(invoices.bill_number))
+      .limit(5),
+  ]);
+
+  const outstandingCount = parseInt(outstandingRows[0]?.count ?? "0");
+  const outstandingTotal = parseFloat(outstandingRows[0]?.total ?? "0");
+
+  const outStockCount = stockRows.filter((r) => parseFloat(r.current_stock) <= 0).length;
+  const lowStockCount = stockRows.filter((r) => {
+    const stock = parseFloat(r.current_stock);
+    const min = r.min_level ? parseFloat(r.min_level) : 0;
+    return stock > 0 && min > 0 && stock < min;
+  }).length;
+
+  return {
+    outstandingCount,
+    outstandingTotal,
+    lowStockCount,
+    outStockCount,
+    fyTotalSales: parseFloat(salesRow[0]?.total ?? "0"),
+    fyTotalPurchases: parseFloat(purchaseRow[0]?.total ?? "0"),
+    recentPOs: recentPORows.map((r) => ({
+      id: r.id,
+      po_number: r.po_number,
+      po_date: new Date(r.po_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      status: r.status,
+      supplier_name: r.supplier_name,
+    })),
+    recentMIs: recentMIRows.map((r) => ({
+      id: r.id,
+      slip_number: r.slip_number,
+      issue_date: new Date(r.issue_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      status: r.status,
+      vehicle_name: r.vehicle_name,
+    })),
+    recentInvoices: recentInvoiceRows.map((r) => ({
+      id: r.id,
+      bill_number: r.bill_number,
+      bill_date: new Date(r.bill_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      customer_name: r.customer_name,
+      payment_status: r.payment_status,
+    })),
+  };
+}

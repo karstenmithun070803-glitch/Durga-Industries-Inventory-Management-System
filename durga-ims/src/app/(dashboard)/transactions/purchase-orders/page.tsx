@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 import { getPurchaseOrders } from "@/lib/actions/purchase-orders.actions";
 import { getCompanySettings } from "@/lib/actions/settings.actions";
-import { getCurrentFinancialYear } from "@/types";
+import { getCurrentFY } from "@/lib/fy";
 import { PurchaseOrdersClient } from "./purchase-orders-client";
 
 export default async function PurchaseOrdersPage() {
-  const fy = getCurrentFinancialYear();
+  const fy = getCurrentFY();
   const [rows, companySetting] = await Promise.all([
     getPurchaseOrders(fy),
     getCompanySettings(),

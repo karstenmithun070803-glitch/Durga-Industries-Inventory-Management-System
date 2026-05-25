@@ -24,6 +24,7 @@ export interface InvoiceSummaryRow {
   bill_number: string;
   bill_date: string;
   vehicle_name: string | null;
+  vehicle_type: string | null;
   job_ref_no: number | null;
   customer_name: string | null;
   customer_gstin: string | null;
@@ -53,6 +54,7 @@ export async function getInvoiceSummaryReport(params: {
       bill_number: invoices.bill_number,
       bill_date: invoices.bill_date,
       vehicle_name: vehicles.vehicle_name,
+      vehicle_type: vehicles.type,
       job_ref_no: vehicles.job_ref_no,
       customer_name: invoices.customer_name,
       customer_gstin: invoices.customer_gstin,
@@ -87,6 +89,7 @@ export async function getInvoiceSummaryReport(params: {
       invoices.discount,
       invoices.net_amount,
       vehicles.vehicle_name,
+      vehicles.type,
       vehicles.job_ref_no,
       vehicles.customer_id
     )
@@ -102,6 +105,7 @@ export async function getInvoiceSummaryReport(params: {
       bill_number: r.bill_number,
       bill_date: new Date(r.bill_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
       vehicle_name: r.vehicle_name ?? null,
+      vehicle_type: r.vehicle_type ?? null,
       job_ref_no: r.job_ref_no ?? null,
       customer_name: r.customer_name ?? null,
       customer_gstin: r.customer_gstin ?? null,
@@ -126,6 +130,8 @@ export interface PurchaseReportRow {
   po_number: number;
   po_date: string;
   supplier_name: string | null;
+  supplier_bill_no: string | null;
+  supplier_bill_date: string | null;
   material_name: string;
   material_no: number;
   qty: number;
@@ -157,6 +163,8 @@ export async function getPurchaseReport(params: {
       po_date: purchaseOrders.po_date,
       status: purchaseOrders.status,
       affects_stock: purchaseOrders.affects_stock,
+      supplier_bill_no: purchaseOrders.supplier_bill_no,
+      supplier_bill_date: purchaseOrders.supplier_bill_date,
       supplier_name: suppliers.name,
       material_name: materials.name,
       material_no: materials.material_no,
@@ -195,6 +203,10 @@ export async function getPurchaseReport(params: {
       po_number: r.po_number,
       po_date: new Date(r.po_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
       supplier_name: r.supplier_name ?? null,
+      supplier_bill_no: r.supplier_bill_no ?? null,
+      supplier_bill_date: r.supplier_bill_date
+        ? new Date(r.supplier_bill_date as unknown as string).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" })
+        : null,
       material_name: r.material_name,
       material_no: r.material_no,
       qty: parseFloat(r.qty ?? "0"),

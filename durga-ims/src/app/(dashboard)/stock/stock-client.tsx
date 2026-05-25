@@ -36,7 +36,8 @@ import type {
   JobCostResult,
 } from "@/lib/actions/stock.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
-import { History, SlidersHorizontal, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { History, SlidersHorizontal, RefreshCw, ChevronDown, ChevronUp, ShoppingCart } from "lucide-react";
+import Link from "next/link";
 import { PrintButton } from "@/components/pdf/print-button";
 import { JobCostDocument } from "@/components/pdf/job-cost-pdf";
 
@@ -496,6 +497,16 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
                           >
                             <SlidersHorizontal className="w-4 h-4" />
                           </button>
+                          {(status === "low" || status === "out") && (
+                            <Link
+                              href={`/transactions/purchase-orders/new?prefill=${row.id}`}
+                              title="Create Purchase Order for this material"
+                            >
+                              <button className="p-1 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors">
+                                <ShoppingCart className="w-4 h-4" />
+                              </button>
+                            </Link>
+                          )}
                         </div>
                       </td>
                     </tr>

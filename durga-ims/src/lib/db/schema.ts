@@ -7,6 +7,7 @@ import {
   integer,
   serial,
   timestamp,
+  date,
   check,
   unique,
 } from "drizzle-orm/pg-core";
@@ -150,6 +151,9 @@ export const purchaseOrders = pgTable("purchase_orders", {
   financial_year: text("financial_year").notNull(), // e.g. "2026-2027"
   // false = PO is for accounting only; receiving does not update warehouse stock
   affects_stock: boolean("affects_stock").notNull().default(true),
+  // optional reference to supplier's own invoice for AP reconciliation
+  supplier_bill_no: text("supplier_bill_no"),
+  supplier_bill_date: date("supplier_bill_date"),
   ...timestamps,
 }, (t) => [
   unique("po_number_fy_unique").on(t.po_number, t.financial_year),
@@ -238,15 +242,20 @@ export const invoices = pgTable("invoices", {
   net_amount: numeric("net_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   rev_charge_status: boolean("rev_charge_status").notNull().default(false),
   financial_year: text("financial_year").notNull(),
-  // 'Draft' | 'Finalized' — finalized shows amber warning on edit but still allows it
+  // 'Draft' | 'Finalized' | 'Cancelled'
   status: text("status").notNull().default("Draft"),
-  // optional reference to the MI slip that was used to auto-populate items
-  issue_id: uuid("issue_id").references(() => materialIssues.id),
   // customer snapshot — frozen at invoice creation; survives master data changes
   customer_name: text("customer_name"),
   customer_gstin: text("customer_gstin"),
   customer_state: text("customer_state"),
   customer_address: text("customer_address"),
+  // payment tracking
+  payment_status: text("payment_status").notNull().default("Unpaid"),
+  payment_date: date("payment_date"),
+  payment_notes: text("payment_notes"),
+  // cancellation audit
+  cancelled_by: text("cancelled_by"),
+  cancelled_at: timestamp("cancelled_at", { withTimezone: true }),
   ...timestamps,
 }, (t) => [
   unique("bill_number_fy_unique").on(t.bill_number, t.financial_year),
@@ -292,6 +301,13 @@ export const companySettings = pgTable("company_settings", {
   company_name: text("company_name").notNull(),
   address: text("address"),
   gstin: text("gstin"),
+  pan_no: text("pan_no"),
+  tan_no: text("tan_no"),
+  bank_name: text("bank_name"),
+  bank_account_no: text("bank_account_no"),
+  bank_ifsc: text("bank_ifsc"),
+  bank_branch: text("bank_branch"),
+  invoice_terms: text("invoice_terms"),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -437,10 +453,6 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   vehicle: one(vehicles, {
     fields: [invoices.vehicle_id],
     references: [vehicles.id],
-  }),
-  materialIssue: one(materialIssues, {
-    fields: [invoices.issue_id],
-    references: [materialIssues.id],
   }),
   items: many(invoiceItems),
 }));

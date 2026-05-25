@@ -16,6 +16,11 @@ interface CompanySetting {
   company_name: string;
   address: string | null;
   gstin: string | null;
+  bank_name?: string | null;
+  bank_account_no?: string | null;
+  bank_ifsc?: string | null;
+  bank_branch?: string | null;
+  invoice_terms?: string | null;
 }
 
 interface Props {
@@ -148,6 +153,30 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
                 {numberToWords(net)}
               </Text>
             </View>
+
+            {/* ── Bank details + Terms ── */}
+            {companySetting?.bank_account_no && (
+              <View style={{ marginTop: 10, borderTopWidth: 0.5, borderTopColor: "#CBD5E1", paddingTop: 6 }}>
+                <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#374151", marginBottom: 2 }}>
+                  Payment Details
+                </Text>
+                <Text style={{ fontSize: 7.5, color: "#374151" }}>
+                  {[
+                    companySetting.bank_name,
+                    companySetting.bank_account_no ? `A/C: ${companySetting.bank_account_no}` : null,
+                    companySetting.bank_ifsc ? `IFSC: ${companySetting.bank_ifsc}` : null,
+                    companySetting.bank_branch ? `Branch: ${companySetting.bank_branch}` : null,
+                  ].filter(Boolean).join("  |  ")}
+                </Text>
+              </View>
+            )}
+            {companySetting?.invoice_terms && (
+              <View style={{ marginTop: 6 }}>
+                <Text style={{ fontSize: 7, color: "#6B7280", fontFamily: "Helvetica-Oblique" }}>
+                  Terms: {companySetting.invoice_terms}
+                </Text>
+              </View>
+            )}
 
             {/* ── Authorised Signatory ── */}
             <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "flex-end" }}>

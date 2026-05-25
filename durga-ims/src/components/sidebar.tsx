@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   {
-    label: "Dashboard",
+    label: "Home",
     href: "/",
     icon: LayoutDashboard,
   },

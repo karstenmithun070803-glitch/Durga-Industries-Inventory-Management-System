@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { getCurrentFinancialYear } from "@/types";
+import { getCurrentFY } from "@/lib/fy";
 
 interface FYContextValue {
   activeFY: string;
@@ -12,7 +12,7 @@ interface FYContextValue {
 const FYContext = createContext<FYContextValue | null>(null);
 
 export function FYProvider({ children }: { children: ReactNode }) {
-  const currentFY = getCurrentFinancialYear();
+  const currentFY = getCurrentFY();
   const [activeFY, setActiveFY] = useState(currentFY);
 
   return (

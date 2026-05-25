@@ -59,6 +59,7 @@ interface Props {
   materials: MaterialOption[];
   taxRates: TaxRateOption[];
   units: UnitOption[];
+  prefillMaterialId?: string;
 }
 
 function toISODate(d: Date | string): string {
@@ -111,14 +112,31 @@ function calcAllTotals(rows: LineItemDraft[]) {
   return { subtotal, cgst, sgst, igst, grand };
 }
 
-export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates, units }: Props) {
+export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates, units, prefillMaterialId }: Props) {
   const { activeFY } = useFY();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [poDate, setPoDate] = useState(po ? toISODate(po.po_date) : toISODate(new Date()));
   const [affectsStock, setAffectsStock] = useState(po?.affects_stock ?? true);
-  const [rows, setRows] = useState<LineItemDraft[]>(po ? poItemsToRows(po) : [newRow()]);
+  const [supplierBillNo, setSupplierBillNo] = useState(po?.supplier_bill_no ?? "");
+  const [supplierBillDate, setSupplierBillDate] = useState(po?.supplier_bill_date ?? "");
+  const [rows, setRows] = useState<LineItemDraft[]>(() => {
+    if (po) return poItemsToRows(po);
+    if (prefillMaterialId) {
+      const m = materials.find((mat) => mat.id === prefillMaterialId);
+      if (m) {
+        return [{
+          ...newRow(),
+          material_id: m.id,
+          material_name: m.name,
+          material_no: m.material_no,
+          hsn_code: m.hsn_code ?? "",
+        }];
+      }
+    }
+    return [newRow()];
+  });
 
   const [showReceiveDialog, setShowReceiveDialog] = useState(false);
 
@@ -144,6 +162,8 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
       po_date: poDate,
       total_amount: grand.toFixed(2),
       affects_stock: affectsStock,
+      supplier_bill_no: supplierBillNo,
+      supplier_bill_date: supplierBillDate,
       items: filledRows.map((r) => ({
         material_id: r.material_id,
         supplier_id: r.supplier_id || null,
@@ -277,6 +297,22 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Financial Year</label>
               <p className="text-sm text-slate-700 py-1">{po?.financial_year ?? activeFY}</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Supplier Bill No. <span className="text-slate-400">(Optional)</span></label>
+              {isReadOnly ? (
+                <p className="text-sm text-slate-800 py-1">{supplierBillNo || "—"}</p>
+              ) : (
+                <Input value={supplierBillNo} onChange={(e) => setSupplierBillNo(e.target.value)} placeholder="e.g. INV-2024-001" className="h-8 text-sm" />
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Supplier Bill Date <span className="text-slate-400">(Optional)</span></label>
+              {isReadOnly ? (
+                <p className="text-sm text-slate-800 py-1">{supplierBillDate ? new Date(supplierBillDate).toLocaleDateString("en-IN") : "—"}</p>
+              ) : (
+                <Input type="date" value={supplierBillDate} onChange={(e) => setSupplierBillDate(e.target.value)} className="h-8 text-sm" />
+              )}
             </div>
           </div>
 

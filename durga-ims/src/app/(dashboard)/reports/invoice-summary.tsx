@@ -95,10 +95,12 @@ export function InvoiceSummaryReport({ vehicles, customers, currentFY, companySe
   }, [rows, isCancelledOnlyView]);
 
   function downloadCsv() {
-    const headers = ["Bill #", "Date", "Vehicle", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Gross Total", "Discount", "Net Amount", "Status"];
+    const headers = ["Bill #", "Date", "Vehicle", "Type", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Gross Total", "Discount", "Net Amount", "Status"];
     const csvRows = rows.map((r) => [
-      r.bill_number, r.bill_date, r.vehicle_name ?? "", r.customer_name ?? "",
-      r.customer_gstin ?? "", r.taxable_value.toFixed(2), r.total_cgst.toFixed(2),
+      r.bill_number, r.bill_date, r.vehicle_name ?? "",
+      r.vehicle_type === "New" ? "New Build" : r.vehicle_type === "Old" ? "Repair" : "",
+      r.customer_name ?? "", r.customer_gstin ?? "",
+      r.taxable_value.toFixed(2), r.total_cgst.toFixed(2),
       r.total_sgst.toFixed(2), r.total_igst.toFixed(2), r.gross_total.toFixed(2),
       r.discount.toFixed(2), r.net_amount.toFixed(2), r.status,
     ]);
@@ -184,6 +186,7 @@ export function InvoiceSummaryReport({ vehicles, customers, currentFY, companySe
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Bill #</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Date</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Vehicle</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Type</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Customer</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">GSTIN</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
@@ -208,6 +211,16 @@ export function InvoiceSummaryReport({ vehicles, customers, currentFY, companySe
                     <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.bill_number}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.bill_date}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.vehicle_name ?? "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">
+                      {r.vehicle_type ? (
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-xs font-medium",
+                          r.vehicle_type === "New" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                        )}>
+                          {r.vehicle_type === "New" ? "New Build" : "Repair"}
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.customer_name ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-400 font-mono text-xs">{r.customer_gstin ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_value)}</td>
@@ -233,7 +246,7 @@ export function InvoiceSummaryReport({ vehicles, customers, currentFY, companySe
               {/* Totals row */}
               <tfoot className="bg-slate-100 sticky bottom-0">
                 <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={5} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
+                  <td colSpan={6} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
                     {isCancelledOnlyView
                       ? "Reference Total (void — excluded from GST)"
                       : rows.some((r) => r.status === "Cancelled")

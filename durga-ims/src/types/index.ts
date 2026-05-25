@@ -75,6 +75,8 @@ export interface PurchaseOrderWithDetails {
   status: string;
   financial_year: string;
   affects_stock: boolean;
+  supplier_bill_no: string | null;
+  supplier_bill_date: string | null;
   created_at: Date | string;
   updated_at: Date | string;
   items: PurchaseOrderItemWithDetails[];
@@ -232,7 +234,11 @@ export interface InvoiceRow {
   discount: string | null;
   net_amount: string;
   rev_charge_status: boolean;
-  issue_id: string | null;
+  payment_status: string;
+  payment_date: string | null;
+  payment_notes: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
   // vehicle + customer (via JOIN)
   vehicle_id: string;
   vehicle_name: string;
@@ -293,7 +299,11 @@ export interface InvoiceWithDetails {
   discount: string | null;
   net_amount: string;
   rev_charge_status: boolean;
-  issue_id: string | null;
+  payment_status: string;
+  payment_date: string | null;
+  payment_notes: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
   vehicle_id: string;
   vehicle_name: string;
   job_ref_no: number;
@@ -320,21 +330,4 @@ export function determineGstType(gstin: string | null | undefined, state: string
   return (state === "Tamil Nadu" || state == null || state === "") ? "CGST_SGST" : "IGST";
 }
 
-// ---------------------------------------------------------------------------
-// Financial year helpers
-// ---------------------------------------------------------------------------
-export function getCurrentFinancialYear(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1; // 1-indexed
-  // Indian FY: April 1 → March 31
-  return month >= 4 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
-}
-
-export function getFinancialYearRange(fy: string): { start: Date; end: Date } {
-  const [startYear] = fy.split("-").map(Number);
-  return {
-    start: new Date(startYear, 3, 1),       // April 1
-    end: new Date(startYear + 1, 2, 31, 23, 59, 59), // March 31
-  };
-}
+// Financial year helpers live in src/lib/fy.ts — import from there.

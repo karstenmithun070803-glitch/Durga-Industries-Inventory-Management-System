@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-import { getCurrentFinancialYear } from "@/types";
+import { getCurrentFY } from "@/lib/fy";
 import {
   getActiveVehicles,
   getActiveContractors,
@@ -11,7 +11,7 @@ import { getAllTaxRates } from "@/lib/actions/tax.actions";
 import { MaterialIssueForm } from "../material-issue-form";
 
 export default async function NewMaterialIssuePage() {
-  const fy = getCurrentFinancialYear();
+  const fy = getCurrentFY();
   const [vehicles, contractors, materials, units, taxRates, nextSlipNumber] = await Promise.all([
     getActiveVehicles(),
     getActiveContractors(),

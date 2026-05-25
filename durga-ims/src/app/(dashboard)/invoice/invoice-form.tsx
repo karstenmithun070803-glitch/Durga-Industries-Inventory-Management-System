@@ -189,7 +189,11 @@ function buildPdfRows(inv: InvoiceWithDetails): InvoiceRow[] {
     discount: inv.discount,
     net_amount: inv.net_amount,
     rev_charge_status: inv.rev_charge_status,
-    issue_id: inv.issue_id,
+    payment_status: inv.payment_status ?? "Unpaid",
+    payment_date: inv.payment_date ?? null,
+    payment_notes: inv.payment_notes ?? null,
+    cancelled_by: inv.cancelled_by ?? null,
+    cancelled_at: inv.cancelled_at ?? null,
     vehicle_id: inv.vehicle_id,
     vehicle_name: inv.vehicle_name,
     job_ref_no: inv.job_ref_no,
@@ -410,7 +414,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     const filledRows = rows.filter((r) => r.material_id);
     return {
       vehicle_id: vehicleId,
-      issue_id: null, // multi-slip — no single issue_id
       slip_ids: Array.from(selectedSlipIds),
       bill_date: billDate,
       rate_date: rateDate || null,
@@ -573,6 +576,18 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
           <span>
             This invoice is <strong>Cancelled</strong>. It is a permanent record and cannot be edited or deleted.
             The MI slips linked to it have been freed and can be used in a corrective invoice.
+            {(invoice?.cancelled_by || invoice?.cancelled_at) && (
+              <span className="block mt-1 text-xs text-rose-600">
+                {invoice.cancelled_by && <>Cancelled by {invoice.cancelled_by}</>}
+                {invoice.cancelled_by && invoice.cancelled_at && " · "}
+                {invoice.cancelled_at && <>
+                  {new Date(invoice.cancelled_at).toLocaleString("en-IN", {
+                    day: "2-digit", month: "short", year: "numeric",
+                    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
+                  })} IST
+                </>}
+              </span>
+            )}
           </span>
         </div>
       )}

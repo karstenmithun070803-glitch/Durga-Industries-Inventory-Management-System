@@ -16,6 +16,7 @@ import {
 import { eq, and, sql, desc, like, notExists, ne, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { fyDateRange } from "@/lib/fy";
+import { createClient } from "@/lib/supabase/server";
 import type { InvoiceWithDetails, InvoiceItemWithDetails, InvoiceRow } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -40,7 +41,6 @@ interface InvoiceItemInput {
 
 interface InvoiceHeaderInput {
   vehicle_id: string;
-  issue_id: string | null;
   slip_ids: string[];
   bill_date: string;
   rate_date: string | null;
@@ -343,7 +343,11 @@ export async function getInvoices(financialYear: string): Promise<InvoiceRow[]> 
       discount: invoices.discount,
       net_amount: invoices.net_amount,
       rev_charge_status: invoices.rev_charge_status,
-      issue_id: invoices.issue_id,
+      payment_status: invoices.payment_status,
+      payment_date: invoices.payment_date,
+      payment_notes: invoices.payment_notes,
+      cancelled_by: invoices.cancelled_by,
+      cancelled_at: invoices.cancelled_at,
       // vehicle
       vehicle_id: vehicles.id,
       vehicle_name: vehicles.vehicle_name,
@@ -384,6 +388,8 @@ export async function getInvoices(financialYear: string): Promise<InvoiceRow[]> 
     ...r,
     bill_date: r.bill_date.toISOString(),
     rate_date: r.rate_date?.toISOString() ?? null,
+    payment_date: r.payment_date ? (r.payment_date as unknown as Date).toISOString().split("T")[0] : null,
+    cancelled_at: r.cancelled_at ? (r.cancelled_at as unknown as Date).toISOString() : null,
     material_no: r.material_no,
     job_ref_no: r.job_ref_no,
   }));
@@ -403,7 +409,11 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
       discount: invoices.discount,
       net_amount: invoices.net_amount,
       rev_charge_status: invoices.rev_charge_status,
-      issue_id: invoices.issue_id,
+      payment_status: invoices.payment_status,
+      payment_date: invoices.payment_date,
+      payment_notes: invoices.payment_notes,
+      cancelled_by: invoices.cancelled_by,
+      cancelled_at: invoices.cancelled_at,
       vehicle_id: vehicles.id,
       vehicle_name: vehicles.vehicle_name,
       job_ref_no: vehicles.job_ref_no,
@@ -459,7 +469,11 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
     discount: h.discount,
     net_amount: h.net_amount,
     rev_charge_status: h.rev_charge_status,
-    issue_id: h.issue_id,
+    payment_status: h.payment_status ?? "Unpaid",
+    payment_date: h.payment_date ? (h.payment_date as unknown as Date).toISOString().split("T")[0] : null,
+    payment_notes: h.payment_notes ?? null,
+    cancelled_by: h.cancelled_by ?? null,
+    cancelled_at: h.cancelled_at ? (h.cancelled_at as unknown as Date).toISOString() : null,
     vehicle_id: h.vehicle_id,
     vehicle_name: h.vehicle_name,
     job_ref_no: h.job_ref_no,
@@ -541,7 +555,6 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
           material_margin: data.material_margin,
           discount: data.discount,
           vehicle_id: data.vehicle_id,
-          issue_id: data.issue_id || null,
           net_amount: data.net_amount,
           rev_charge_status: data.rev_charge_status,
           financial_year: data.financial_year,
@@ -633,7 +646,6 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
         material_margin: data.material_margin,
         discount: data.discount,
         vehicle_id: data.vehicle_id,
-        issue_id: data.issue_id || null,
         net_amount: data.net_amount,
         rev_charge_status: data.rev_charge_status,
         customer_name: vData?.customer_name ?? null,
@@ -716,10 +728,42 @@ export async function cancelInvoice(id: string): Promise<void> {
   if (!inv) throw new Error("Invoice not found.");
   if (inv.status === "Cancelled") throw new Error(`${inv.bill_number} is already cancelled.`);
 
-  // Free MI slips and update status atomically — if status update fails, slip links stay intact
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Free MI slips and record cancellation audit atomically
   await db.transaction(async (tx) => {
     await tx.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
-    await tx.update(invoices).set({ status: "Cancelled" }).where(eq(invoices.id, id));
+    await tx.update(invoices).set({
+      status: "Cancelled",
+      cancelled_by: user?.email ?? "unknown",
+      cancelled_at: new Date(),
+    }).where(eq(invoices.id, id));
+  });
+  revalidatePath("/invoice");
+}
+
+export async function markInvoicePayment(
+  id: string,
+  data: { payment_status: string; payment_date: string | null; payment_notes: string | null }
+): Promise<void> {
+  const [inv] = await db
+    .select({ status: invoices.status, bill_number: invoices.bill_number })
+    .from(invoices)
+    .where(eq(invoices.id, id));
+
+  if (!inv) throw new Error("Invoice not found.");
+  if (inv.status !== "Finalized")
+    throw new Error(`Only Finalized invoices can be marked as paid. ${inv.bill_number} is ${inv.status}.`);
+  if (!["Unpaid", "Partial", "Paid"].includes(data.payment_status))
+    throw new Error("Invalid payment status.");
+
+  await db.transaction(async (tx) => {
+    await tx.update(invoices).set({
+      payment_status: data.payment_status,
+      payment_date: data.payment_date || null,
+      payment_notes: data.payment_notes || null,
+    }).where(eq(invoices.id, id));
   });
   revalidatePath("/invoice");
 }

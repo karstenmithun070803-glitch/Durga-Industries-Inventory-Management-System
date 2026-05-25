@@ -92,11 +92,12 @@ export function PurchaseReport({ suppliers, materials, currentFY, companySetting
 
   function downloadCsv() {
     const headers = [
-      "PO #", "Date", "Supplier", "Material", "Qty", "Unit", "Rate",
+      "PO #", "Date", "Supplier Bill No.", "Supplier Bill Date", "Supplier", "Material", "Qty", "Unit", "Rate",
       "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount", "Stock Updated", "Status",
     ];
     const csvRows = rows.map((r) => [
-      r.po_number, r.po_date, r.supplier_name ?? "", r.material_name,
+      r.po_number, r.po_date, r.supplier_bill_no ?? "", r.supplier_bill_date ?? "",
+      r.supplier_name ?? "", r.material_name,
       r.qty.toFixed(3), r.unit_name ?? "", r.rate.toFixed(2),
       r.taxable_amount.toFixed(2), r.cgst_amount.toFixed(2),
       r.sgst_amount.toFixed(2), r.igst_amount.toFixed(2),
@@ -196,6 +197,7 @@ export function PurchaseReport({ suppliers, materials, currentFY, companySetting
                 <tr>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">PO #</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Date</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier Bill</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
@@ -218,6 +220,11 @@ export function PurchaseReport({ suppliers, materials, currentFY, companySetting
                   >
                     <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">PO-{String(r.po_number).padStart(4, "0")}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.po_date}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">
+                      {r.supplier_bill_no ? (
+                        <span title={r.supplier_bill_date ?? undefined}>{r.supplier_bill_no}</span>
+                      ) : "—"}
+                    </td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.supplier_name ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.material_name}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>

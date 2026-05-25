@@ -1,11 +1,16 @@
 export const dynamic = "force-dynamic";
 import { getActiveSuppliers, getActiveMaterials, getActiveUnits, getPurchaseOrders } from "@/lib/actions/purchase-orders.actions";
 import { getAllTaxRates } from "@/lib/actions/tax.actions";
-import { getCurrentFinancialYear } from "@/types";
+import { getCurrentFY } from "@/lib/fy";
 import { POForm } from "../po-form";
 
-export default async function NewPOPage() {
-  const fy = getCurrentFinancialYear();
+interface Props {
+  searchParams: Promise<{ prefill?: string }>;
+}
+
+export default async function NewPOPage({ searchParams }: Props) {
+  const { prefill } = await searchParams;
+  const fy = getCurrentFY();
   const [suppliers, materials, taxRates, units, orders] = await Promise.all([
     getActiveSuppliers(),
     getActiveMaterials(),
@@ -25,6 +30,7 @@ export default async function NewPOPage() {
       materials={materials}
       taxRates={taxRates as { id: string; tax_percentage: string }[]}
       units={units}
+      prefillMaterialId={prefill}
     />
   );
 }
