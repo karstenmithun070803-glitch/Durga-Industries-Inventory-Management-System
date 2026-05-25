@@ -122,7 +122,7 @@ export default async function HomePage() {
           <RecentTable
             headers={["PO #", "Date", "Supplier", "Status"]}
             rows={stats.recentPOs.map((r) => [
-              <Link key={r.id} href={`/transactions/purchase-orders/${r.id}`} className="font-mono text-blue-600 hover:underline">
+              <Link key={r.id} href={`/transactions/purchase-orders/${r.id}/view`} className="font-mono text-blue-600 hover:underline">
                 PO-{String(r.po_number).padStart(4, "0")}
               </Link>,
               r.po_date,
@@ -140,7 +140,7 @@ export default async function HomePage() {
           <RecentTable
             headers={["Slip #", "Date", "Vehicle", "Status"]}
             rows={stats.recentMIs.map((r) => [
-              <Link key={r.id} href={`/transactions/material-issues/${r.id}`} className="font-mono text-blue-600 hover:underline">
+              <Link key={r.id} href={`/transactions/material-issues/${r.id}/view`} className="font-mono text-blue-600 hover:underline">
                 MI-{String(r.slip_number).padStart(4, "0")}
               </Link>,
               r.issue_date,
