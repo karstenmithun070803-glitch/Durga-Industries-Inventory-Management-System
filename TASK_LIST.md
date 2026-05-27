@@ -143,23 +143,28 @@ The phase numbers here (1–8) are the **project-level phases**. During developm
 [ ] 6.9 Download buttons — CSV export for invoice list, MI list, PO list
 
 ### Phase 6 — Gaps from earlier phases to fix here
-[ ] 6.A Customer deactivation guard — block if customer has active vehicles
-[ ] 6.B PO and MI PDFs — connect to company_settings (currently still hardcoded)
+[x] 6.A Customer deactivation guard — block if customer has active vehicles (done: customers.actions.ts checks active vehicles before deactivating)
+[x] 6.B PO and MI PDFs — connect to company_settings (done: all PDF components accept companySetting prop; page.tsx files fetch and pass it; hardcoded constants used only as fallback)
 
 ---
 
 ## PHASE 7 — Settings, Polish & Deploy
-[ ] 7.1 Settings — Financial Year (create new FY, switch between years, persist FY across navigation)
+
+### NOTE: Phase 7 as originally scoped was not fully implemented.
+### What was actually built in Phase 7 is documented in docs/08-payment-tracking-dashboard-rls.md.
+### The items below reflect the original plan status — incomplete items carry to Phase 8.
+
+[~] 7.1 Settings — Financial Year switching — PARTIAL: FYProvider + useFY hook + FYBanner component built; NO UI switcher exists (setActiveFY is never called from any UI element)
 [~] 7.2 Settings — PDF config — PARTIAL: company name/address/GSTIN done; logo upload NOT done
-[ ] 7.3 Global financial year context (filters all screens + reports by selected FY)
-[ ] 7.4 Historical year amber banner (persistent, non-dismissable, on all pages when viewing past FY)
-[ ] 7.5 GSTIN format validation (blur validation, state code cross-check warning)
-[ ] 7.6 Cross-year date validation (hard block if transaction date outside active FY)
-[ ] 7.7 Session timeout handling (redirect to login)
-[ ] 7.8 Mobile responsiveness pass (Dashboard + Reports pages only)
-[ ] 7.9 End-to-end testing: PO → Received → MI → Issued → Invoice → Finalize → Stock Dashboard
-[ ] 7.10 Deploy to Cloudflare Workers production (OpenNext adapter)
-[ ] 7.11 Client UAT with Durga Industries owner
+[~] 7.3 Global financial year context — PARTIAL: FYProvider wraps dashboard layout; PO/MI/Invoice forms use activeFY; Reports screens do NOT use it yet
+[~] 7.4 Historical year amber banner — PARTIAL: FYBanner component exists and mounts in layout but cannot display until 7.1 FY switcher is built
+[ ] 7.5 GSTIN format validation (blur validation, state code cross-check warning) — NOT done
+[ ] 7.6 Cross-year date validation (hard block if transaction date outside active FY) — NOT done
+[~] 7.7 Session timeout handling — PARTIAL: middleware redirects unauthenticated users to /login; no "session expired" message shown to user
+[ ] 7.8 Mobile responsiveness pass (Dashboard + Reports pages only) — NOT done
+[ ] 7.9 End-to-end testing: PO → Received → MI → Issued → Invoice → Finalize → Stock Dashboard — NOT done (no test files exist)
+[x] 7.10 Deploy to Vercel production (hosting decision changed from Cloudflare Workers to Vercel; app is live on Vercel)
+[ ] 7.11 Client UAT with Durga Industries owner — NOT done
 
 ---
 
@@ -194,8 +199,8 @@ Format: [Date] [Phase] [Description] [Status]
 - Financial year: India April 1 → March 31 (current: 2026-2027)
 - Max concurrent users: 4 (same access level for now, roles deferred to Phase 8)
 - All stock math: server-side only, atomic DB transactions, never client-side
-- Hosting: Cloudflare Workers (free, commercial OK) via OpenNext adapter
+- Hosting: Vercel (switched from original Cloudflare Workers plan; app deployed and live)
 - Database: Supabase free tier (real-time built-in, 500MB, 200 concurrent connections)
 - Auth: Supabase Auth + @supabase/ssr, username-only login (maps to username@durgaindustries.internal)
-- RLS: Currently DISABLED on all tables. Safe for now (all DB ops go through server-side Drizzle). Enable before any public exposure.
+- RLS: ENABLED on all 17 tables (Phase 7). Policy: authenticated_full_access FOR ALL TO authenticated USING (true).
 - Invoice module documentation: INVOICE-MODULE-DOCUMENTATION.md
