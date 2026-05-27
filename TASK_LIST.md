@@ -158,8 +158,8 @@ The phase numbers here (1–8) are the **project-level phases**. During developm
 [~] 7.2 Settings — PDF config — PARTIAL: company name/address/GSTIN done; logo upload NOT done
 [~] 7.3 Global financial year context — PARTIAL: FYProvider wraps dashboard layout; PO/MI/Invoice forms use activeFY; Reports screens do NOT use it yet
 [~] 7.4 Historical year amber banner — PARTIAL: FYBanner component exists and mounts in layout but cannot display until 7.1 FY switcher is built
-[ ] 7.5 GSTIN format validation (blur validation, state code cross-check warning) — NOT done
-[ ] 7.6 Cross-year date validation (hard block if transaction date outside active FY) — NOT done
+[x] 7.5 GSTIN format validation — shared validateGstinFormat() in utils.ts; blur warning toast on customer/supplier/settings forms; settings save blocked if regex fails
+[x] 7.6 Cross-year date validation — isDateInFY() in fy.ts; blocks PO save, Invoice draft/finalize, MI draft/reapply/confirm if date outside activeFY
 [~] 7.7 Session timeout handling — PARTIAL: middleware redirects unauthenticated users to /login; no "session expired" message shown to user
 [ ] 7.8 Mobile responsiveness pass (Dashboard + Reports pages only) — NOT done
 [ ] 7.9 End-to-end testing: PO → Received → MI → Issued → Invoice → Finalize → Stock Dashboard — NOT done (no test files exist)
