@@ -8,21 +8,13 @@ import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createSupplier, updateSupplier, deleteSupplier, reactivateSupplier } from "@/lib/actions/suppliers.actions";
 import { INDIAN_STATES } from "@/lib/constants";
-import { formatCode, matchesCode } from "@/lib/utils";
+import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Supplier } from "@/types";
 import { Pencil, RotateCcw, UserX } from "lucide-react";
 import { toast } from "sonner";
 
 const EMPTY = { name: "", tin_no: "", cst_no: "", gstin: "", address: "", state: "" };
 
-const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
-
-function handleGstinBlur(value: string) {
-  const trimmed = value.trim().toUpperCase();
-  if (trimmed && !GSTIN_REGEX.test(trimmed)) {
-    toast.warning("GSTIN format looks incorrect. Expected: 2 digits + 5 letters + 4 digits + 1 letter + 1 alphanumeric + Z + 1 alphanumeric (e.g. 33AAAAA1234A1Z5)");
-  }
-}
 
 export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   const [search, setSearch] = useState("");
@@ -94,7 +86,11 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                 placeholder="e.g. 33AAAAA1234A1Z5"
                 value={form.gstin}
                 onChange={(e) => set("gstin", e.target.value)}
-                onBlur={(e) => handleGstinBlur(e.target.value)}
+                onBlur={(e) => {
+                  const err = validateGstinFormat(e.target.value);
+                  if (err) toast.warning(err);
+                  else if (e.target.value.trim()) set("gstin", e.target.value.trim().toUpperCase());
+                }}
                 maxLength={15}
               />
             </div>

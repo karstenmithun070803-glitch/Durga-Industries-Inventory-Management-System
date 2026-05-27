@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFY } from "@/lib/financial-year";
+import { isDateInFY } from "@/lib/fy";
 import {
   createMaterialIssue,
   updateMaterialIssue,
@@ -205,6 +206,10 @@ export function MaterialIssueForm({
 
   // ---- Actions ----
   function handleSaveDraft() {
+    if (!isDateInFY(issueDate, activeFY)) {
+      toast.error(`Issue date is outside FY ${activeFY} (1 Apr – 31 Mar).`);
+      return;
+    }
     startTransition(async () => {
       try {
         const data = buildSubmitData();
@@ -223,6 +228,10 @@ export function MaterialIssueForm({
   }
 
   function handleSaveReapply() {
+    if (!isDateInFY(issueDate, activeFY)) {
+      toast.error(`Issue date is outside FY ${activeFY} (1 Apr – 31 Mar).`);
+      return;
+    }
     startTransition(async () => {
       try {
         const data = buildSubmitData();
@@ -236,6 +245,10 @@ export function MaterialIssueForm({
   }
 
   function handleConfirmIssue() {
+    if (!isDateInFY(issueDate, activeFY)) {
+      toast.error(`Issue date is outside FY ${activeFY} (1 Apr – 31 Mar).`);
+      return;
+    }
     startTransition(async () => {
       try {
         // For new: save draft first, then issue

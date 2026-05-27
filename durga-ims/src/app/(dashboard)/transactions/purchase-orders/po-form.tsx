@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFY } from "@/lib/financial-year";
+import { isDateInFY } from "@/lib/fy";
 import {
   createPurchaseOrder,
   updatePurchaseOrder,
@@ -147,6 +148,7 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
 
   function validate(): string | null {
     if (!poDate) return "Please enter a PO date.";
+    if (!isDateInFY(poDate, activeFY)) return `PO date is outside FY ${activeFY} (1 Apr – 31 Mar).`;
     const filledRows = rows.filter((r) => r.material_id);
     if (filledRows.length === 0) return "Add at least one material.";
     const missingSupplier = filledRows.find((r) => !r.supplier_id);

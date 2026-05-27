@@ -14,3 +14,10 @@ export function fyDateRange(fy: string): { start: Date; end: Date } {
     end: new Date(`${startYear + 1}-03-31T23:59:59+05:30`),
   };
 }
+
+// Returns true if an ISO date string (YYYY-MM-DD) falls within the given FY.
+// Pure string comparison — safe because ISO dates are lexicographically ordered.
+export function isDateInFY(dateStr: string, fy: string): boolean {
+  const [startYear] = fy.split("-").map(Number);
+  return dateStr >= `${startYear}-04-01` && dateStr <= `${startYear + 1}-03-31`;
+}

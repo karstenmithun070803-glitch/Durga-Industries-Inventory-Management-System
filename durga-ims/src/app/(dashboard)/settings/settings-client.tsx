@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { upsertCompanySettings } from "@/lib/actions/settings.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
+import { validateGstinFormat } from "@/lib/utils";
 
 interface Props {
   initialSettings: CompanySetting;
@@ -35,7 +36,7 @@ export function SettingsClient({ initialSettings }: Props) {
 
   async function handleSave() {
     if (!companyName.trim()) { toast.error("Company name is required."); return; }
-    if (gstin && gstin.length !== 15) { toast.error("GSTIN must be 15 characters."); return; }
+    if (gstin) { const gstinErr = validateGstinFormat(gstin); if (gstinErr) { toast.error(gstinErr); return; } }
     setIsSaving(true);
     try {
       await upsertCompanySettings({
@@ -79,7 +80,14 @@ export function SettingsClient({ initialSettings }: Props) {
         </Field>
         <div className="grid grid-cols-3 gap-4">
           <Field label="GSTIN">
-            <Input value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} placeholder="15-char GSTIN" maxLength={15} className="text-sm font-mono" />
+            <Input
+              value={gstin}
+              onChange={(e) => setGstin(e.target.value.toUpperCase())}
+              onBlur={(e) => { const err = validateGstinFormat(e.target.value); if (err) toast.warning(err); }}
+              placeholder="15-char GSTIN"
+              maxLength={15}
+              className="text-sm font-mono"
+            />
             {gstin && gstin.length !== 15 && <p className="text-xs text-amber-600 mt-1">{gstin.length}/15</p>}
           </Field>
           <Field label="PAN No.">

@@ -12,6 +12,7 @@ import { PrintButton } from "@/components/pdf/print-button";
 import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
 import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
 import { useFY } from "@/lib/financial-year";
+import { isDateInFY } from "@/lib/fy";
 import { formatCode } from "@/lib/utils";
 
 function toISODate(d: string | Date | null | undefined): string {
@@ -443,6 +444,10 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   }
 
   async function handleSaveDraft() {
+    if (!isDateInFY(billDate, fy)) {
+      toast.error(`Bill date is outside FY ${fy} (1 Apr – 31 Mar).`);
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = buildPayload();
@@ -462,6 +467,10 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   }
 
   async function handleFinalize() {
+    if (!isDateInFY(billDate, fy)) {
+      toast.error(`Bill date is outside FY ${fy} (1 Apr – 31 Mar).`);
+      return;
+    }
     setIsSaving(true);
     try {
       if (invoice) {

@@ -8,7 +8,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createCustomer, updateCustomer, deleteCustomer, reactivateCustomer } from "@/lib/actions/customers.actions";
 import { INDIAN_STATES } from "@/lib/constants";
-import { formatCode, matchesCode } from "@/lib/utils";
+import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Customer } from "@/types";
 import { Pencil, RotateCcw, UserX } from "lucide-react";
 import { toast } from "sonner";
@@ -96,7 +96,17 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">GSTIN</label>
-              <Input placeholder="15-character GSTIN" value={form.gstin} onChange={(e) => set("gstin", e.target.value)} maxLength={15} />
+              <Input
+                placeholder="e.g. 33AAAAA1234A1Z5"
+                value={form.gstin}
+                onChange={(e) => set("gstin", e.target.value.toUpperCase())}
+                onBlur={(e) => {
+                  const err = validateGstinFormat(e.target.value);
+                  if (err) toast.warning(err);
+                  else if (e.target.value.trim()) set("gstin", e.target.value.trim().toUpperCase());
+                }}
+                maxLength={15}
+              />
             </div>
             <div className="flex gap-2 pt-1">
               <Button onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
