@@ -22,7 +22,8 @@ import {
   Warehouse,
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth.actions";
-import { getCurrentFY } from "@/lib/fy";
+import { getFYOptions } from "@/lib/fy";
+import { useFY } from "@/lib/financial-year";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -59,8 +60,11 @@ const nav = [
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
+const fyOptions = getFYOptions(5);
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { activeFY, setActiveFY, isCurrentFY } = useFY();
   const [openSections, setOpenSections] = useState<string[]>(["Masters"]);
 
   const toggle = (label: string) =>
@@ -148,7 +152,25 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-slate-700 space-y-2">
-        <p className="text-slate-500 text-xs">FY {getCurrentFY()}</p>
+        <div>
+          <p className="text-slate-500 text-xs mb-1 flex items-center gap-1.5">
+            Financial Year
+            {!isCurrentFY && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Viewing historical data" />
+            )}
+          </p>
+          <select
+            value={activeFY}
+            onChange={(e) => setActiveFY(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          >
+            {fyOptions.map((fy) => (
+              <option key={fy} value={fy}>
+                FY {fy}
+              </option>
+            ))}
+          </select>
+        </div>
         <form action={logout}>
           <button
             type="submit"

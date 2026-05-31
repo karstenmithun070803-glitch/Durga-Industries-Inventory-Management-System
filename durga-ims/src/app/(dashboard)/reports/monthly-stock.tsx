@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getMonthlyStockReport } from "@/lib/actions/reports.actions";
+import { fyDateRange } from "@/lib/fy";
 import type { MonthlyStockRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 
@@ -38,13 +39,28 @@ function monthToDateRange(monthStr: string): { from: string; to: string } {
 
 interface Props {
   materials: { id: string; name: string; material_no: number }[];
-  currentFY: string;
+  defaultFY: string;
   companySetting?: CompanySetting;
 }
 
-export function MonthlyStockReport({ materials, currentFY, companySetting }: Props) {
-  const [fromMonth, setFromMonth] = useState(currentMonthStr());
-  const [toMonth, setToMonth] = useState(currentMonthStr());
+function fyToMonthRange(fy: string): { from: string; to: string } {
+  const { start, end } = fyDateRange(fy);
+  const from = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+  const to = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}`;
+  return { from, to };
+}
+
+export function MonthlyStockReport({ materials, defaultFY, companySetting }: Props) {
+  const initialRange = fyToMonthRange(defaultFY);
+  const [fromMonth, setFromMonth] = useState(initialRange.from);
+  const [toMonth, setToMonth] = useState(initialRange.to);
+
+  // When the global FY switcher changes, reset the date range to that FY
+  useEffect(() => {
+    const range = fyToMonthRange(defaultFY);
+    setFromMonth(range.from);
+    setToMonth(range.to);
+  }, [defaultFY]);
   const [materialId, setMaterialId] = useState("");
   const [showPrices, setShowPrices] = useState(false);
   const [rows, setRows] = useState<MonthlyStockRow[]>([]);

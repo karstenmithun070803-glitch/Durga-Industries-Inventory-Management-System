@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
@@ -10,8 +10,8 @@ import { getInvoiceSummaryReport } from "@/lib/actions/reports.actions";
 import type { InvoiceSummaryRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 
-function buildFYOptions(currentFY: string) {
-  const [startYear] = currentFY.split("-").map(Number);
+function buildFYOptions(defaultFY: string) {
+  const [startYear] = defaultFY.split("-").map(Number);
   return Array.from({ length: 5 }, (_, i) => {
     const y = startYear - i;
     const label = `${y}-${y + 1}`;
@@ -32,13 +32,18 @@ function fmtAmt(v: number) {
 interface Props {
   vehicles: { id: string; vehicle_name: string; job_ref_no: number }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];
-  currentFY: string;
+  defaultFY: string;
   companySetting?: CompanySetting;
 }
 
-export function InvoiceSummaryReport({ vehicles, customers, currentFY, companySetting }: Props) {
-  const FY_OPTIONS = buildFYOptions(currentFY);
-  const [fy, setFy] = useState(currentFY);
+export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySetting }: Props) {
+  const FY_OPTIONS = buildFYOptions(defaultFY);
+  const [fy, setFy] = useState(defaultFY);
+
+  // When the global FY switcher changes, reset this report's FY filter to match
+  useEffect(() => {
+    setFy(defaultFY);
+  }, [defaultFY]);
   const [status, setStatus] = useState("Finalized");
   const [vehicleId, setVehicleId] = useState("");
   const [customerId, setCustomerId] = useState("");
@@ -149,9 +154,9 @@ export function InvoiceSummaryReport({ vehicles, customers, currentFY, companySe
           <Button onClick={runReport} disabled={isLoading} className="h-9">
             {isLoading ? "Loading…" : "Run Report"}
           </Button>
-          {(customerId || vehicleId || dateFrom || dateTo || status !== "Finalized" || fy !== currentFY) && (
+          {(customerId || vehicleId || dateFrom || dateTo || status !== "Finalized" || fy !== defaultFY) && (
             <button
-              onClick={() => { setCustomerId(""); setVehicleId(""); setDateFrom(""); setDateTo(""); setStatus("Finalized"); setFy(currentFY); }}
+              onClick={() => { setCustomerId(""); setVehicleId(""); setDateFrom(""); setDateTo(""); setStatus("Finalized"); setFy(defaultFY); }}
               className="text-xs text-blue-600 underline h-9 px-1"
             >
               Clear filters

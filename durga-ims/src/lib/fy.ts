@@ -21,3 +21,14 @@ export function isDateInFY(dateStr: string, fy: string): boolean {
   const [startYear] = fy.split("-").map(Number);
   return dateStr >= `${startYear}-04-01` && dateStr <= `${startYear + 1}-03-31`;
 }
+
+// Returns an array of FY strings (e.g. "2026-2027") going `count` years back
+// from the current FY, most recent first. Used to populate the FY switcher dropdown.
+export function getFYOptions(count = 5): string[] {
+  const currentFY = getCurrentFY();
+  const [startYear] = currentFY.split("-").map(Number);
+  return Array.from({ length: count }, (_, i) => {
+    const y = startYear - i;
+    return `${y}-${y + 1}`;
+  });
+}

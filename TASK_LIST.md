@@ -1,5 +1,5 @@
 # Durga Industries IMS — Task List & Progress Tracker
-Last Updated: 2026-05-24
+Last Updated: 2026-05-31 (post 7.1/7.3/7.7 implementation)
 
 ## STATUS KEY
 [ ] Not started | [→] In progress | [x] Done | [!] Blocked | [~] Partial
@@ -131,16 +131,16 @@ The phase numbers here (1–8) are the **project-level phases**. During developm
 
 ---
 
-## PHASE 6 — Stock Dashboard & Reports ← NEXT TO BUILD
-[ ] 6.1 Stock Dashboard — live materials table (current stock, rate, value, color coding for low stock)
-[ ] 6.2 Stock Dashboard — summary cards (total materials, total stock value, low stock count)
-[ ] 6.3 Stock Dashboard — Job Search panel (job no → all materials + contractor + total cost, PDF)
-[ ] 6.4 Stock Dashboard — Manual Stock Adjustment (CONFIRM modal, reason required, cannot go below 0)
-[ ] 6.5 Reports — Material-wise Costing (filter: vehicle/job/date, includes contractor column, PDF)
-[ ] 6.6 Reports — Monthly Stock Report (with/without price toggle, opening/closing stock, PDF/Excel)
-[ ] 6.7 Reports — Purchase Report (filter: supplier/date, PDF/Excel)
-[ ] 6.8 Reports — Invoice Summary (filter: FY/customer/vehicle, total billed, PDF/CSV)
-[ ] 6.9 Download buttons — CSV export for invoice list, MI list, PO list
+## PHASE 6 — Stock Dashboard & Reports ✅ COMPLETE
+[x] 6.1 Stock Dashboard — live materials table (current stock, rate, value, color coding for low stock)
+[x] 6.2 Stock Dashboard — summary cards (total materials, total stock value, low stock count)
+[x] 6.3 Stock Dashboard — Job Search panel (job no → all materials + contractor + total cost, PDF)
+[x] 6.4 Stock Dashboard — Manual Stock Adjustment (CONFIRM modal, reason required, cannot go below 0)
+[x] 6.5 Reports — Material-wise Costing (filter: vehicle/job/date, includes contractor column, PDF)
+[x] 6.6 Reports — Monthly Stock Report (with/without price toggle, opening/closing stock, PDF/Excel)
+[x] 6.7 Reports — Purchase Report (filter: supplier/date, PDF/Excel)
+[x] 6.8 Reports — Invoice Summary (filter: FY/customer/vehicle, total billed, PDF/CSV)
+[x] 6.9 Download buttons — CSV export for invoice list, MI list, PO list
 
 ### Phase 6 — Gaps from earlier phases to fix here
 [x] 6.A Customer deactivation guard — block if customer has active vehicles (done: customers.actions.ts checks active vehicles before deactivating)
@@ -154,13 +154,23 @@ The phase numbers here (1–8) are the **project-level phases**. During developm
 ### What was actually built in Phase 7 is documented in docs/08-payment-tracking-dashboard-rls.md.
 ### The items below reflect the original plan status — incomplete items carry to Phase 8.
 
-[~] 7.1 Settings — Financial Year switching — PARTIAL: FYProvider + useFY hook + FYBanner component built; NO UI switcher exists (setActiveFY is never called from any UI element)
-[~] 7.2 Settings — PDF config — PARTIAL: company name/address/GSTIN done; logo upload NOT done
-[~] 7.3 Global financial year context — PARTIAL: FYProvider wraps dashboard layout; PO/MI/Invoice forms use activeFY; Reports screens do NOT use it yet
-[~] 7.4 Historical year amber banner — PARTIAL: FYBanner component exists and mounts in layout but cannot display until 7.1 FY switcher is built
+### Phase 7 — Features actually shipped (documented in docs/08-payment-tracking-dashboard-rls.md)
+[x] 7.A Supplier Bill Reference on POs — supplier_bill_no + supplier_bill_date fields; shown on PO PDF
+[x] 7.B Payment Status Tracking on Invoices — Unpaid / Partial / Paid badge; payment_status + payment_date + payment_notes columns on invoices table
+[x] 7.C Home Dashboard — outstanding invoices card, stock alerts (out of stock + below min), FY sales/purchases totals, recent POs/MIs/Invoices
+[x] 7.D Vehicle Type in Job Cost & Reports — vehicle_type column on vehicles; shown in job cost panel and invoice summary report
+[x] 7.E Bank Details & Terms on Invoice PDFs — bank_name/account/IFSC/branch + invoice_terms stored in company_settings; printed on customer and insurance PDFs
+[x] 7.F Low-stock → Create PO shortcut — button on stock dashboard row pre-fills new PO with the material
+[x] 7.G RLS enabled on all 17 tables — authenticated_full_access policy FOR ALL TO authenticated USING (true)
+[x] 7.H Centralised constants — src/lib/constants.ts (all status enums); src/lib/fy.ts (single source for FY logic)
+
+[x] 7.1 Settings — Financial Year switching — getFYOptions() added to fy.ts; sidebar footer replaced with <select> dropdown using useFY(); sessionStorage persistence added to FYProvider (tab-scoped); FYBanner now activates automatically
+[~] 7.2 Settings — PDF config — PARTIAL: company name/address/GSTIN done; logo upload NOT done (deferred to Phase 8)
+[x] 7.3 Global financial year context — reports-client.tsx reads activeFY from useFY(); invoice-summary, purchase-report, monthly-stock all reset their filters via useEffect when activeFY changes; invoice list also wired to re-fetch on FY change (was missing, now fixed)
+[x] 7.4 Historical year amber banner — fully operational now that 7.1 FY switcher is built; amber dot also shown in sidebar when viewing historical FY
 [x] 7.5 GSTIN format validation — shared validateGstinFormat() in utils.ts; blur warning toast on customer/supplier/settings forms; settings save blocked if regex fails
 [x] 7.6 Cross-year date validation — isDateInFY() in fy.ts; blocks PO save, Invoice draft/finalize, MI draft/reapply/confirm if date outside activeFY
-[~] 7.7 Session timeout handling — PARTIAL: middleware redirects unauthenticated users to /login; no "session expired" message shown to user
+[x] 7.7 Session timeout handling — middleware detects prior Supabase cookie and redirects to /login?reason=session_expired; login page shows amber "session expired" info box; AuthSessionGuard client component in dashboard layout catches in-app token expiry via onAuthStateChange and shows Sonner toast before redirecting
 [ ] 7.8 Mobile responsiveness pass (Dashboard + Reports pages only) — NOT done
 [ ] 7.9 End-to-end testing: PO → Received → MI → Issued → Invoice → Finalize → Stock Dashboard — NOT done (no test files exist)
 [x] 7.10 Deploy to Vercel production (hosting decision changed from Cloudflare Workers to Vercel; app is live on Vercel)

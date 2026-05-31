@@ -1,6 +1,5 @@
 export const dynamic = "force-dynamic";
 
-import { getCurrentFY } from "@/lib/fy";
 import {
   getActiveVehiclesForReports,
   getActiveSuppliersForReports,
@@ -19,15 +18,12 @@ export default async function ReportsPage() {
     getCompanySettings(),
   ]);
 
-  const currentFY = getCurrentFY();
-
   return (
     <ReportsClient
       vehicles={vehicles}
       suppliers={suppliers}
       materials={materials}
       customers={customers}
-      currentFY={currentFY}
       companySetting={companySetting}
     />
   );

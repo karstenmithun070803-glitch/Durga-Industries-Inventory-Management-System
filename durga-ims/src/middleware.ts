@@ -33,6 +33,11 @@ export async function middleware(request: NextRequest) {
   if (!user && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    // If a Supabase auth cookie existed, the session expired rather than never existing
+    const hadSession = request.cookies.getAll().some(
+      (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
+    );
+    if (hadSession) url.searchParams.set("reason", "session_expired");
     return NextResponse.redirect(url);
   }
 

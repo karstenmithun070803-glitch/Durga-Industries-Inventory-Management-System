@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
@@ -10,8 +10,8 @@ import { getPurchaseReport } from "@/lib/actions/reports.actions";
 import type { PurchaseReportRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 
-function buildFYOptions(currentFY: string) {
-  const [startYear] = currentFY.split("-").map(Number);
+function buildFYOptions(defaultFY: string) {
+  const [startYear] = defaultFY.split("-").map(Number);
   return Array.from({ length: 5 }, (_, i) => {
     const y = startYear - i;
     const label = `${y}-${y + 1}`;
@@ -36,13 +36,18 @@ function fmtQty(v: number) {
 interface Props {
   suppliers: { id: string; name: string }[];
   materials: { id: string; name: string; material_no: number }[];
-  currentFY: string;
+  defaultFY: string;
   companySetting?: CompanySetting;
 }
 
-export function PurchaseReport({ suppliers, materials, currentFY, companySetting }: Props) {
-  const FY_OPTIONS = buildFYOptions(currentFY);
-  const [fy, setFy] = useState(currentFY);
+export function PurchaseReport({ suppliers, materials, defaultFY, companySetting }: Props) {
+  const FY_OPTIONS = buildFYOptions(defaultFY);
+  const [fy, setFy] = useState(defaultFY);
+
+  // When the global FY switcher changes, reset this report's FY filter to match
+  useEffect(() => {
+    setFy(defaultFY);
+  }, [defaultFY]);
   const [status, setStatus] = useState("Received");
   const [supplierId, setSupplierId] = useState("");
   const [materialId, setMaterialId] = useState("");
@@ -163,9 +168,9 @@ export function PurchaseReport({ suppliers, materials, currentFY, companySetting
           <Button onClick={runReport} disabled={isLoading} className="h-9">
             {isLoading ? "Loading…" : "Run Report"}
           </Button>
-          {(supplierId || materialId || dateFrom || dateTo || status !== "Received" || fy !== currentFY) && (
+          {(supplierId || materialId || dateFrom || dateTo || status !== "Received" || fy !== defaultFY) && (
             <button
-              onClick={() => { setSupplierId(""); setMaterialId(""); setDateFrom(""); setDateTo(""); setStatus("Received"); setFy(currentFY); }}
+              onClick={() => { setSupplierId(""); setMaterialId(""); setDateFrom(""); setDateTo(""); setStatus("Received"); setFy(defaultFY); }}
               className="text-xs text-blue-600 underline h-9 px-1"
             >
               Clear filters

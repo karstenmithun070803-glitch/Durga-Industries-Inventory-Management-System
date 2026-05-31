@@ -7,6 +7,7 @@ import { InvoiceSummaryReport } from "./invoice-summary";
 import { PurchaseReport } from "./purchase-report";
 import { MonthlyStockReport } from "./monthly-stock";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
+import { useFY } from "@/lib/financial-year";
 
 type ReportTab = "invoice-summary" | "purchase" | "monthly-stock";
 
@@ -15,7 +16,6 @@ interface Props {
   suppliers: { id: string; name: string }[];
   materials: { id: string; name: string; material_no: number }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];
-  currentFY: string;
   companySetting?: CompanySetting;
 }
 
@@ -25,7 +25,8 @@ const NAV_ITEMS: { id: ReportTab; label: string; icon: React.ElementType }[] = [
   { id: "monthly-stock", label: "Monthly Stock Report", icon: BarChart2 },
 ];
 
-export function ReportsClient({ vehicles, suppliers, materials, customers, currentFY, companySetting }: Props) {
+export function ReportsClient({ vehicles, suppliers, materials, customers, companySetting }: Props) {
+  const { activeFY } = useFY();
   const [activeTab, setActiveTab] = useState<ReportTab>("invoice-summary");
 
   return (
@@ -59,7 +60,7 @@ export function ReportsClient({ vehicles, suppliers, materials, customers, curre
           <InvoiceSummaryReport
             vehicles={vehicles}
             customers={customers}
-            currentFY={currentFY}
+            defaultFY={activeFY}
             companySetting={companySetting}
           />
         )}
@@ -67,14 +68,14 @@ export function ReportsClient({ vehicles, suppliers, materials, customers, curre
           <PurchaseReport
             suppliers={suppliers}
             materials={materials}
-            currentFY={currentFY}
+            defaultFY={activeFY}
             companySetting={companySetting}
           />
         )}
         {activeTab === "monthly-stock" && (
           <MonthlyStockReport
             materials={materials}
-            currentFY={currentFY}
+            defaultFY={activeFY}
             companySetting={companySetting}
           />
         )}

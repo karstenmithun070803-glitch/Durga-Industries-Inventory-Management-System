@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -11,22 +11,29 @@ import { PrintButton } from "@/components/pdf/print-button";
 import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
 import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
 import { formatCode } from "@/lib/utils";
-import { deleteInvoice, markInvoicePayment } from "@/lib/actions/invoices.actions";
+import { deleteInvoice, markInvoicePayment, getInvoices } from "@/lib/actions/invoices.actions";
 import type { InvoiceRow } from "@/types";
+import { useFY } from "@/lib/financial-year";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { Pencil, Trash2, Plus, CreditCard } from "lucide-react";
 import { INVOICE_STATUS, PAYMENT_STATUS } from "@/lib/constants";
 
 interface Props {
-  rows: InvoiceRow[];
+  initialRows: InvoiceRow[];
   fy: string;
   companySetting?: CompanySetting;
 }
 
 type StatusFilter = "all" | "Draft" | "Finalized" | "Cancelled";
 
-export function InvoiceListClient({ rows, fy, companySetting }: Props) {
+export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
   const router = useRouter();
+  const { activeFY } = useFY();
+  const [rows, setRows] = useState<InvoiceRow[]>(initialRows);
+
+  useEffect(() => {
+    getInvoices(activeFY).then(setRows);
+  }, [activeFY]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");

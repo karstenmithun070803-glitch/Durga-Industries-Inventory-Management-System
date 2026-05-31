@@ -11,10 +11,11 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reason?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, reason } = await searchParams;
   const errorMessage = error ? (ERROR_MESSAGES[error] ?? "An error occurred.") : null;
+  const sessionExpired = reason === "session_expired";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -30,6 +31,12 @@ export default async function LoginPage({
         {/* Card */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8">
           <h2 className="text-base font-semibold text-slate-800 mb-6">Sign in</h2>
+
+          {sessionExpired && (
+            <div className="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+              Your session has expired. Please sign in again to continue.
+            </div>
+          )}
 
           {errorMessage && (
             <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
