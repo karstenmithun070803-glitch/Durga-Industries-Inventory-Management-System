@@ -318,6 +318,115 @@ UAT is considered passed when:
 
 ---
 
+---
+
+## New Questions — Pre Go-Live Checklist
+
+These questions are separate from the 9 UAT scenarios above. They must be answered **before the client goes live** — they are go-live blockers or will cause confusion on day 1 if not resolved.
+
+---
+
+### A — Opening Stock (Critical)
+
+The system starts with zero stock for every material. Before real work begins, current warehouse stock levels must be entered.
+
+**Questions to ask:**
+- Have you done a recent physical stock count? If yes, when?
+- Do you want to enter opening stock via the **Stock Adjustment** tool (Stock page → Adjust) for each material?
+- What date do you want to treat as the official go-live date? (All stock adjustments should be dated that day)
+- Should opening stock adjustments carry a reason like "Opening balance — [date]"?
+
+**Action required:** Do not go live until opening stock is entered. Every MI slip after go-live will reduce from zero otherwise.
+
+---
+
+### B — Invoice and PO Number Continuity (Critical)
+
+The system starts bill numbers from **D-00001** and PO numbers from **PO-0001** for FY 2026-2027. If the client has already issued invoices or placed orders manually since April 1, 2026, the system will generate duplicate numbers — which is illegal under GST.
+
+**Questions to ask:**
+- Have you issued any invoices since April 1, 2026? What was the last invoice number?
+- Have you raised any purchase orders since April 1, 2026? What was the last PO number?
+
+**If yes:** The starting sequence in the system needs to be adjusted before the first real invoice/PO is created. (This requires a one-time DB fix — flag for developer.)
+
+---
+
+### C — Customer GSTIN Verification (Critical)
+
+Every invoice's GST type (CGST+SGST vs IGST) is determined entirely by the customer's GSTIN state code. A missing or incorrect GSTIN means the wrong tax is applied — this is a legal compliance issue.
+
+**Questions to ask:**
+- Have all your regular customers been entered in the system with their correct GSTIN?
+- For customers without a GSTIN (unregistered individuals or small businesses), do you still issue them formal GST invoices? How do you currently handle tax for them?
+- Can you show your CA's or accountant's customer list and verify it matches what's in the system?
+
+---
+
+### D — HSN Codes (Critical for Insurance Invoices)
+
+Insurance company PDFs require an HSN code on every line item. Materials without HSN codes will show a blank HSN column on the PDF, which the insurance company may reject.
+
+**Questions to ask:**
+- Have HSN codes been filled in for all materials in the Materials master?
+- Who provided the HSN codes — your CA or accountant?
+- Are there any materials where you are unsure of the correct HSN code?
+
+**Tip:** Go to Masters → Materials → check each material's HSN field. Any blank = needs to be filled before the insurance PDF is used.
+
+---
+
+### E — Go-Live Date and Historical Data (Important)
+
+**Questions to ask:**
+- When do you plan to start using this system for real, day-to-day work?
+- Between April 1, 2026 and the go-live date, have you done jobs and issued invoices manually? Do you want to enter those into the system, or start fresh from the go-live date?
+- If starting fresh: are you comfortable that old jobs won't appear in stock history or reports?
+
+---
+
+### F — "Affects Inventory" Flag (Important)
+
+On every Material Issue slip, each line item has an **Affects Inventory** checkbox. When checked, issuing that material reduces your warehouse stock. When unchecked, the material appears on the slip but does NOT reduce stock.
+
+**Questions to ask:**
+- Are there materials you issue on slips that you do NOT want to deduct from warehouse stock? (Examples: materials bought specifically for one job and never stored in your warehouse, or small consumables you don't track)
+- For each such material, should "Affects Inventory" be unchecked by default in the Material master?
+
+---
+
+### G — Contractor Tracking (Important)
+
+Each line item on a Material Issue slip can be assigned to a specific contractor. This is for tracking which contractor used which materials.
+
+**Questions to ask:**
+- Do you work with outside contractors (labour contractors, fabricators, etc.)?
+- If yes, are all your regular contractors entered in Masters → Contractors?
+- Is assigning a different contractor per material line item how your work is structured — or do you assign one contractor to the whole job?
+- If you don't use contractors at all, leave the contractor field blank — it is optional.
+
+---
+
+### H — Internet and Daily Users (Nice to Have)
+
+**Questions to ask:**
+- Is there reliable internet at the Durga Industries premises where this app will be used?
+- Who will use the app day-to-day — the owner only, or also a staff member?
+- If a staff member uses it, are you comfortable that they currently have full access (same as the owner)? User roles are planned for Phase 8.
+
+---
+
+### I — Reverse Charge (Nice to Have)
+
+The invoice form has a **Reverse Charge** checkbox. Under GST reverse charge, the buyer (your customer) is responsible for paying the tax directly to the government instead of you.
+
+**Questions to ask:**
+- Do any of your customers ever ask you to issue invoices under reverse charge?
+- Do you receive any services where reverse charge applies to you as the buyer? (Examples: goods transport by road, legal services, security services)
+- If reverse charge is not relevant to your business, this checkbox can simply be ignored.
+
+---
+
 ## Session Notes
 
 *(Fill during UAT)*
