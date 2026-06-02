@@ -21,7 +21,7 @@ type MaterialIssueRow = {
   total_amount: string;
   vehicle_id: string;
   vehicle_name: string;
-  job_ref_no: number;
+  job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
@@ -76,7 +76,7 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
       {slipGroups.map(([slipId, items]) => {
         const first = items[0];
         const slipLabel = formatCode("MI-", first.slip_number, 4);
-        const jobLabel = formatCode("J", first.job_ref_no, 5);
+        const jobLabel = first.job_ref_no;
         const slipTotal = items.reduce((s, r) => s + parseFloat(r.amount ?? "0"), 0);
 
         return (

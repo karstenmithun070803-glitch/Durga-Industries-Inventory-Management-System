@@ -25,7 +25,7 @@ export interface InvoiceSummaryRow {
   bill_date: string;
   vehicle_name: string | null;
   vehicle_type: string | null;
-  job_ref_no: number | null;
+  job_ref_no: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
   status: string;

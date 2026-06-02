@@ -27,7 +27,7 @@ export function JobCostDocument({ result, companySetting }: Props) {
   const coAddress = companySetting?.address      ?? COMPANY_ADDRESS;
   const coGstin   = companySetting?.gstin        ?? COMPANY_GSTIN;
 
-  const jobLabel = `J${String(result.vehicle.job_ref_no).padStart(5, "0")}`;
+  const jobLabel = result.vehicle.job_ref_no;
 
   return (
     <Document title={`Job Cost — ${result.vehicle.vehicle_name}`}>
@@ -69,8 +69,6 @@ export function JobCostDocument({ result, companySetting }: Props) {
             <Text style={[styles.plainTableHeadCell, { width: "8%", marginLeft: 4 }]}>Unit</Text>
             <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "right" }]}>Rate</Text>
             <Text style={[styles.plainTableHeadCell, { width: "14%", textAlign: "right" }]}>Total</Text>
-            <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "right" }]}>Billed</Text>
-            <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "right" }]}>Unbilled</Text>
           </View>
           <View style={styles.separator} />
 
@@ -82,8 +80,6 @@ export function JobCostDocument({ result, companySetting }: Props) {
               <Text style={[styles.plainTableCell, { width: "8%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
               <Text style={[styles.plainTableCell, { width: "12%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
               <Text style={[styles.plainTableCellBold, { width: "14%", textAlign: "right" }]}>{fmtAmt(r.total_amount)}</Text>
-              <Text style={[styles.plainTableCell, { width: "12%", textAlign: "right" }]}>{fmtAmt(r.billed_amount)}</Text>
-              <Text style={[styles.plainTableCell, { width: "12%", textAlign: "right" }]}>{fmtAmt(r.unbilled_amount)}</Text>
             </View>
           ))}
 
@@ -92,8 +88,6 @@ export function JobCostDocument({ result, companySetting }: Props) {
           {/* Totals */}
           <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 4, gap: 16 }}>
             <Text style={styles.plainTableCellBold}>Total Cost: {fmtAmt(result.totals.total_cost)}</Text>
-            <Text style={styles.plainTableCellBold}>Billed: {fmtAmt(result.totals.total_billed)}</Text>
-            <Text style={styles.plainTableCellBold}>Unbilled: {fmtAmt(result.totals.total_unbilled)}</Text>
           </View>
         </View>
 

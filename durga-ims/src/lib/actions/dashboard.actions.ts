@@ -9,27 +9,24 @@ import {
   suppliers,
   vehicles,
 } from "@/lib/db/schema";
-import { eq, and, sql, desc, ne } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { getCurrentFY } from "@/lib/fy";
-import { INVOICE_STATUS, PAYMENT_STATUS, PO_STATUS } from "@/lib/constants";
+import { INVOICE_STATUS, PO_STATUS } from "@/lib/constants";
 
 export interface DashboardStats {
-  outstandingCount: number;
-  outstandingTotal: number;
   lowStockCount: number;
   outStockCount: number;
   fyTotalSales: number;
   fyTotalPurchases: number;
   recentPOs: { id: string; po_number: number; po_date: string; status: string; supplier_name: string | null }[];
   recentMIs: { id: string; slip_number: number; vehicle_name: string | null; issue_date: string; status: string }[];
-  recentInvoices: { id: string; bill_number: string; customer_name: string | null; bill_date: string; payment_status: string }[];
+  recentInvoices: { id: string; bill_number: string; customer_name: string | null; bill_date: string }[];
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const fy = getCurrentFY();
 
   const [
-    outstandingRows,
     salesRow,
     purchaseRow,
     stockRows,
@@ -37,15 +34,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     recentMIRows,
     recentInvoiceRows,
   ] = await Promise.all([
-    // Outstanding invoices: Finalized + not Paid
-    db
-      .select({ count: sql<string>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${invoices.net_amount}), 0)` })
-      .from(invoices)
-      .where(and(
-        eq(invoices.status, INVOICE_STATUS.FINALIZED),
-        ne(invoices.payment_status, PAYMENT_STATUS.PAID),
-      )),
-
     // This FY total sales
     db
       .select({ total: sql<string>`COALESCE(SUM(${invoices.net_amount}), 0)` })
@@ -105,15 +93,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         bill_number: invoices.bill_number,
         bill_date: invoices.bill_date,
         customer_name: invoices.customer_name,
-        payment_status: invoices.payment_status,
       })
       .from(invoices)
       .orderBy(desc(invoices.bill_date), desc(invoices.bill_number))
       .limit(5),
   ]);
-
-  const outstandingCount = parseInt(outstandingRows[0]?.count ?? "0");
-  const outstandingTotal = parseFloat(outstandingRows[0]?.total ?? "0");
 
   const outStockCount = stockRows.filter((r) => parseFloat(r.current_stock) <= 0).length;
   const lowStockCount = stockRows.filter((r) => {
@@ -123,8 +107,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   }).length;
 
   return {
-    outstandingCount,
-    outstandingTotal,
     lowStockCount,
     outStockCount,
     fyTotalSales: parseFloat(salesRow[0]?.total ?? "0"),
@@ -148,7 +130,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       bill_number: r.bill_number,
       bill_date: new Date(r.bill_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
       customer_name: r.customer_name,
-      payment_status: r.payment_status,
     })),
   };
 }

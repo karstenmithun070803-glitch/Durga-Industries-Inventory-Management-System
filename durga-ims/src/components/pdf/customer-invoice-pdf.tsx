@@ -19,9 +19,6 @@ interface Props {
   companySetting?: CompanySetting;
 }
 
-function formatJobCode(num: number): string {
-  return `J${String(num).padStart(5, "0")}`;
-}
 
 export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
   const coName = companySetting?.company_name ?? COMPANY_NAME;
@@ -33,9 +30,6 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
       {groups.map((items) => {
         const first = items[0];
 
-        const discount = parseFloat(first.discount || "0");
-        const net = parseFloat(first.net_amount || "0");
-        const gross = discount > 0 ? net + discount : net;
 
         return (
           <Page key={first.id} size="A4" style={styles.page}>
@@ -64,7 +58,7 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
             </View>
             <View style={styles.infoLine}>
               <Text style={styles.infoLineLabel}>JOB NO.</Text>
-              <Text style={styles.infoLineValue}>: {formatJobCode(first.job_ref_no)}</Text>
+              <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
             </View>
             {first.customer_name && (
               <View style={styles.infoLine}>
@@ -90,14 +84,6 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
                 <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
               </View>
             )}
-            {first.rev_charge_status && (
-              <View style={[styles.infoLine, { marginTop: 3 }]}>
-                <Text style={[styles.infoLineValue, { fontFamily: "Helvetica-Oblique", fontSize: 8 }]}>
-                  * Tax to be paid on reverse charge basis
-                </Text>
-              </View>
-            )}
-
             {/* ── Table — simplified (no tax columns) ── */}
             <View style={[styles.table, { marginTop: 8 }]}>
               <View style={styles.separator} />
@@ -126,21 +112,17 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
 
               <View style={styles.separator} />
 
-              {/* Simplified totals — Net Amount only */}
+              {/* Totals — Net Amount only */}
               <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2, gap: 8 }}>
                 <View style={{ alignItems: "flex-end", gap: 3 }}>
-                  {discount > 0 && <Text style={styles.plainTableCell}>Subtotal</Text>}
-                  {discount > 0 && <Text style={styles.plainTableCell}>Discount</Text>}
                   <Text style={styles.plainTableCellBold}>Net Amount</Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 3, minWidth: 90 }}>
-                  {discount > 0 && <Text style={styles.plainTableCell}>{fmtAmt(String(gross))}</Text>}
-                  {discount > 0 && <Text style={styles.plainTableCell}>- {fmtAmt(String(discount))}</Text>}
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>
               <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", marginTop: 4, color: "#374151" }}>
-                {numberToWords(net)}
+                {numberToWords(parseFloat(first.net_amount || "0"))}
               </Text>
             </View>
 

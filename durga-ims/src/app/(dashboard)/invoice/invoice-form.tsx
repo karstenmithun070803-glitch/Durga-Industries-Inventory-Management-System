@@ -13,7 +13,6 @@ import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf
 import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
-import { formatCode } from "@/lib/utils";
 
 function toISODate(d: string | Date | null | undefined): string {
   if (!d) return "";
@@ -27,7 +26,6 @@ import {
   finalizeInvoice,
   revertInvoiceToDraft,
   deleteInvoice,
-  cancelInvoice,
   getIssuedMIsForVehicle,
   getAllIssuedMIItemsForVehicle,
   getLinkedSlipsForInvoice,
@@ -39,7 +37,7 @@ type Mode = "new" | "edit" | "view";
 
 interface VehicleOption {
   id: string;
-  job_ref_no: number;
+  job_ref_no: string;
   vehicle_name: string;
   customer_id: string | null;
   customer_name: string | null;
@@ -135,6 +133,7 @@ function itemsFromMISlips(slips: MISlipWithItems[], gstType: string): LineItemDr
       unit_id: item.unit_id ?? "",
       unit_name: item.unit_name ?? "",
       rate: item.rate,
+      baseRate: item.rate,
       tax_percentage: item.tax_percentage,
       cgst_amount: item.cgst_amount,
       sgst_amount: item.sgst_amount,
@@ -164,6 +163,7 @@ function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[]): LineItemDraft
     unit_id: item.unit_id ?? "",
     unit_name: item.unit_name ?? "",
     rate: item.rate,
+    baseRate: item.rate,
     tax_percentage: item.tax_percentage,
     cgst_amount: item.cgst_amount,
     sgst_amount: item.sgst_amount,
@@ -245,7 +245,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   const [billDate, setBillDate] = useState(
     invoice ? toISODate(invoice.bill_date) : new Date().toISOString().slice(0, 10)
   );
-  const [rateDate, setRateDate] = useState(invoice?.rate_date ? toISODate(invoice.rate_date) : "");
 
   // Tax rate selection (determines bill number prefix)
   const [taxRateId, setTaxRateId] = useState("");
@@ -258,9 +257,8 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   const [selectedSlipIds, setSelectedSlipIds] = useState<Set<string>>(new Set());
   const [miLoading, setMiLoading] = useState(false);
 
-  const [materialMargin, setMaterialMargin] = useState(invoice?.material_margin ?? "0");
-  const [discount, setDiscount] = useState(invoice?.discount ?? "0");
-  const [revCharge, setRevCharge] = useState(invoice?.rev_charge_status ?? false);
+  // Margin % — fresh per new invoice; loaded from DB when editing
+  const [materialMargin, setMaterialMargin] = useState(invoice?.material_margin ?? "");
 
   // ── Line items state ──────────────────────────────────────────────────────
   const [rows, setRows] = useState<LineItemDraft[]>(
@@ -270,7 +268,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   // ── Linked slips for view mode (read-only checklist) ─────────────────────
   const [linkedSlips, setLinkedSlips] = useState<MISlipMeta[]>([]);
@@ -278,8 +275,32 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   // ── Derived totals ────────────────────────────────────────────────────────
   const totals = calcRowTotals(rows);
   const grossTotal = totals.grand;
-  const discountAmt = parseFloat(discount || "0");
-  const netAmount = Math.max(0, grossTotal - discountAmt);
+  const netAmount = grossTotal;
+
+  // ── Margin % → recalculate all row rates when margin changes ──────────────
+  useEffect(() => {
+    if (rows.length === 0) return;
+    const marginFactor = 1 + parseFloat(materialMargin || "0") / 100;
+    setRows((prev) =>
+      prev.map((row) => {
+        const base = parseFloat(row.baseRate || row.rate || "0");
+        const newRate = (base * marginFactor).toFixed(4);
+        const qty = parseFloat(row.qty || "0");
+        const taxPct = parseFloat(row.tax_percentage || "0");
+        const newAmount = (parseFloat(newRate) * qty).toFixed(2);
+        const amt = parseFloat(newAmount);
+        let cgst = "0.00", sgst = "0.00", igst = "0.00";
+        if (row.gst_type === "CGST_SGST") {
+          const half = ((amt * taxPct) / 100 / 2).toFixed(2);
+          cgst = half; sgst = half;
+        } else if (row.gst_type === "IGST") {
+          igst = ((amt * taxPct) / 100).toFixed(2);
+        }
+        return { ...row, rate: newRate, amount: newAmount, cgst_amount: cgst, sgst_amount: sgst, igst_amount: igst };
+      })
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [materialMargin]);
 
   // Rebuild rows from currently selected slips + any manually added rows
   const rebuildRowsFromSlips = useCallback(
@@ -302,6 +323,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
             unit_id: item.unit_id ?? "",
             unit_name: item.unit_name ?? "",
             rate: item.rate,
+            baseRate: item.rate,
             tax_percentage: item.tax_percentage,
             cgst_amount: item.cgst_amount,
             sgst_amount: item.sgst_amount,
@@ -417,14 +439,11 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
       vehicle_id: vehicleId,
       slip_ids: Array.from(selectedSlipIds),
       bill_date: billDate,
-      rate_date: rateDate || null,
       inv_prefix: invPrefix ?? "",
       financial_year: fy,
       tax_percentage: "0",
       material_margin: materialMargin,
-      discount: discount,
       net_amount: netAmount.toFixed(2),
-      rev_charge_status: revCharge,
       items: filledRows.map((r) => ({
         material_id: r.material_id,
         hsn_code: r.hsn_code,
@@ -521,29 +540,13 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     }
   }
 
-  async function handleCancel() {
-    if (!invoice) return;
-    setIsSaving(true);
-    try {
-      await cancelInvoice(invoice.id);
-      toast.success(`${invoice.bill_number} cancelled.`);
-      router.push("/invoice");
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to cancel.");
-    } finally {
-      setIsSaving(false);
-      setShowCancelDialog(false);
-    }
-  }
-
   const isFinalized = invoice?.status === "Finalized";
-  const isCancelled = invoice?.status === "Cancelled";
   const fmt2 = (n: number) =>
     n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${formatCode("J", v.job_ref_no, 5)} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
+    label: `${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
   }));
 
   const taxRateOptions = taxRates.map((t) => ({
@@ -578,28 +581,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
         </div>
       )}
 
-      {/* Cancelled banner */}
-      {isCancelled && (
-        <div className="mx-6 mb-3 flex items-start gap-2 bg-rose-50 border border-rose-200 rounded px-4 py-3 text-sm text-rose-800">
-          <span className="mt-0.5">✕</span>
-          <span>
-            This invoice is <strong>Cancelled</strong>. It is a permanent record and cannot be edited or deleted.
-            The MI slips linked to it have been freed and can be used in a corrective invoice.
-            {(invoice?.cancelled_by || invoice?.cancelled_at) && (
-              <span className="block mt-1 text-xs text-rose-600">
-                {invoice.cancelled_by && <>Cancelled by {invoice.cancelled_by}</>}
-                {invoice.cancelled_by && invoice.cancelled_at && " · "}
-                {invoice.cancelled_at && <>
-                  {new Date(invoice.cancelled_at).toLocaleString("en-IN", {
-                    day: "2-digit", month: "short", year: "numeric",
-                    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
-                  })} IST
-                </>}
-              </span>
-            )}
-          </span>
-        </div>
-      )}
 
       <div className="flex-1 overflow-y-auto px-6 pb-32">
         {/* ── Header card ─────────────────────────────────────────────────── */}
@@ -641,7 +622,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
               <label className="text-xs text-slate-500 block mb-1">Vehicle / Job</label>
               {isReadOnly ? (
                 <div className="h-9 px-3 flex items-center text-sm text-slate-700">
-                  {formatCode("J", invoice?.job_ref_no ?? 0, 5)} — {invoice?.vehicle_name}
+                  {invoice?.job_ref_no ?? ""} — {invoice?.vehicle_name}
                 </div>
               ) : (
                 <Combobox
@@ -790,32 +771,12 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
                 )}
               </div>
             )}
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">Rate Date (optional)</label>
-              {isReadOnly ? (
-                <div className="h-9 px-3 flex items-center text-sm text-slate-600">
-                  {rateDate ? new Date(rateDate).toLocaleDateString("en-IN") : "—"}
-                </div>
-              ) : (
-                <Input
-                  type="date"
-                  value={rateDate}
-                  onChange={(e) => setRateDate(e.target.value)}
-                  className="h-9 text-sm"
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Row 4: Margin / Discount / Reverse Charge */}
+          {/* Row 4: Margin % */}
           <div className="grid grid-cols-4 gap-4 items-end">
             <div>
-              <label className="text-xs text-slate-500 block mb-1">
-                Material Margin %
-                <span className="ml-1 text-amber-600 text-xs">(pending client confirmation)</span>
-              </label>
+              <label className="text-xs text-slate-500 block mb-1">Material Margin %</label>
               {isReadOnly ? (
-                <div className="h-9 px-3 flex items-center text-sm text-slate-700">{materialMargin}</div>
+                <div className="h-9 px-3 flex items-center text-sm text-slate-700">{materialMargin || "—"}</div>
               ) : (
                 <Input
                   type="number"
@@ -824,51 +785,11 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
                   className="h-9 text-sm"
                   min="0"
                   step="any"
+                  placeholder="0"
                 />
               )}
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">Discount (₹)</label>
-              {isReadOnly ? (
-                <div className="h-9 px-3 flex items-center text-sm text-slate-700">{discount}</div>
-              ) : (
-                <Input
-                  type="number"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  className={`h-9 text-sm ${
-                    discountAmt > grossTotal ? "border-red-400 focus-visible:ring-red-400" : ""
-                  }`}
-                  min="0"
-                  step="any"
-                />
-              )}
-              {discountAmt > grossTotal && (
-                <p className="text-xs text-red-600 mt-0.5">Exceeds total</p>
-              )}
-            </div>
-            <div className="flex items-center gap-2 pb-1">
-              <input
-                type="checkbox"
-                id="rev_charge"
-                checked={revCharge}
-                onChange={(e) => setRevCharge(e.target.checked)}
-                disabled={isReadOnly}
-                className="w-4 h-4 accent-slate-700"
-              />
-              <label htmlFor="rev_charge" className="text-sm text-slate-700 cursor-pointer">
-                Reverse Charge
-              </label>
             </div>
           </div>
-
-          {/* Reverse charge alert */}
-          {revCharge && (
-            <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2 text-xs text-amber-800">
-              ⚠ Reverse charge is ON. Tax liability shifts to the recipient. PDF will show
-              "Tax to be paid on reverse charge basis."
-            </div>
-          )}
         </div>
 
         {/* ── Line Items grid ────────────────────────────────────────────── */}
@@ -911,41 +832,13 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
               IGST: <strong className="text-slate-800">₹{fmt2(totals.igst)}</strong>
             </span>
           )}
-          {discountAmt > 0 && (
-            <span className="text-slate-500">
-              Discount: <strong className="text-red-600">−₹{fmt2(discountAmt)}</strong>
-            </span>
-          )}
           <span className="ml-auto text-base font-semibold text-slate-900">
             Net Amount: ₹{fmt2(netAmount)}
           </span>
         </div>
 
         <div className="flex items-center gap-3 px-6 py-3">
-          {isCancelled ? (
-            // Cancelled: read-only, no actions except PDF print and back
-            <>
-              {invoice && (
-                <>
-                  <PrintButton
-                    label="Insurance PDF"
-                    getDocument={() => (
-                      <InsuranceInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} companySetting={companySetting} />
-                    )}
-                  />
-                  <PrintButton
-                    label="Customer PDF"
-                    getDocument={() => (
-                      <CustomerInvoiceDocument groups={[buildPdfRows(invoice)]} fy={fy} companySetting={companySetting} />
-                    )}
-                  />
-                </>
-              )}
-              <Button variant="outline" size="sm" onClick={() => router.push("/invoice")}>
-                Back to Invoices
-              </Button>
-            </>
-          ) : mode === "view" ? (
+          {mode === "view" ? (
             <>
               <Button
                 variant="outline"
@@ -989,17 +882,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
               >
                 Revert to Draft
               </Button>
-              {invoice && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 ml-auto"
-                  onClick={() => setShowCancelDialog(true)}
-                  disabled={isSaving}
-                >
-                  Cancel Invoice
-                </Button>
-              )}
             </>
           ) : (
             <>
@@ -1019,15 +901,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-rose-500 hover:text-rose-700 hover:bg-rose-50"
-                    onClick={() => setShowCancelDialog(true)}
-                    disabled={isSaving}
-                  >
-                    Cancel Invoice
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
                     className="text-red-500 hover:text-red-700 hover:bg-red-50"
                     onClick={() => setShowDeleteDialog(true)}
                     disabled={isSaving}
@@ -1038,7 +911,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
               )}
             </>
           )}
-          {!isCancelled && mode !== "view" && (
+          {mode !== "view" && (
             <Button
               variant="ghost"
               size="sm"
@@ -1056,7 +929,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
         open={showFinalizeDialog}
         onOpenChange={setShowFinalizeDialog}
         title={`Finalize ${billNumber}?`}
-        description={`Mark this invoice as Finalized (Net Amount: ₹${fmt2(netAmount)})? You can still edit it later if needed — no stock impact either way.${revCharge ? " ⚠ Reverse charge is enabled." : ""}`}
+        description={`Mark this invoice as Finalized (Net Amount: ₹${fmt2(netAmount)})? You can still edit it later if needed — no stock impact either way.`}
         confirmLabel="Finalize Invoice"
         onConfirm={handleFinalize}
       />
@@ -1070,14 +943,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
         onConfirm={handleDelete}
       />
 
-      <ConfirmDialog
-        open={showCancelDialog}
-        onOpenChange={setShowCancelDialog}
-        title={`Cancel ${invoice?.bill_number}?`}
-        description="This will permanently cancel the invoice. It cannot be edited or deleted after cancellation. The linked MI slips will be freed for use in a corrective invoice."
-        confirmLabel={isSaving ? "Cancelling…" : "Cancel Invoice"}
-        onConfirm={handleCancel}
-      />
     </div>
   );
 }

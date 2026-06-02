@@ -8,13 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createVehicle, updateVehicle, deleteVehicle, reactivateVehicle } from "@/lib/actions/vehicles.actions";
-import { formatCode, matchesCode } from "@/lib/utils";
+import { formatCode } from "@/lib/utils";
 import type { Customer } from "@/types";
 import { Pencil, RotateCcw, UserX } from "lucide-react";
 import { toast } from "sonner";
 
-type VehicleRow = { id: string; job_ref_no: number; vehicle_name: string; type: string; customer_id: string | null; customer_name: string | null; is_active: boolean; created_at: Date; updated_at: Date };
-const EMPTY = { vehicle_name: "", type: "New", customer_id: "" };
+type VehicleRow = { id: string; job_ref_no: string; vehicle_name: string; type: string; customer_id: string | null; customer_name: string | null; is_active: boolean; created_at: Date; updated_at: Date };
+const EMPTY = { job_ref_no: "", vehicle_name: "", type: "New", customer_id: "" };
 
 interface Props { vehicles: VehicleRow[]; customers: Customer[]; }
 
@@ -32,18 +32,25 @@ export function VehiclesClient({ vehicles, customers }: Props) {
     return (
       v.vehicle_name.toLowerCase().includes(q) ||
       (v.customer_name ?? "").toLowerCase().includes(q) ||
-      matchesCode(search, "J", v.job_ref_no, 5)
+      (v.job_ref_no ?? "").toLowerCase().includes(q)
     );
   });
 
-  function startEdit(v: VehicleRow) { setEditing(v); setForm({ vehicle_name: v.vehicle_name, type: v.type, customer_id: v.customer_id ?? "" }); }
+  function startEdit(v: VehicleRow) {
+    setEditing(v);
+    setForm({ job_ref_no: v.job_ref_no, vehicle_name: v.vehicle_name, type: v.type, customer_id: v.customer_id ?? "" });
+  }
   function resetForm() { setEditing(null); setForm(EMPTY); }
   function set(key: string, val: string) { setForm((f) => ({ ...f, [key]: val })); }
 
   function handleSubmit() {
     startTransition(async () => {
       try {
-        if (editing) { await updateVehicle(editing.id, form); } else { await createVehicle(form); }
+        if (editing) {
+          await updateVehicle(editing.id, form);
+        } else {
+          await createVehicle(form);
+        }
         toast.success(editing ? "Vehicle updated" : "Vehicle added");
         resetForm();
       } catch (e: unknown) {
@@ -66,6 +73,14 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         formPanel={
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Vehicle" : "Add Vehicle"}</p>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Job No. *</label>
+              <Input
+                placeholder="e.g. 2026/001"
+                value={form.job_ref_no}
+                onChange={(e) => set("job_ref_no", e.target.value)}
+              />
+            </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Vehicle Name / Reg. No *</label>
               <Input placeholder="e.g. TN 82 H 3560" value={form.vehicle_name} onChange={(e) => set("vehicle_name", e.target.value)} />
@@ -101,7 +116,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         tablePanel={
           <div className="flex flex-col h-full">
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
-              <Input placeholder="Search by vehicle, J00042 or just 42, customer..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+              <Input placeholder="Search by vehicle name, job number, or customer..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
               {inactive.length > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
                   {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
@@ -112,7 +127,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
-                    {["S.No", "Job Code", "Vehicle Name", "Type", "Customer", "Actions"].map((h) => (
+                    {["S.No", "Job No.", "Vehicle Name", "Type", "Customer", "Actions"].map((h) => (
                       <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -124,7 +139,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                   {visible.map((v, i) => (
                     <tr key={v.id} className={`border-t border-slate-100 ${!v.is_active ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"}`}>
                       <td className="px-4 py-2.5 text-slate-500">{i + 1}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("J", v.job_ref_no, 5)}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{v.job_ref_no}</td>
                       <td className="px-4 py-2.5 font-medium">{v.vehicle_name}</td>
                       <td className="px-4 py-2.5">
                         <Badge variant={v.type === "New" ? "default" : "secondary"}>{v.type}</Badge>

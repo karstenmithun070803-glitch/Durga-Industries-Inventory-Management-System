@@ -44,14 +44,11 @@ interface InvoiceHeaderInput {
   vehicle_id: string;
   slip_ids: string[];
   bill_date: string;
-  rate_date: string | null;
   inv_prefix: string;
   financial_year: string;
   tax_percentage: string;
   material_margin: string;
-  discount: string;
   net_amount: string;
-  rev_charge_status: boolean;
   items: InvoiceItemInput[];
 }
 
@@ -108,7 +105,7 @@ export async function peekNextBillNumber(invPrefix: string | null | undefined, f
   return getNextBillNumber(invPrefix, financialYear);
 }
 
-function validateInvoiceItems(items: InvoiceItemInput[], discount: string) {
+function validateInvoiceItems(items: InvoiceItemInput[]) {
   if (items.length === 0) throw new Error("Add at least one material.");
 
   for (const item of items) {
@@ -123,12 +120,6 @@ function validateInvoiceItems(items: InvoiceItemInput[], discount: string) {
         "One or more items have a zero rate without confirmation. Check 'Zero cost — confirm?' for each."
       );
   }
-
-  // Discount hard block
-  const subtotal = items.reduce((s, i) => s + parseFloat(i.amount || "0"), 0);
-  const discountAmt = parseFloat(discount || "0");
-  if (discountAmt < 0) throw new Error("Discount cannot be negative.");
-  if (discountAmt > subtotal) throw new Error(`Discount (₹${discountAmt.toFixed(2)}) cannot exceed invoice total (₹${subtotal.toFixed(2)}).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -381,7 +372,7 @@ export async function getInvoices(financialYear: string): Promise<InvoiceRow[]> 
     .innerJoin(vehicles, eq(invoices.vehicle_id, vehicles.id))
     .leftJoin(customers, eq(vehicles.customer_id, customers.id))
     .leftJoin(units, eq(invoiceItems.unit_id, units.id))
-    .where(eq(invoices.financial_year, financialYear))
+    .where(and(eq(invoices.financial_year, financialYear), ne(invoices.status, INVOICE_STATUS.CANCELLED)))
     .orderBy(desc(invoices.bill_date), desc(invoices.bill_number));
 
   return rows.map((r) => ({
@@ -510,7 +501,7 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
 export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
   // Validate
   if (!data.vehicle_id) throw new Error("Vehicle is required.");
-  validateInvoiceItems(data.items, data.discount);
+  validateInvoiceItems(data.items);
 
   // Date within FY
   const fyRange = fyDateRange(data.financial_year);
@@ -550,13 +541,10 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
         .values({
           bill_number: billNumber,
           bill_date: new Date(data.bill_date),
-          rate_date: data.rate_date ? new Date(data.rate_date) : null,
           tax_percentage: data.tax_percentage,
           material_margin: data.material_margin,
-          discount: data.discount,
           vehicle_id: data.vehicle_id,
           net_amount: data.net_amount,
-          rev_charge_status: data.rev_charge_status,
           financial_year: data.financial_year,
           status: INVOICE_STATUS.DRAFT,
           customer_name: vData?.customer_name ?? null,
@@ -604,7 +592,7 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
 
 export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promise<void> {
   if (!data.vehicle_id) throw new Error("Vehicle is required.");
-  validateInvoiceItems(data.items, data.discount);
+  validateInvoiceItems(data.items);
 
   const fyRange = fyDateRange(data.financial_year);
   const billDate = new Date(data.bill_date);
@@ -641,13 +629,10 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
       .update(invoices)
       .set({
         bill_date: new Date(data.bill_date),
-        rate_date: data.rate_date ? new Date(data.rate_date) : null,
         tax_percentage: data.tax_percentage,
         material_margin: data.material_margin,
-        discount: data.discount,
         vehicle_id: data.vehicle_id,
         net_amount: data.net_amount,
-        rev_charge_status: data.rev_charge_status,
         customer_name: vData?.customer_name ?? null,
         customer_gstin: vData?.customer_gstin ?? null,
         customer_state: vData?.customer_state ?? null,

@@ -12,7 +12,7 @@ import { useFY } from "@/lib/financial-year";
 type ReportTab = "invoice-summary" | "purchase" | "monthly-stock";
 
 interface Props {
-  vehicles: { id: string; vehicle_name: string; job_ref_no: number }[];
+  vehicles: { id: string; vehicle_name: string; job_ref_no: string }[];
   suppliers: { id: string; name: string }[];
   materials: { id: string; name: string; material_no: number }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];

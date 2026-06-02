@@ -78,10 +78,9 @@ function fmtLastUpdated(d: Date): string {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) + ` at ${time}`;
 }
 
-type StockStatus = "ok" | "low" | "out" | "inactive";
+type StockStatus = "ok" | "low" | "out";
 
 function getStatus(row: StockMaterialRow): StockStatus {
-  if (!row.is_active) return "inactive";
   const stock = parseFloat(row.current_stock);
   if (stock === 0) return "out";
   const minL = parseFloat(row.min_level ?? "0");
@@ -89,7 +88,7 @@ function getStatus(row: StockMaterialRow): StockStatus {
   return "ok";
 }
 
-type TabFilter = "all" | "low" | "out" | "inactive";
+type TabFilter = "all" | "low" | "out";
 
 const LEDGER_TYPE_COLOR: Record<string, string> = {
   PO_INWARD: "bg-blue-100 text-blue-700",
@@ -168,8 +167,6 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
     let result = rows;
     if (tab === "low") result = result.filter((r) => getStatus(r) === "low");
     else if (tab === "out") result = result.filter((r) => getStatus(r) === "out");
-    else if (tab === "inactive") result = result.filter((r) => getStatus(r) === "inactive");
-    else result = result.filter((r) => r.is_active); // "all" = active only
 
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -184,11 +181,9 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
 
   // Summary tab counts
   const tabCounts = useMemo(() => {
-    const active = rows.filter((r) => r.is_active);
     return {
-      low: active.filter((r) => getStatus(r) === "low").length,
-      out: active.filter((r) => getStatus(r) === "out").length,
-      inactive: rows.filter((r) => getStatus(r) === "inactive").length,
+      low: rows.filter((r) => getStatus(r) === "low").length,
+      out: rows.filter((r) => getStatus(r) === "out").length,
     };
   }, [rows]);
 
@@ -355,12 +350,11 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
       <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg flex flex-col">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
-          {(["all", "low", "out", "inactive"] as TabFilter[]).map((t) => {
+          {(["all", "low", "out"] as TabFilter[]).map((t) => {
             const label =
-              t === "all" ? `Active (${search.trim() ? filtered.length : summary.totalMaterials})`
+              t === "all" ? `All (${search.trim() ? filtered.length : summary.totalMaterials})`
               : t === "low" ? `Low Stock (${tabCounts.low})`
-              : t === "out" ? `Out of Stock (${tabCounts.out})`
-              : `Inactive with Stock (${tabCounts.inactive})`;
+              : `Out of Stock (${tabCounts.out})`;
             return (
               <button
                 key={t}
@@ -388,7 +382,7 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
             className="h-8 text-xs ml-auto"
             onClick={() => {
               const headers = ["Code", "Material Name", "Unit", "Current Stock", "Min Level", "Max Level", "Last PO Rate", "Stock Value", "Status"];
-              const statusLabel: Record<string, string> = { ok: "OK", low: "Low Stock", out: "Out of Stock", inactive: "Inactive" };
+              const statusLabel: Record<string, string> = { ok: "OK", low: "Low Stock", out: "Out of Stock" };
               const csvRows = filtered.map((r) => {
                 const stock = parseFloat(r.current_stock);
                 const rate = r.last_po_rate ? parseFloat(r.last_po_rate) : null;
@@ -452,7 +446,6 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
                   const rowBg =
                     status === "out" ? "bg-red-50"
                     : status === "low" ? "bg-amber-50"
-                    : status === "inactive" ? "bg-slate-50"
                     : "";
 
                   return (
@@ -707,7 +700,6 @@ function SummaryCard({
 function StatusBadge({ status }: { status: StockStatus }) {
   if (status === "out") return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Out of Stock</span>;
   if (status === "low") return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Low Stock</span>;
-  if (status === "inactive") return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Inactive</span>;
   return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>;
 }
 
@@ -788,8 +780,6 @@ function JobCostPanel({
                           <th className="px-3 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
                           <th className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Rate</th>
                           <th className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Total Cost</th>
-                          <th className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Billed</th>
-                          <th className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Unbilled</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -801,20 +791,12 @@ function JobCostPanel({
                             <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.unit_name ?? "—"}</td>
                             <td className="px-3 py-1.5 text-right whitespace-nowrap text-slate-600">{fmtAmt(r.rate)}</td>
                             <td className="px-3 py-1.5 text-right whitespace-nowrap font-medium">{fmtAmt(r.total_amount)}</td>
-                            <td className="px-3 py-1.5 text-right whitespace-nowrap text-green-700">{fmtAmt(r.billed_amount)}</td>
-                            <td className={cn("px-3 py-1.5 text-right whitespace-nowrap font-semibold", r.unbilled_amount > 0 ? "text-amber-700" : "text-slate-400")}>
-                              {fmtAmt(r.unbilled_amount)}
-                            </td>
                           </tr>
                         ))}
                         {/* Totals row */}
                         <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold text-sm">
                           <td colSpan={5} className="px-3 py-2 text-right text-slate-600">TOTAL</td>
                           <td className="px-3 py-2 text-right text-slate-800">{fmtAmt(result.totals.total_cost)}</td>
-                          <td className="px-3 py-2 text-right text-green-700">{fmtAmt(result.totals.total_billed)}</td>
-                          <td className={cn("px-3 py-2 text-right", result.totals.total_unbilled > 0 ? "text-amber-700" : "text-slate-400")}>
-                            {fmtAmt(result.totals.total_unbilled)}
-                          </td>
                         </tr>
                       </tbody>
                     </table>

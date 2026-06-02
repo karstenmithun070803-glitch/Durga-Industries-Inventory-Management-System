@@ -11,12 +11,12 @@ import { PrintButton } from "@/components/pdf/print-button";
 import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
 import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
 import { formatCode } from "@/lib/utils";
-import { deleteInvoice, markInvoicePayment, getInvoices } from "@/lib/actions/invoices.actions";
+import { deleteInvoice, getInvoices } from "@/lib/actions/invoices.actions";
 import type { InvoiceRow } from "@/types";
 import { useFY } from "@/lib/financial-year";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
-import { Pencil, Trash2, Plus, CreditCard } from "lucide-react";
-import { INVOICE_STATUS, PAYMENT_STATUS } from "@/lib/constants";
+import { Pencil, Trash2, Plus } from "lucide-react";
+import { INVOICE_STATUS } from "@/lib/constants";
 
 interface Props {
   initialRows: InvoiceRow[];
@@ -24,7 +24,7 @@ interface Props {
   companySetting?: CompanySetting;
 }
 
-type StatusFilter = "all" | "Draft" | "Finalized" | "Cancelled";
+type StatusFilter = "all" | "Draft" | "Finalized";
 
 export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
   const router = useRouter();
@@ -40,18 +40,11 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; bill_number: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [paymentTarget, setPaymentTarget] = useState<{ id: string; bill_number: string; current_status: string } | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<string>(PAYMENT_STATUS.UNPAID);
-  const [paymentDate, setPaymentDate] = useState("");
-  const [paymentNotes, setPaymentNotes] = useState("");
-  const [isSavingPayment, setIsSavingPayment] = useState(false);
-  const [paymentFilter, setPaymentFilter] = useState<"all" | string>("all");
 
   const filtered = useMemo(() => {
     let result = rows;
 
     if (statusFilter !== "all") result = result.filter((r) => r.status === statusFilter);
-    if (paymentFilter !== "all") result = result.filter((r) => r.payment_status === paymentFilter);
 
     if (dateFrom) result = result.filter((r) => r.bill_date >= dateFrom);
     if (dateTo) result = result.filter((r) => r.bill_date <= dateTo + "T23:59:59");
@@ -65,12 +58,12 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
           r.customer_name?.toLowerCase().includes(s) ||
           r.material_name?.toLowerCase().includes(s) ||
           formatCode("M", r.material_no).toLowerCase().includes(s) ||
-          String(r.job_ref_no).includes(s)
+          (r.job_ref_no ?? "").toLowerCase().includes(s)
       );
     }
 
     return result;
-  }, [rows, statusFilter, paymentFilter, dateFrom, dateTo, search]);
+  }, [rows, statusFilter, dateFrom, dateTo, search]);
 
   // Deduplicate: one row per invoice (first item only)
   const invoiceRows = useMemo(
@@ -89,8 +82,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
     const uniqueIds = new Set(rows.map((r) => r.id));
     const draftIds = new Set(rows.filter((r) => r.status === INVOICE_STATUS.DRAFT).map((r) => r.id));
     const finalizedIds = new Set(rows.filter((r) => r.status === INVOICE_STATUS.FINALIZED).map((r) => r.id));
-    const cancelledIds = new Set(rows.filter((r) => r.status === INVOICE_STATUS.CANCELLED).map((r) => r.id));
-    return { all: uniqueIds.size, draft: draftIds.size, finalized: finalizedIds.size, cancelled: cancelledIds.size };
+    return { all: uniqueIds.size, draft: draftIds.size, finalized: finalizedIds.size };
   }, [rows]);
 
   async function handleDelete() {
@@ -123,7 +115,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
       r.bill_number,
       fmtDate(r.bill_date),
       r.vehicle_name ?? "",
-      r.job_ref_no != null ? `J${String(r.job_ref_no).padStart(5, "0")}` : "",
+      r.job_ref_no ?? "",
       r.customer_name ?? "",
       r.customer_gstin ?? "",
       parseFloat(r.net_amount ?? "0").toFixed(2),
@@ -138,29 +130,6 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
     a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }
-
-  async function handleSavePayment() {
-    if (!paymentTarget) return;
-    if (paymentStatus === PAYMENT_STATUS.PAID && !paymentDate) {
-      toast.error("Please enter the payment date.");
-      return;
-    }
-    setIsSavingPayment(true);
-    try {
-      await markInvoicePayment(paymentTarget.id, {
-        payment_status: paymentStatus,
-        payment_date: paymentDate || null,
-        payment_notes: paymentNotes || null,
-      });
-      toast.success(`${paymentTarget.bill_number} marked as ${paymentStatus}.`);
-      setPaymentTarget(null);
-      router.refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update payment.");
-    } finally {
-      setIsSavingPayment(false);
-    }
   }
 
   // Group rows by invoice id for PDF generation (one page per invoice)
@@ -186,8 +155,8 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
         <h1 className="text-lg font-semibold text-slate-800 mr-2">Invoices</h1>
 
         {/* Status tabs */}
-        {(["all", INVOICE_STATUS.DRAFT, INVOICE_STATUS.FINALIZED, INVOICE_STATUS.CANCELLED] as StatusFilter[]).map((s) => {
-          const count = s === "all" ? counts.all : s === INVOICE_STATUS.DRAFT ? counts.draft : s === INVOICE_STATUS.FINALIZED ? counts.finalized : counts.cancelled;
+        {(["all", INVOICE_STATUS.DRAFT, INVOICE_STATUS.FINALIZED] as StatusFilter[]).map((s) => {
+          const count = s === "all" ? counts.all : s === INVOICE_STATUS.DRAFT ? counts.draft : counts.finalized;
           return (
             <button
               key={s}
@@ -220,17 +189,6 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
             placeholder="To"
           />
         </div>
-
-        <select
-          value={paymentFilter}
-          onChange={(e) => setPaymentFilter(e.target.value as typeof paymentFilter)}
-          className="h-8 text-xs border border-slate-200 rounded-md px-2 text-slate-600 bg-white"
-        >
-          <option value="all">All Payments</option>
-          <option value={PAYMENT_STATUS.UNPAID}>Unpaid</option>
-          <option value={PAYMENT_STATUS.PARTIAL}>Partial</option>
-          <option value={PAYMENT_STATUS.PAID}>Paid</option>
-        </select>
 
         <Input
           value={search}
@@ -300,14 +258,13 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-20">Tax %</th>
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">Amount</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">Status</th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">Payment</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Actions</th>
               </tr>
             </thead>
             <tbody>
               {invoiceRows.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="px-3 py-12 text-center text-slate-400">
+                  <td colSpan={15} className="px-3 py-12 text-center text-slate-400">
                     No invoices found.
                   </td>
                 </tr>
@@ -328,7 +285,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-xs">
                         <span className="font-mono text-slate-500">
-                          {formatCode("J", r.job_ref_no, 5)}
+                          {r.job_ref_no}
                         </span>{" "}
                         <span className="text-slate-700">{r.vehicle_name}</span>
                       </td>
@@ -367,37 +324,11 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                             r.status === INVOICE_STATUS.FINALIZED
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                              : r.status === INVOICE_STATUS.CANCELLED
-                              ? "bg-rose-50 text-rose-700 border border-rose-200"
                               : "bg-slate-100 text-slate-600 border border-slate-200"
                           }`}
                         >
                           {r.status}
                         </span>
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        {r.status === INVOICE_STATUS.FINALIZED ? (
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${
-                              r.payment_status === PAYMENT_STATUS.PAID
-                                ? "bg-green-50 text-green-700 border border-green-200"
-                                : r.payment_status === PAYMENT_STATUS.PARTIAL
-                                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : "bg-red-50 text-red-700 border border-red-200"
-                            }`}
-                            onClick={() => {
-                              setPaymentTarget({ id: r.id, bill_number: r.bill_number, current_status: r.payment_status });
-                              setPaymentStatus(r.payment_status ?? PAYMENT_STATUS.UNPAID);
-                              setPaymentDate(r.payment_date ?? "");
-                              setPaymentNotes(r.payment_notes ?? "");
-                            }}
-                            title="Click to update payment"
-                          >
-                            {r.payment_status ?? PAYMENT_STATUS.UNPAID}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1">
@@ -411,22 +342,6 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
                           </Link>
-                          {r.status === INVOICE_STATUS.FINALIZED && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
-                              title="Update Payment"
-                              onClick={() => {
-                                setPaymentTarget({ id: r.id, bill_number: r.bill_number, current_status: r.payment_status });
-                                setPaymentStatus(r.payment_status ?? PAYMENT_STATUS.UNPAID);
-                                setPaymentDate(r.payment_date ?? "");
-                                setPaymentNotes(r.payment_notes ?? "");
-                              }}
-                            >
-                              <CreditCard className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
                           {r.status === INVOICE_STATUS.DRAFT && (
                             <Button
                               variant="ghost"
@@ -464,76 +379,6 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
         onConfirm={handleDelete}
       />
 
-      {/* Payment dialog */}
-      {paymentTarget && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 space-y-4">
-            <h2 className="text-sm font-semibold text-slate-800">
-              Update Payment — {paymentTarget.bill_number}
-            </h2>
-
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-slate-600">Payment Status</p>
-              <div className="flex flex-col gap-2">
-                {(Object.values(PAYMENT_STATUS) as string[]).map((s) => (
-                  <label key={s} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment_status"
-                      value={s}
-                      checked={paymentStatus === s}
-                      onChange={() => setPaymentStatus(s)}
-                      className="accent-slate-700"
-                    />
-                    <span className={`text-xs font-medium ${
-                      s === PAYMENT_STATUS.PAID ? "text-green-700"
-                      : s === PAYMENT_STATUS.PARTIAL ? "text-amber-700"
-                      : "text-red-700"
-                    }`}>{s}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600">
-                Payment Date {paymentStatus === PAYMENT_STATUS.PAID && <span className="text-red-500">*</span>}
-              </label>
-              <input
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-600">Notes (optional)</label>
-              <textarea
-                value={paymentNotes}
-                onChange={(e) => setPaymentNotes(e.target.value)}
-                placeholder="e.g. Cheque #1234, NEFT ref..."
-                rows={2}
-                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPaymentTarget(null)}
-                disabled={isSavingPayment}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSavePayment} disabled={isSavingPayment}>
-                {isSavingPayment ? "Saving…" : "Save"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -88,14 +88,7 @@ export default async function HomePage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          label="Outstanding"
-          value={stats.outstandingCount}
-          sub={fmtAmt(stats.outstandingTotal)}
-          href="/invoice"
-          color={stats.outstandingCount > 0 ? "amber" : "slate"}
-        />
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <StatCard
           label="Out of Stock"
           value={stats.outStockCount}
@@ -156,19 +149,13 @@ export default async function HomePage() {
         <div>
           <SectionTitle>Recent Invoices</SectionTitle>
           <RecentTable
-            headers={["Bill #", "Date", "Customer", "Payment"]}
+            headers={["Bill #", "Date", "Customer"]}
             rows={stats.recentInvoices.map((r) => [
               <Link key={r.id} href={`/invoice/${r.id}/view`} className="font-mono text-blue-600 hover:underline">
                 {r.bill_number}
               </Link>,
               r.bill_date,
               r.customer_name ?? "—",
-              <span key="s" className={cn(
-                "px-1.5 py-0.5 rounded text-xs font-medium",
-                r.payment_status === "Paid" ? "bg-green-100 text-green-700"
-                : r.payment_status === "Partial" ? "bg-amber-100 text-amber-700"
-                : "bg-red-100 text-red-700"
-              )}>{r.payment_status}</span>,
             ])}
           />
         </div>

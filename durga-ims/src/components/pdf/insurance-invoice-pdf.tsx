@@ -19,9 +19,6 @@ interface Props {
   companySetting?: CompanySetting;
 }
 
-function formatJobCode(num: number): string {
-  return `J${String(num).padStart(5, "0")}`;
-}
 
 export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
   const coName = companySetting?.company_name ?? COMPANY_NAME;
@@ -37,9 +34,7 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
         const cgst = items.reduce((s, r) => s + parseFloat(r.cgst_amount || "0"), 0);
         const sgst = items.reduce((s, r) => s + parseFloat(r.sgst_amount || "0"), 0);
         const igst = items.reduce((s, r) => s + parseFloat(r.igst_amount || "0"), 0);
-        const discount = parseFloat(first.discount || "0");
         const gross = subtotal + cgst + sgst + igst;
-        const net = gross - discount;
 
         const hasCgstSgst = cgst > 0 || sgst > 0;
         const hasIgst = igst > 0;
@@ -65,19 +60,13 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
               <Text style={styles.infoLineLabel}>BILL DATE</Text>
               <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
             </View>
-            {first.rate_date && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>RATE DATE</Text>
-                <Text style={styles.infoLineValue}>: {fmtDate(first.rate_date)}</Text>
-              </View>
-            )}
             <View style={styles.infoLine}>
               <Text style={styles.infoLineLabel}>VEHICLE</Text>
               <Text style={styles.infoLineValue}>: {first.vehicle_name}</Text>
             </View>
             <View style={styles.infoLine}>
               <Text style={styles.infoLineLabel}>JOB NO.</Text>
-              <Text style={styles.infoLineValue}>: {formatJobCode(first.job_ref_no)}</Text>
+              <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
             </View>
             {first.customer_name && (
               <View style={styles.infoLine}>
@@ -101,13 +90,6 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabel}>PLACE OF SUPPLY</Text>
                 <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
-              </View>
-            )}
-            {first.rev_charge_status && (
-              <View style={[styles.infoLine, { marginTop: 3 }]}>
-                <Text style={[styles.infoLineValue, { fontFamily: "Helvetica-Oblique", fontSize: 8 }]}>
-                  * Tax to be paid on reverse charge basis
-                </Text>
               </View>
             )}
 
@@ -167,7 +149,6 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
                   {hasCgstSgst && <Text style={styles.plainTableCell}>SGST</Text>}
                   {hasIgst && <Text style={styles.plainTableCell}>IGST</Text>}
                   <Text style={styles.plainTableCell}>Gross Total</Text>
-                  {discount > 0 && <Text style={styles.plainTableCell}>Discount</Text>}
                   <Text style={styles.plainTableCellBold}>Net Amount</Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 3, minWidth: 90 }}>
@@ -176,7 +157,6 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
                   {hasCgstSgst && <Text style={styles.plainTableCell}>{fmtAmt(String(sgst))}</Text>}
                   {hasIgst && <Text style={styles.plainTableCell}>{fmtAmt(String(igst))}</Text>}
                   <Text style={styles.plainTableCell}>{fmtAmt(String(gross))}</Text>
-                  {discount > 0 && <Text style={styles.plainTableCell}>- {fmtAmt(String(discount))}</Text>}
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>

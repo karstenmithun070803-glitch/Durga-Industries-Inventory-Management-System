@@ -12,10 +12,8 @@ import {
   contractors,
   vehicles,
   customers,
-  invoices,
-  invoiceSlipLinks,
 } from "@/lib/db/schema";
-import { eq, and, desc, sql, lt, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
@@ -56,7 +54,7 @@ export interface StockLedgerEntry {
 
 export interface VehicleSearchRow {
   id: string;
-  job_ref_no: number;
+  job_ref_no: string;
   vehicle_name: string;
   customer_name: string | null;
   is_active: boolean;
@@ -70,13 +68,11 @@ export interface JobCostRow {
   total_qty: number;
   rate: number;
   total_amount: number;
-  billed_amount: number;
-  unbilled_amount: number;
 }
 
 export interface JobCostResult {
   vehicle: {
-    job_ref_no: number;
+    job_ref_no: string;
     vehicle_name: string;
     vehicle_type: string;
     customer_name: string | null;
@@ -84,8 +80,6 @@ export interface JobCostResult {
   rows: JobCostRow[];
   totals: {
     total_cost: number;
-    total_billed: number;
-    total_unbilled: number;
   };
 }
 
@@ -110,9 +104,7 @@ export async function getStockDashboardMaterials(): Promise<{
       unit_id: materials.sales_unit_id,
     })
     .from(materials)
-    .where(
-      sql`${materials.is_active} = true OR (${materials.is_active} = false AND ${materials.current_stock} > 0)`
-    )
+    .where(eq(materials.is_active, true))
     .orderBy(materials.material_no);
 
   if (allMats.length === 0) {
@@ -408,25 +400,9 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
     return {
       vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, vehicle_type: veh.vehicle_type, customer_name: veh.customer_name ?? null },
       rows: [],
-      totals: { total_cost: 0, total_billed: 0, total_unbilled: 0 },
+      totals: { total_cost: 0 },
     };
   }
-
-  // Determine which slip IDs are linked to a Finalized invoice
-  const seenSlips = new Set<string>();
-  for (const i of miItems) seenSlips.add(i.slip_id);
-  const uniqueSlipIds = Array.from(seenSlips);
-  const billedLinks = await db
-    .select({ slip_id: invoiceSlipLinks.slip_id })
-    .from(invoiceSlipLinks)
-    .innerJoin(invoices, eq(invoiceSlipLinks.invoice_id, invoices.id))
-    .where(
-      and(
-        inArray(invoiceSlipLinks.slip_id, uniqueSlipIds),
-        eq(invoices.status, "Finalized")
-      )
-    );
-  const billedSlipIds = new Set(billedLinks.map((l) => l.slip_id));
 
   // Group by material_id + contractor_id + rate
   type GroupKey = string;
@@ -440,8 +416,6 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
       rate: number;
       total_qty: number;
       total_amount: number;
-      billed_amount: number;
-      unbilled_amount: number;
     }
   >();
 
@@ -449,7 +423,6 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
     const key: GroupKey = `${item.material_id}|${item.contractor_id ?? "none"}|${item.rate}`;
     const qty = parseFloat(item.qty);
     const amount = parseFloat(item.amount);
-    const isBilled = billedSlipIds.has(item.slip_id);
 
     if (!groupMap.has(key)) {
       groupMap.set(key, {
@@ -460,15 +433,11 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
         rate: parseFloat(item.rate),
         total_qty: 0,
         total_amount: 0,
-        billed_amount: 0,
-        unbilled_amount: 0,
       });
     }
     const g = groupMap.get(key)!;
     g.total_qty += qty;
     g.total_amount += amount;
-    if (isBilled) g.billed_amount += amount;
-    else g.unbilled_amount += amount;
   }
 
   const rows: JobCostRow[] = Array.from(groupMap.values()).map((g) => ({
@@ -479,17 +448,13 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
     total_qty: g.total_qty,
     rate: g.rate,
     total_amount: g.total_amount,
-    billed_amount: g.billed_amount,
-    unbilled_amount: g.unbilled_amount,
   }));
 
   const total_cost = rows.reduce((s, r) => s + r.total_amount, 0);
-  const total_billed = rows.reduce((s, r) => s + r.billed_amount, 0);
-  const total_unbilled = rows.reduce((s, r) => s + r.unbilled_amount, 0);
 
   return {
     vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, vehicle_type: veh.vehicle_type, customer_name: veh.customer_name ?? null },
     rows,
-    totals: { total_cost, total_billed, total_unbilled },
+    totals: { total_cost },
   };
 }

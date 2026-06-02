@@ -35,29 +35,49 @@ export async function getAllVehicles() {
 }
 
 export async function createVehicle(data: {
+  job_ref_no: string;
   vehicle_name: string;
   type: string;
   customer_id?: string;
 }) {
-  if (!data.vehicle_name.trim()) throw new Error("Vehicle name is required");
-  await db.insert(vehicles).values({
-    vehicle_name: data.vehicle_name.trim().toUpperCase(),
-    type: data.type || "New",
-    customer_id: data.customer_id || null,
-  });
+  if (!data.job_ref_no.trim()) throw new Error("Job number is required.");
+  if (!data.vehicle_name.trim()) throw new Error("Vehicle name is required.");
+  try {
+    await db.insert(vehicles).values({
+      job_ref_no: data.job_ref_no.trim(),
+      vehicle_name: data.vehicle_name.trim().toUpperCase(),
+      type: data.type || "New",
+      customer_id: data.customer_id || null,
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("vehicles_job_ref_no_unique"))
+      throw new Error(`Job number "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
+    throw e;
+  }
   revalidatePath("/masters/vehicles");
 }
 
 export async function updateVehicle(id: string, data: {
+  job_ref_no: string;
   vehicle_name: string;
   type: string;
   customer_id?: string;
 }) {
-  await db.update(vehicles).set({
-    vehicle_name: data.vehicle_name.trim().toUpperCase(),
-    type: data.type,
-    customer_id: data.customer_id || null,
-  }).where(eq(vehicles.id, id));
+  if (!data.job_ref_no.trim()) throw new Error("Job number is required.");
+  try {
+    await db.update(vehicles).set({
+      job_ref_no: data.job_ref_no.trim(),
+      vehicle_name: data.vehicle_name.trim().toUpperCase(),
+      type: data.type,
+      customer_id: data.customer_id || null,
+    }).where(eq(vehicles.id, id));
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("vehicles_job_ref_no_unique"))
+      throw new Error(`Job number "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
+    throw e;
+  }
   revalidatePath("/masters/vehicles");
 }
 

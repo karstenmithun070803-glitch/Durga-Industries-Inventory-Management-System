@@ -122,6 +122,7 @@ export interface LineItemDraft {
   sgst_amount: string;
   igst_amount: string;
   amount: string;
+  baseRate: string;            // original PO rate before margin applied (client-only, never sent to server)
   rateBlank: boolean;         // true when no purchase history exists
   zeroRateConfirmed: boolean; // user must check this when rate = 0
   // Material Issue fields (ignored in purchase-order mode)
@@ -148,7 +149,7 @@ export interface MaterialIssueRow {
   total_amount: string;
   vehicle_id: string;
   vehicle_name: string;
-  job_ref_no: number;
+  job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
@@ -208,7 +209,7 @@ export interface MaterialIssueWithDetails {
   total_amount: string;
   vehicle_id: string;
   vehicle_name: string;
-  job_ref_no: number;
+  job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
@@ -242,7 +243,7 @@ export interface InvoiceRow {
   // vehicle + customer (via JOIN)
   vehicle_id: string;
   vehicle_name: string;
-  job_ref_no: number;
+  job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
@@ -306,7 +307,7 @@ export interface InvoiceWithDetails {
   cancelled_at: string | null;
   vehicle_id: string;
   vehicle_name: string;
-  job_ref_no: number;
+  job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;
   customer_gstin: string | null;

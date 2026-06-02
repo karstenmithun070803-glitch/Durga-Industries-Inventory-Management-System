@@ -34,7 +34,7 @@ type Mode = "new" | "edit-draft" | "edit-issued" | "view";
 
 interface VehicleOption {
   id: string;
-  job_ref_no: number;
+  job_ref_no: string;
   vehicle_name: string;
   customer_id: string | null;
   customer_name: string | null;
@@ -102,6 +102,7 @@ function issueItemsToRows(issue: MaterialIssueWithDetails): LineItemDraft[] {
     unit_id: item.unit_id ?? "",
     unit_name: item.unit_name ?? "",
     rate: item.rate,
+    baseRate: item.rate,
     tax_percentage: item.tax_percentage,
     cgst_amount: item.cgst_amount,
     sgst_amount: item.sgst_amount,
@@ -307,7 +308,7 @@ export function MaterialIssueForm({
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${formatCode("J", v.job_ref_no, 5)} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
+    label: `${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
   }));
 
   return (
@@ -381,7 +382,7 @@ export function MaterialIssueForm({
               {isReadOnly ? (
                 <div className="h-9 px-3 flex items-center rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-700">
                   {selectedVehicle
-                    ? `${formatCode("J", selectedVehicle.job_ref_no, 5)} — ${selectedVehicle.vehicle_name}`
+                    ? `${selectedVehicle.job_ref_no} — ${selectedVehicle.vehicle_name}`
                     : issue?.vehicle_name ?? "—"}
                 </div>
               ) : (
