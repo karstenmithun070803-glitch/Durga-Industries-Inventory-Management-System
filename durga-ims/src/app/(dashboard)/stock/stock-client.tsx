@@ -270,7 +270,7 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
     () =>
       vehicles.map((v) => ({
         value: v.id,
-        label: `Job #${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` (${v.customer_name})` : ""}${!v.is_active ? " [Inactive]" : ""}`,
+        label: `${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` (${v.customer_name})` : ""}${!v.is_active ? " [Inactive]" : ""}`,
       })),
     [vehicles]
   );

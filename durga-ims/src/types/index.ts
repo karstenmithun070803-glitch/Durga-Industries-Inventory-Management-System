@@ -122,7 +122,7 @@ export interface LineItemDraft {
   sgst_amount: string;
   igst_amount: string;
   amount: string;
-  baseRate: string;            // original PO rate before margin applied (client-only, never sent to server)
+  baseRate?: string;           // original PO rate before margin applied (invoice form only, never sent to server)
   rateBlank: boolean;         // true when no purchase history exists
   zeroRateConfirmed: boolean; // user must check this when rate = 0
   // Material Issue fields (ignored in purchase-order mode)
