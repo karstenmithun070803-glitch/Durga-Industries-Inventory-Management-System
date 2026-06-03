@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import {
   getInvoiceById,
   getActiveVehiclesForInvoice,
-  getActiveTaxRatesWithPrefix,
   getActiveInvoiceMaterials,
 } from "@/lib/actions/invoices.actions";
 import { getUnits } from "@/lib/actions/units.actions";
@@ -17,10 +16,9 @@ interface Props {
 
 export default async function EditInvoicePage({ params }: Props) {
   const { id } = await params;
-  const [invoice, vehicles, taxRates, materials, units, companySetting] = await Promise.all([
+  const [invoice, vehicles, materials, units, companySetting] = await Promise.all([
     getInvoiceById(id),
     getActiveVehiclesForInvoice(),
-    getActiveTaxRatesWithPrefix(),
     getActiveInvoiceMaterials(),
     getUnits(),
     getCompanySettings(),
@@ -33,7 +31,6 @@ export default async function EditInvoicePage({ params }: Props) {
       mode="edit"
       invoice={invoice}
       vehicles={vehicles}
-      taxRates={taxRates}
       materials={materials}
       units={units}
       companySetting={companySetting}

@@ -16,7 +16,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<TaxRate | null>(null);
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ tax_percentage: "", description: "", inv_prefix: "" });
+  const [form, setForm] = useState({ tax_percentage: "", description: "" });
   const [isPending, startTransition] = useTransition();
 
   const inactive = taxRates.filter((t) => !t.is_active);
@@ -31,10 +31,10 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
 
   function startEdit(t: TaxRate) {
     setEditing(t);
-    setForm({ tax_percentage: t.tax_percentage, description: t.description, inv_prefix: t.inv_prefix ?? "" });
+    setForm({ tax_percentage: t.tax_percentage, description: t.description });
   }
 
-  function resetForm() { setEditing(null); setForm({ tax_percentage: "", description: "", inv_prefix: "" }); }
+  function resetForm() { setEditing(null); setForm({ tax_percentage: "", description: "" }); }
 
   function handleSubmit() {
     startTransition(async () => {
@@ -65,7 +65,6 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
             {[
               { label: "Tax Percentage *", key: "tax_percentage", placeholder: "e.g. 18" },
               { label: "Description *", key: "description", placeholder: "e.g. GST 18%" },
-              { label: "Invoice Prefix", key: "inv_prefix", placeholder: "e.g. D" },
             ].map(({ label, key, placeholder }) => (
               <div key={key} className="space-y-1.5">
                 <label className="text-xs text-slate-500">{label}</label>
@@ -92,14 +91,14 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
-                    {["S.No", "Tax Code", "Tax %", "Description", "Inv. Prefix", "Actions"].map((h) => (
+                    {["S.No", "Tax Code", "Tax %", "Description", "Actions"].map((h) => (
                       <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No tax rates found</td></tr>
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No tax rates found</td></tr>
                   )}
                   {visible.map((t, i) => (
                     <tr key={t.id} className={`border-t border-slate-100 ${!t.is_active ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"}`}>
@@ -107,7 +106,6 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
                       <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("T", t.vat_code, 2)}</td>
                       <td className="px-4 py-2.5 font-medium">{parseFloat(t.tax_percentage)}</td>
                       <td className="px-4 py-2.5">{t.description}</td>
-                      <td className="px-4 py-2.5 text-slate-500">{t.inv_prefix ?? "—"}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex gap-1">
                           {t.is_active ? (

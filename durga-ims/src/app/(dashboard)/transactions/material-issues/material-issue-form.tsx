@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFY } from "@/lib/financial-year";
@@ -156,6 +156,30 @@ export function MaterialIssueForm({
   const [rows, setRows] = useState<LineItemDraft[]>(
     issue ? issueItemsToRows(issue) : [newRow()]
   );
+
+  // ── Margin % → recalculate all row rates when margin changes ─────────────
+  useEffect(() => {
+    if (rows.length === 0) return;
+    const factor = 1 + parseFloat(marginPct || "0") / 100;
+    setRows((prev) =>
+      prev.map((row) => {
+        const base = parseFloat(row.baseRate || row.rate || "0");
+        const newRate = (base * factor).toFixed(4);
+        const qty = parseFloat(row.qty || "0");
+        const taxPct = parseFloat(row.tax_percentage || "0");
+        const preAmt = parseFloat(newRate) * qty;
+        let cgst = "0.00", sgst = "0.00", igst = "0.00";
+        if (row.gst_type === "CGST_SGST") {
+          const half = ((preAmt * taxPct) / 100 / 2).toFixed(2);
+          cgst = half; sgst = half;
+        } else if (row.gst_type === "IGST") {
+          igst = ((preAmt * taxPct) / 100).toFixed(2);
+        }
+        return { ...row, rate: newRate, amount: preAmt.toFixed(2), cgst_amount: cgst, sgst_amount: sgst, igst_amount: igst };
+      })
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marginPct]);
 
   // Vehicle type filter
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<"all" | "New" | "Old">("all");
@@ -409,7 +433,7 @@ export function MaterialIssueForm({
                             : "text-slate-500 border-slate-200 hover:border-slate-400"
                         }`}
                       >
-                        {f === "all" ? "All" : f === "New" ? "New Build" : "Repair"}
+                        {f === "all" ? "All" : f === "New" ? "New Build" : "Old Build"}
                       </button>
                     ))}
                   </div>
@@ -442,7 +466,6 @@ export function MaterialIssueForm({
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
                   Margin %
-                  <span className="ml-1 font-normal text-slate-400">(applied at invoicing)</span>
                 </label>
                 {isReadOnly ? (
                   <div className="h-9 px-3 w-24 flex items-center rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-700">

@@ -33,6 +33,7 @@ type ItemRow = {
   qty: string | null;
   unit_name: string | null;
   rate: string | null;
+  tax_percentage: string | null;
   cgst_amount: string | null;
   sgst_amount: string | null;
   igst_amount: string | null;

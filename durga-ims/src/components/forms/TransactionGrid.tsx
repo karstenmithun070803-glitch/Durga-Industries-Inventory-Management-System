@@ -207,6 +207,7 @@ export function TransactionGrid({
       unit_name: unit?.unit_name ?? "",
       tax_percentage: taxPct,
       rate: lastRate ?? "",
+      baseRate: lastRate ?? "",
       rateBlank,
       zeroRateConfirmed: false,
       // In issue/invoice mode, apply header gstType; in PO mode gst_type set by supplier select
@@ -312,9 +313,6 @@ export function TransactionGrid({
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Unit</th>
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">Rate</th>
             {!isInvoiceMode && <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Tax %</th>}
-            {!isInvoiceMode && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">CGST</th>}
-            {!isInvoiceMode && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">SGST</th>}
-            {!isInvoiceMode && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">IGST</th>}
             <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-28">Amount</th>
             {!readOnly && <th className="px-3 py-2.5 w-10" />}
           </tr>
@@ -513,28 +511,15 @@ export function TransactionGrid({
                   </td>
                 )}
 
-                {/* CGST — hidden in invoice mode */}
-                {!isInvoiceMode && (
-                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
-                    {fmt2(row.cgst_amount)}
-                  </td>
-                )}
-                {/* SGST — hidden in invoice mode */}
-                {!isInvoiceMode && (
-                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
-                    {fmt2(row.sgst_amount)}
-                  </td>
-                )}
-                {/* IGST — hidden in invoice mode */}
-                {!isInvoiceMode && (
-                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
-                    {fmt2(row.igst_amount)}
-                  </td>
-                )}
 
-                {/* Amount */}
+                {/* Amount — tax-inclusive display; stored amount is pre-tax */}
                 <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">
-                  {fmt2(row.amount)}
+                  {fmt2(
+                    (parseFloat(row.amount || "0") +
+                     parseFloat(row.cgst_amount || "0") +
+                     parseFloat(row.sgst_amount || "0") +
+                     parseFloat(row.igst_amount || "0")).toFixed(2)
+                  )}
                 </td>
 
                 {!readOnly && (

@@ -28,6 +28,7 @@ type ItemRow = {
   qty: string | null;
   unit_name: string | null;
   rate: string | null;
+  tax_percentage: string | null;
   cgst_amount: string | null;
   sgst_amount: string | null;
   igst_amount: string | null;
@@ -66,7 +67,13 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
         const first = items[0];
         const poLabel = formatCode("PO-", first.po_number, 4);
         const supplier = first.supplier_name ?? "—";
-        const poTotal = items.reduce((s, r) => s + parseFloat(r.amount ?? "0"), 0);
+
+        // Per-PO totals breakdown
+        const poSubtotal = items.reduce((s, r) => s + parseFloat(r.amount ?? "0"), 0);
+        const poCgst     = items.reduce((s, r) => s + parseFloat(r.cgst_amount ?? "0"), 0);
+        const poSgst     = items.reduce((s, r) => s + parseFloat(r.sgst_amount ?? "0"), 0);
+        const poIgst     = items.reduce((s, r) => s + parseFloat(r.igst_amount ?? "0"), 0);
+        const poGrand    = poSubtotal + poCgst + poSgst + poIgst;
 
         return (
           <Page key={poId} size="A4" style={styles.page}>
@@ -115,14 +122,16 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
 
               {/* Column headers */}
               <View style={styles.plainTableHead}>
-                <Text style={[styles.plainTableHeadCell, { width: "8%" }]}>S No.</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "7%" }]}>S No.</Text>
                 <Text style={[styles.plainTableHeadCell, { flex: 1 }]}>Material Name</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "14%", textAlign: "right" }]}>Qty</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "10%", marginLeft: 6 }]}>Unit</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "right" }]}>Qty</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "9%", marginLeft: 6 }]}>Unit</Text>
                 {showRates && (
                   <>
-                    <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Rate</Text>
-                    <Text style={[styles.plainTableHeadCell, { width: "15%", textAlign: "right" }]}>Amount</Text>
+                    <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Rate</Text>
+                    <Text style={[styles.plainTableHeadCell, { width: "8%", textAlign: "right" }]}>Tax%</Text>
+                    <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax Amt</Text>
+                    <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Amount</Text>
                   </>
                 )}
               </View>
@@ -130,37 +139,81 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
               <View style={styles.separator} />
 
               {/* Data rows */}
-              {items.map((r, idx) => (
-                <View key={r.item_id ?? idx} style={styles.plainTableRow}>
-                  <Text style={[styles.plainTableCell, { width: "8%" }]}>{idx + 1}</Text>
-                  <Text style={[styles.plainTableCell, { flex: 1 }]}>{r.material_name ?? "—"}</Text>
-                  <Text style={[styles.plainTableCell, { width: "14%", textAlign: "right" }]}>
-                    {fmtQty(r.qty)}
-                  </Text>
-                  <Text style={[styles.plainTableCell, { width: "10%", marginLeft: 6 }]}>
-                    {r.unit_name ?? "—"}
-                  </Text>
-                  {showRates && (
-                    <>
-                      <Text style={[styles.plainTableCell, { width: "13%", textAlign: "right" }]}>
-                        {r.rate ? fmtAmt(r.rate) : "—"}
-                      </Text>
-                      <Text style={[styles.plainTableCellBold, { width: "15%", textAlign: "right" }]}>
-                        {fmtAmt(r.amount)}
-                      </Text>
-                    </>
-                  )}
-                </View>
-              ))}
+              {items.map((r, idx) => {
+                const taxAmt = parseFloat(r.cgst_amount ?? "0") + parseFloat(r.sgst_amount ?? "0") + parseFloat(r.igst_amount ?? "0");
+                const grossAmt = parseFloat(r.amount ?? "0") + taxAmt;
+                return (
+                  <View key={r.item_id ?? idx} style={styles.plainTableRow}>
+                    <Text style={[styles.plainTableCell, { width: "7%" }]}>{idx + 1}</Text>
+                    <Text style={[styles.plainTableCell, { flex: 1 }]}>{r.material_name ?? "—"}</Text>
+                    <Text style={[styles.plainTableCell, { width: "12%", textAlign: "right" }]}>
+                      {fmtQty(r.qty)}
+                    </Text>
+                    <Text style={[styles.plainTableCell, { width: "9%", marginLeft: 6 }]}>
+                      {r.unit_name ?? "—"}
+                    </Text>
+                    {showRates && (
+                      <>
+                        <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
+                          {r.rate ? fmtAmt(r.rate) : "—"}
+                        </Text>
+                        <Text style={[styles.plainTableCell, { width: "8%", textAlign: "right" }]}>
+                          {r.tax_percentage ? `${parseFloat(r.tax_percentage)}%` : "—"}
+                        </Text>
+                        <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
+                          {fmtAmt(taxAmt.toFixed(2))}
+                        </Text>
+                        <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
+                          {fmtAmt(grossAmt.toFixed(2))}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                );
+              })}
 
               <View style={styles.separator} />
 
-              {/* Total — only when showRates */}
+              {/* Footer — only when showRates */}
               {showRates && (
-                <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2 }}>
-                  <Text style={styles.plainTableCellBold}>
-                    Total : Rs. {fmtAmt(String(poTotal))}
-                  </Text>
+                <View style={{ marginTop: 4 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 1 }}>
+                    <Text style={[styles.plainTableCell, { textAlign: "right", marginRight: 4 }]}>Taxable Value:</Text>
+                    <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
+                      Rs. {fmtAmt(poSubtotal.toFixed(2))}
+                    </Text>
+                  </View>
+                  {poCgst > 0 && (
+                    <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 1 }}>
+                      <Text style={[styles.plainTableCell, { textAlign: "right", marginRight: 4 }]}>CGST:</Text>
+                      <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
+                        Rs. {fmtAmt(poCgst.toFixed(2))}
+                      </Text>
+                    </View>
+                  )}
+                  {poSgst > 0 && (
+                    <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 1 }}>
+                      <Text style={[styles.plainTableCell, { textAlign: "right", marginRight: 4 }]}>SGST:</Text>
+                      <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
+                        Rs. {fmtAmt(poSgst.toFixed(2))}
+                      </Text>
+                    </View>
+                  )}
+                  {poIgst > 0 && (
+                    <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 1 }}>
+                      <Text style={[styles.plainTableCell, { textAlign: "right", marginRight: 4 }]}>IGST:</Text>
+                      <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
+                        Rs. {fmtAmt(poIgst.toFixed(2))}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={[styles.separator, { marginVertical: 2 }]} />
+                  <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+                    <Text style={[styles.plainTableCell, { textAlign: "right", marginRight: 4 }]}>Grand Total:</Text>
+                    <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
+                      Rs. {fmtAmt(poGrand.toFixed(2))}
+                    </Text>
+                  </View>
                 </View>
               )}
             </View>

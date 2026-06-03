@@ -45,14 +45,6 @@ interface VehicleOption {
   customer_state: string | null;
 }
 
-interface TaxRateOption {
-  id: string;
-  vat_code: number;
-  tax_percentage: string;
-  description: string;
-  inv_prefix: string | null;
-}
-
 interface MaterialOption {
   id: string;
   material_no: number;
@@ -73,9 +65,7 @@ interface UnitOption {
 interface Props {
   mode: Mode;
   invoice?: InvoiceWithDetails | null;
-  nextBillNumber?: string;
   vehicles: VehicleOption[];
-  taxRates: TaxRateOption[];
   materials: MaterialOption[];
   units: UnitOption[];
   companySetting?: CompanySetting;
@@ -221,7 +211,7 @@ function buildPdfRows(inv: InvoiceWithDetails): InvoiceRow[] {
   }));
 }
 
-export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, units, companySetting }: Props) {
+export function InvoiceForm({ mode, invoice, vehicles, materials, units, companySetting }: Props) {
   const router = useRouter();
   const { activeFY: fy } = useFY();
   const [isSaving, setIsSaving] = useState(false);
@@ -246,9 +236,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     invoice ? toISODate(invoice.bill_date) : new Date().toISOString().slice(0, 10)
   );
 
-  // Tax rate selection (determines bill number prefix)
-  const [taxRateId, setTaxRateId] = useState("");
-  const [invPrefix, setInvPrefix] = useState<string | null>(null);
   const [billNumber, setBillNumber] = useState(invoice?.bill_number ?? "—");
 
   // MI slip checklist state
@@ -276,6 +263,14 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
   const totals = calcRowTotals(rows);
   const grossTotal = totals.grand;
   const netAmount = grossTotal;
+
+  // ── Bill number init for new invoices ────────────────────────────────────
+  useEffect(() => {
+    if (!invoice) {
+      peekNextBillNumber(null, fy).then(setBillNumber).catch(() => setBillNumber("00001"));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount; fy is stable at initial render
 
   // ── Margin % → recalculate all row rates when margin changes ──────────────
   useEffect(() => {
@@ -392,23 +387,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     });
   }
 
-  // When tax rate / prefix changes: update bill number preview
-  async function handleTaxRateChange(trId: string) {
-    setTaxRateId(trId);
-    const tr = taxRates.find((t) => t.id === trId);
-    const prefix = tr?.inv_prefix?.trim().toUpperCase() ?? null;
-    setInvPrefix(prefix);
-
-    if (!invoice) {
-      try {
-        const next = await peekNextBillNumber(prefix, fy);
-        setBillNumber(next);
-      } catch {
-        setBillNumber(prefix ? `${prefix}-00001` : "00001");
-      }
-    }
-  }
-
   // Load initial MIs if editing an existing invoice
   useEffect(() => {
     if (invoice?.vehicle_id && !isReadOnly) {
@@ -439,7 +417,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
       vehicle_id: vehicleId,
       slip_ids: Array.from(selectedSlipIds),
       bill_date: billDate,
-      inv_prefix: invPrefix ?? "",
+      inv_prefix: "",
       financial_year: fy,
       tax_percentage: "0",
       material_margin: materialMargin || "0",
@@ -548,14 +526,6 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
     value: v.id,
     label: `${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
   }));
-
-  const taxRateOptions = taxRates.map((t) => ({
-    value: t.id,
-    label: t.inv_prefix ? `${t.description} (${t.inv_prefix})` : t.description,
-  }));
-
-  const selectedTaxRate = taxRates.find((t) => t.id === taxRateId);
-  const noPrefixWarning = taxRateId && !selectedTaxRate?.inv_prefix;
 
   return (
     <div className="flex flex-col h-full">
@@ -740,38 +710,8 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
             </div>
           )}
 
-          {/* Row 3: Tax Rate / Bill Series, Rate Date */}
+          {/* Row 3: Margin % */}
           <div className="grid grid-cols-3 gap-4">
-            {invoice ? (
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Bill Series</label>
-                <div className="h-9 px-3 flex items-center bg-slate-50 rounded border border-slate-200 text-sm text-slate-500">
-                  {invoice.bill_number.includes("-")
-                    ? invoice.bill_number.split("-")[0]
-                    : "Numeric only"}
-                  <span className="ml-2 text-xs text-slate-400">(locked at creation)</span>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Tax Rate (Bill Series)</label>
-                <Combobox
-                  options={taxRateOptions}
-                  value={taxRateId}
-                  onChange={handleTaxRateChange}
-                  placeholder="Select tax rate..."
-                  searchPlaceholder="Search..."
-                />
-                {noPrefixWarning ? (
-                  <p className="text-xs text-amber-600 mt-1">
-                    ⚠ No Invoice Prefix on this rate — bill number will be numeric only. Set one in Tax Master if needed.
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-400 mt-1">Determines bill number prefix</p>
-                )}
-              </div>
-            )}
-          {/* Row 4: Margin % */}
           <div className="grid grid-cols-4 gap-4 items-end">
             <div>
               <label className="text-xs text-slate-500 block mb-1">Material Margin %</label>
@@ -816,7 +756,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
       <div className="fixed bottom-0 left-64 right-0 z-30 bg-white border-t border-slate-200 shadow-lg">
         <div className="flex items-center gap-6 px-6 py-2 border-b border-slate-100 text-sm">
           <span className="text-slate-500">
-            Subtotal: <strong className="text-slate-800">₹{fmt2(totals.subtotal)}</strong>
+            Taxable Value: <strong className="text-slate-800">₹{fmt2(totals.subtotal)}</strong>
           </span>
           {totals.cgst > 0 && (
             <span className="text-slate-500">
