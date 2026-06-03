@@ -31,6 +31,13 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
         const first = items[0];
 
 
+        const subtotal = items.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
+        const cgst = items.reduce((s, r) => s + parseFloat(r.cgst_amount || "0"), 0);
+        const sgst = items.reduce((s, r) => s + parseFloat(r.sgst_amount || "0"), 0);
+        const igst = items.reduce((s, r) => s + parseFloat(r.igst_amount || "0"), 0);
+        const hasCgstSgst = cgst > 0 || sgst > 0;
+        const hasIgst = igst > 0;
+
         return (
           <Page key={first.id} size="A4" style={styles.page}>
 
@@ -98,35 +105,57 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
               <View style={styles.separator} />
 
               <View style={styles.plainTableHead}>
-                <Text style={[styles.plainTableHeadCell, { width: "8%" }]}>S No.</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "7%" }]}>S No.</Text>
                 <Text style={[styles.plainTableHeadCell, { flex: 1 }]}>Material Name</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "right" }]}>Qty</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "9%", marginLeft: 4 }]}>Unit</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Rate</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "14%", textAlign: "right" }]}>Amount</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>Qty</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "7%", marginLeft: 4 }]}>Unit</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Rate</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "7%", textAlign: "right" }]}>Tax%</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax Amt</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Amount</Text>
               </View>
 
               <View style={styles.separator} />
 
-              {items.map((r, idx) => (
-                <View key={r.item_id} style={styles.plainTableRow}>
-                  <Text style={[styles.plainTableCell, { width: "8%" }]}>{idx + 1}</Text>
-                  <Text style={[styles.plainTableCell, { flex: 1 }]}>{r.material_name}</Text>
-                  <Text style={[styles.plainTableCell, { width: "12%", textAlign: "right" }]}>{fmtQty(r.qty)}</Text>
-                  <Text style={[styles.plainTableCell, { width: "9%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
-                  <Text style={[styles.plainTableCell, { width: "13%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
-                  <Text style={[styles.plainTableCellBold, { width: "14%", textAlign: "right" }]}>{fmtAmt(r.amount)}</Text>
-                </View>
-              ))}
+              {items.map((r, idx) => {
+                const taxAmt = parseFloat(r.cgst_amount || "0") + parseFloat(r.sgst_amount || "0") + parseFloat(r.igst_amount || "0");
+                const grossAmt = parseFloat(r.amount || "0") + taxAmt;
+                return (
+                  <View key={r.item_id} style={styles.plainTableRow}>
+                    <Text style={[styles.plainTableCell, { width: "7%" }]}>{idx + 1}</Text>
+                    <Text style={[styles.plainTableCell, { flex: 1 }]}>{r.material_name}</Text>
+                    <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQty(r.qty)}</Text>
+                    <Text style={[styles.plainTableCell, { width: "7%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
+                    <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
+                    <Text style={[styles.plainTableCell, { width: "7%", textAlign: "right" }]}>
+                      {r.tax_percentage_item ? `${parseFloat(r.tax_percentage_item)}%` : "—"}
+                    </Text>
+                    <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
+                      {fmtAmt(taxAmt.toFixed(2))}
+                    </Text>
+                    <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
+                      {fmtAmt(grossAmt.toFixed(2))}
+                    </Text>
+                  </View>
+                );
+              })}
 
               <View style={styles.separator} />
 
-              {/* Totals — Net Amount only */}
+              {/* Totals — Taxable Value → tax lines → Net Amount */}
               <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2, gap: 8 }}>
                 <View style={{ alignItems: "flex-end", gap: 3 }}>
+                  <Text style={styles.plainTableCell}>Taxable Value</Text>
+                  {hasCgstSgst && <Text style={styles.plainTableCell}>CGST</Text>}
+                  {hasCgstSgst && <Text style={styles.plainTableCell}>SGST</Text>}
+                  {hasIgst && <Text style={styles.plainTableCell}>IGST</Text>}
                   <Text style={styles.plainTableCellBold}>Net Amount</Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 3, minWidth: 90 }}>
+                  <Text style={styles.plainTableCell}>{fmtAmt(subtotal.toFixed(2))}</Text>
+                  {hasCgstSgst && <Text style={styles.plainTableCell}>{fmtAmt(cgst.toFixed(2))}</Text>}
+                  {hasCgstSgst && <Text style={styles.plainTableCell}>{fmtAmt(sgst.toFixed(2))}</Text>}
+                  {hasIgst && <Text style={styles.plainTableCell}>{fmtAmt(igst.toFixed(2))}</Text>}
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>

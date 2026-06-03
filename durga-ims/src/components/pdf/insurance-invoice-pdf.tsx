@@ -106,35 +106,49 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
               <View style={styles.separator} />
 
               <View style={styles.plainTableHead}>
-                <Text style={[styles.plainTableHeadCell, { width: "6%" }]}>S No.</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "center" }]}>HSN</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "5%" }]}>S No.</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "center" }]}>HSN</Text>
                 <Text style={[styles.plainTableHeadCell, { flex: 1, marginLeft: 6 }]}>Material Name</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>Qty</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "8%", marginLeft: 4 }]}>Unit</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Rate</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "14%", textAlign: "right" }]}>Amount</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "9%", textAlign: "right" }]}>Qty</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "7%", marginLeft: 4 }]}>Unit</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Rate</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "7%", textAlign: "right" }]}>Tax%</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax Amt</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Amount</Text>
               </View>
 
               <View style={styles.separator} />
 
-              {items.map((r, idx) => (
-                <View key={r.item_id} style={styles.plainTableRow}>
-                  <Text style={[styles.plainTableCell, { width: "6%" }]}>{idx + 1}</Text>
-                  <Text style={[styles.plainTableCell, { width: "12%", textAlign: "center" }]}>{r.hsn_code ?? "—"}</Text>
-                  <Text style={[styles.plainTableCell, { flex: 1, marginLeft: 6 }]}>{r.material_name}</Text>
-                  <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQty(r.qty)}</Text>
-                  <Text style={[styles.plainTableCell, { width: "8%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
-                  <Text style={[styles.plainTableCell, { width: "13%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
-                  <Text style={[styles.plainTableCellBold, { width: "14%", textAlign: "right" }]}>{fmtAmt(r.amount)}</Text>
-                </View>
-              ))}
+              {items.map((r, idx) => {
+                const taxAmt = parseFloat(r.cgst_amount || "0") + parseFloat(r.sgst_amount || "0") + parseFloat(r.igst_amount || "0");
+                const grossAmt = parseFloat(r.amount || "0") + taxAmt;
+                return (
+                  <View key={r.item_id} style={styles.plainTableRow}>
+                    <Text style={[styles.plainTableCell, { width: "5%" }]}>{idx + 1}</Text>
+                    <Text style={[styles.plainTableCell, { width: "10%", textAlign: "center" }]}>{r.hsn_code ?? "—"}</Text>
+                    <Text style={[styles.plainTableCell, { flex: 1, marginLeft: 6 }]}>{r.material_name}</Text>
+                    <Text style={[styles.plainTableCell, { width: "9%", textAlign: "right" }]}>{fmtQty(r.qty)}</Text>
+                    <Text style={[styles.plainTableCell, { width: "7%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
+                    <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
+                    <Text style={[styles.plainTableCell, { width: "7%", textAlign: "right" }]}>
+                      {r.tax_percentage_item ? `${parseFloat(r.tax_percentage_item)}%` : "—"}
+                    </Text>
+                    <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
+                      {fmtAmt(taxAmt.toFixed(2))}
+                    </Text>
+                    <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
+                      {fmtAmt(grossAmt.toFixed(2))}
+                    </Text>
+                  </View>
+                );
+              })}
 
               <View style={styles.separator} />
 
               {/* Totals — Subtotal → tax lines → Net Amount (no Gross Total) */}
               <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2, gap: 8 }}>
                 <View style={{ alignItems: "flex-end", gap: 3 }}>
-                  <Text style={styles.plainTableCell}>Subtotal</Text>
+                  <Text style={styles.plainTableCell}>Taxable Value</Text>
                   {hasCgstSgst && <Text style={styles.plainTableCell}>CGST</Text>}
                   {hasCgstSgst && <Text style={styles.plainTableCell}>SGST</Text>}
                   {hasIgst && <Text style={styles.plainTableCell}>IGST</Text>}
