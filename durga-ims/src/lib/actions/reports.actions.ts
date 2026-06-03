@@ -377,63 +377,6 @@ export async function getMonthlyStockReport(params: {
 }
 
 // ---------------------------------------------------------------------------
-// Supplier Monthly Report
-// ---------------------------------------------------------------------------
-
-export interface SupplierMaterialRow {
-  supplier_name: string;
-  material_name: string;
-  month: string; // "YYYY-MM"
-  total_qty: number;
-  total_amount: number;
-}
-
-export async function getSupplierMaterialReport(params: {
-  fromDate: string;
-  toDate: string;
-  supplierId?: string;
-  materialId?: string;
-}): Promise<SupplierMaterialRow[]> {
-  const { fromDate, toDate, supplierId, materialId } = params;
-  const from = new Date(fromDate + "T00:00:00+05:30");
-  const to = new Date(toDate + "T23:59:59+05:30");
-
-  const monthExpr = sql<string>`to_char(date_trunc('month', ${purchaseOrders.po_date}), 'YYYY-MM')`;
-
-  const rows = await db
-    .select({
-      supplier_name: suppliers.name,
-      material_name: materials.name,
-      month: monthExpr,
-      total_qty: sql<string>`SUM(${purchaseOrderItems.qty}::numeric)`,
-      total_amount: sql<string>`SUM(${purchaseOrderItems.amount}::numeric)`,
-    })
-    .from(purchaseOrderItems)
-    .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
-    .innerJoin(suppliers, eq(purchaseOrderItems.supplier_id, suppliers.id))
-    .innerJoin(materials, eq(purchaseOrderItems.material_id, materials.id))
-    .where(
-      and(
-        eq(purchaseOrders.status, "Received"),
-        gte(purchaseOrders.po_date, from),
-        lte(purchaseOrders.po_date, to),
-        supplierId ? eq(purchaseOrderItems.supplier_id, supplierId) : undefined,
-        materialId ? eq(purchaseOrderItems.material_id, materialId) : undefined,
-      )
-    )
-    .groupBy(suppliers.name, materials.name, monthExpr)
-    .orderBy(asc(suppliers.name), asc(materials.name), asc(monthExpr));
-
-  return rows.map((r) => ({
-    supplier_name: r.supplier_name,
-    material_name: r.material_name,
-    month: r.month,
-    total_qty: parseFloat(r.total_qty ?? "0"),
-    total_amount: parseFloat(r.total_amount ?? "0"),
-  }));
-}
-
-// ---------------------------------------------------------------------------
 // Filter dropdown data
 // ---------------------------------------------------------------------------
 

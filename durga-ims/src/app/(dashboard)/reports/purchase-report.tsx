@@ -56,6 +56,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   const [rows, setRows] = useState<PurchaseReportRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);
+  const [groupByMonth, setGroupByMonth] = useState(false);
 
   const supplierOptions = suppliers.map((s) => ({ value: s.id, label: s.name }));
   const materialOptions = materials.map((m) => ({
@@ -95,19 +96,39 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
     };
   }, [rows]);
 
+  const monthlyRows = useMemo(() => {
+    if (!groupByMonth) return [];
+    const map = new Map<string, { key: string; label: string; qty: number; taxable: number; cgst: number; sgst: number; igst: number; total: number }>();
+    for (const r of rows.filter((r) => r.status === "Received")) {
+      const parts = r.po_date.split("/"); // ["03", "06", "2026"]
+      const key = `${parts[2]}-${parts[1]}`; // "2026-06"
+      const label = new Date(+parts[2], +parts[1] - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+      const prev = map.get(key) ?? { key, label, qty: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 };
+      map.set(key, { ...prev, qty: prev.qty + r.qty, taxable: prev.taxable + r.taxable_amount, cgst: prev.cgst + r.cgst_amount, sgst: prev.sgst + r.sgst_amount, igst: prev.igst + r.igst_amount, total: prev.total + r.total_amount });
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+  }, [rows, groupByMonth]);
+
   function downloadCsv() {
-    const headers = [
-      "PO #", "Date", "Supplier Bill No.", "Supplier Bill Date", "Supplier", "Material", "Qty", "Unit", "Rate",
-      "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount", "Stock Updated", "Status",
-    ];
-    const csvRows = rows.map((r) => [
-      r.po_number, r.po_date, r.supplier_bill_no ?? "", r.supplier_bill_date ?? "",
-      r.supplier_name ?? "", r.material_name,
-      r.qty.toFixed(3), r.unit_name ?? "", r.rate.toFixed(2),
-      r.taxable_amount.toFixed(2), r.cgst_amount.toFixed(2),
-      r.sgst_amount.toFixed(2), r.igst_amount.toFixed(2),
-      r.total_amount.toFixed(2), r.affects_stock ? "Yes" : "No", r.status,
-    ]);
+    let headers: string[];
+    let csvRows: (string | number)[][];
+    if (groupByMonth) {
+      headers = ["Month", "Qty", "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount"];
+      csvRows = monthlyRows.map((r) => [r.label, r.qty.toFixed(3), r.taxable.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2), r.igst.toFixed(2), r.total.toFixed(2)]);
+    } else {
+      headers = [
+        "PO #", "Date", "Supplier Bill No.", "Supplier Bill Date", "Supplier", "Material", "Qty", "Unit", "Rate",
+        "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount", "Stock Updated", "Status",
+      ];
+      csvRows = rows.map((r) => [
+        r.po_number, r.po_date, r.supplier_bill_no ?? "", r.supplier_bill_date ?? "",
+        r.supplier_name ?? "", r.material_name,
+        r.qty.toFixed(3), r.unit_name ?? "", r.rate.toFixed(2),
+        r.taxable_amount.toFixed(2), r.cgst_amount.toFixed(2),
+        r.sgst_amount.toFixed(2), r.igst_amount.toFixed(2),
+        r.total_amount.toFixed(2), r.affects_stock ? "Yes" : "No", r.status,
+      ]);
+    }
     const bom = "﻿";
     const csv = bom + [headers, ...csvRows]
       .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
@@ -116,7 +137,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `purchase-report-${fy}.csv`;
+    a.download = groupByMonth ? `purchase-report-monthly-${fy}.csv` : `purchase-report-${fy}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -191,10 +212,64 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
       ) : (
         <>
           <div className="flex justify-end gap-2">
+            <Button
+              variant={groupByMonth ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setGroupByMonth((g) => !g)}
+            >
+              {groupByMonth ? "Monthly View" : "Group by Month"}
+            </Button>
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadCsv}>
-              Export CSV ({rows.length})
+              Export CSV ({groupByMonth ? monthlyRows.length : rows.length})
             </Button>
           </div>
+
+          {groupByMonth ? (
+            <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg overflow-auto">
+              <table className="min-w-max w-full text-xs">
+                <thead className="bg-slate-50 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Month</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">CGST</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">SGST</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">IGST</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyRows.length === 0 ? (
+                    <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">No received purchases in selected range.</td></tr>
+                  ) : (
+                    monthlyRows.map((r) => (
+                      <tr key={r.key} className="border-t border-slate-100 hover:bg-slate-50/50">
+                        <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.label}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.cgst > 0 ? fmtAmt(r.cgst) : "—"}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.sgst > 0 ? fmtAmt(r.sgst) : "—"}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.igst > 0 ? fmtAmt(r.igst) : "—"}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.total)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot className="bg-slate-100 sticky bottom-0">
+                  <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
+                    <td className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">TOTAL</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.qty)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">{totals.cgst > 0 ? fmtAmt(totals.cgst) : "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">{totals.sgst > 0 ? fmtAmt(totals.sgst) : "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">{totals.igst > 0 ? fmtAmt(totals.igst) : "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
 
           <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg overflow-auto">
             <table className="min-w-max w-full text-xs">
@@ -263,22 +338,24 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
               </tbody>
               <tfoot className="bg-slate-100 sticky bottom-0">
                 <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={4} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
+                  <td colSpan={5} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
                     TOTAL {rows.filter((r) => r.status !== "Received").length > 0 && "(Received only)"}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.qty)}</td>
-                  <td />
-                  <td />
+                  <td />{/* Unit */}
+                  <td />{/* Rate — no total */}
                   <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{totals.cgst > 0 ? fmtAmt(totals.cgst) : "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{totals.sgst > 0 ? fmtAmt(totals.sgst) : "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{totals.igst > 0 ? fmtAmt(totals.igst) : "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
-                  <td colSpan={2} />
+                  <td />{/* Stock Updated */}
+                  <td />{/* Status */}
                 </tr>
               </tfoot>
             </table>
           </div>
+          )}
         </>
       )}
     </div>
