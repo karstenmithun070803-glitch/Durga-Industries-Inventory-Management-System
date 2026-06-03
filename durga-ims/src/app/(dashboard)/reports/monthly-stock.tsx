@@ -62,7 +62,8 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
     setToMonth(range.to);
   }, [defaultFY]);
   const [materialId, setMaterialId] = useState("");
-  const [showPrices, setShowPrices] = useState(false);
+  const [showPrices, setShowPrices] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
   const [rows, setRows] = useState<MonthlyStockRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);
@@ -95,6 +96,23 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
     }
   }
 
+  // Auto-run when filters change after the first manual run
+  useEffect(() => {
+    if (!hasRun) return;
+    if (fromMonth > toMonth) return;
+    const t = setTimeout(() => {
+      setIsLoading(true);
+      const { from } = monthToDateRange(fromMonth);
+      const { to } = monthToDateRange(toMonth);
+      getMonthlyStockReport({ fromDate: from, toDate: to, materialId: materialId || undefined })
+        .then((data) => setRows(data))
+        .catch(() => toast.error("Failed to load report data."))
+        .finally(() => setIsLoading(false));
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromMonth, toMonth, materialId]);
+
   const totals = useMemo(() => ({
     opening: rows.reduce((s, r) => s + r.opening_stock, 0),
     inward: rows.reduce((s, r) => s + r.po_inward, 0),
@@ -110,9 +128,10 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
   }, [rows]);
 
   function downloadCsv() {
-    const headers = showPrices
-      ? ["Material", "Unit", "Opening", "PO Inward", "Issues", "Reversals", "Adjustments", "Closing", "Last Rate", "Closing Value"]
-      : ["Material", "Unit", "Opening", "PO Inward", "Issues", "Reversals", "Adjustments", "Closing"];
+    const baseHeaders = showDetails
+      ? ["Material", "Unit", "Opening", "PO Inward", "Issues", "Reversals", "Adjustments", "Closing"]
+      : ["Material", "Unit", "Opening", "PO Inward", "Issues", "Closing"];
+    const headers = showPrices ? [...baseHeaders, "Last Rate", "Closing Value"] : baseHeaders;
 
     const csvRows = rows.map((r) => {
       const base = [
@@ -121,8 +140,10 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
         r.opening_stock.toFixed(3),
         r.po_inward.toFixed(3),
         r.issues.toFixed(3),
-        r.reversals >= 0 ? `+${r.reversals.toFixed(3)}` : r.reversals.toFixed(3),
-        r.adjustments >= 0 ? `+${r.adjustments.toFixed(3)}` : r.adjustments.toFixed(3),
+        ...(showDetails ? [
+          r.reversals >= 0 ? `+${r.reversals.toFixed(3)}` : r.reversals.toFixed(3),
+          r.adjustments >= 0 ? `+${r.adjustments.toFixed(3)}` : r.adjustments.toFixed(3),
+        ] : []),
         r.closing_stock.toFixed(3),
       ];
       if (showPrices) {
@@ -150,7 +171,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
     <div className="p-6 flex flex-col gap-5 h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Monthly Stock Report</h2>
-        <p className="text-sm text-slate-500 mt-0.5">Warehouse period reconciliation — opening, movements, and closing stock</p>
+        <p className="text-sm text-slate-500 mt-0.5">Warehouse stock movement by period — what came in, what was used, and what remains</p>
       </div>
 
       {/* Filters */}
@@ -197,6 +218,21 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             {showPrices ? "Prices On" : "Prices Off"}
           </button>
         </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600 block">Details</label>
+          <button
+            type="button"
+            onClick={() => setShowDetails((d) => !d)}
+            className={cn(
+              "h-9 px-4 rounded-md text-sm font-medium border transition-colors",
+              showDetails
+                ? "bg-slate-800 text-white border-slate-800"
+                : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+            )}
+          >
+            {showDetails ? "Details On" : "Show Details"}
+          </button>
+        </div>
         <div className="flex gap-2 items-end">
           <Button onClick={runReport} disabled={isLoading} className="h-9">
             {isLoading ? "Loading…" : "Run Report"}
@@ -238,8 +274,12 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Opening</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">PO Inward</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Issues</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Reversals</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Adjustments</th>
+                  {showDetails && (
+                    <>
+                      <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Reversals</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Adjustments</th>
+                    </>
+                  )}
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Closing</th>
                   {showPrices && (
                     <>
@@ -270,18 +310,22 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                       <td className="px-3 py-1.5 whitespace-nowrap text-right text-orange-700">
                         {r.issues > 0 ? `-${fmtQty(r.issues)}` : "—"}
                       </td>
-                      <td className={cn(
-                        "px-3 py-1.5 whitespace-nowrap text-right",
-                        r.reversals > 0 ? "text-purple-700" : r.reversals < 0 ? "text-rose-700" : "text-slate-400"
-                      )}>
-                        {fmtSigned(r.reversals)}
-                      </td>
-                      <td className={cn(
-                        "px-3 py-1.5 whitespace-nowrap text-right",
-                        r.adjustments > 0 ? "text-green-700" : r.adjustments < 0 ? "text-rose-700" : "text-slate-400"
-                      )}>
-                        {fmtSigned(r.adjustments)}
-                      </td>
+                      {showDetails && (
+                        <>
+                          <td className={cn(
+                            "px-3 py-1.5 whitespace-nowrap text-right",
+                            r.reversals > 0 ? "text-purple-700" : r.reversals < 0 ? "text-rose-700" : "text-slate-400"
+                          )}>
+                            {fmtSigned(r.reversals)}
+                          </td>
+                          <td className={cn(
+                            "px-3 py-1.5 whitespace-nowrap text-right",
+                            r.adjustments > 0 ? "text-green-700" : r.adjustments < 0 ? "text-rose-700" : "text-slate-400"
+                          )}>
+                            {fmtSigned(r.adjustments)}
+                          </td>
+                        </>
+                      )}
                       <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-900">
                         {fmtQty(r.closing_stock)}
                       </td>
@@ -302,7 +346,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
               <tfoot className="bg-slate-100 sticky bottom-0">
                 {hasMultipleUnits ? (
                   <tr className="border-t-2 border-slate-300">
-                    <td colSpan={showPrices ? 10 : 8} className="px-3 py-2 text-center text-xs text-slate-500 italic">
+                    <td colSpan={6 + (showDetails ? 2 : 0) + (showPrices ? 2 : 0)} className="px-3 py-2 text-center text-xs text-slate-500 italic">
                       Unit-wise total not shown — multiple units in this report. Filter by a single material or unit for a meaningful total.
                     </td>
                   </tr>
@@ -316,10 +360,21 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                     <td className="px-3 py-2 whitespace-nowrap text-right text-orange-700">
                       {totals.issues > 0 ? `-${fmtQty(totals.issues)}` : "—"}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtSigned(totals.reversals)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtSigned(totals.adjustments)}</td>
+                    {showDetails && (
+                      <>
+                        <td className="px-3 py-2 whitespace-nowrap text-right">{fmtSigned(totals.reversals)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right">{fmtSigned(totals.adjustments)}</td>
+                      </>
+                    )}
                     <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtQty(totals.closing)}</td>
                     {showPrices && <td colSpan={2} />}
+                  </tr>
+                )}
+                {!showDetails && (
+                  <tr>
+                    <td colSpan={6 + (showPrices ? 2 : 0)} className="px-3 py-1 text-center text-[10px] text-slate-400 italic border-t border-slate-200">
+                      Reversals and Adjustments columns hidden — toggle Show Details to view.
+                    </td>
                   </tr>
                 )}
               </tfoot>

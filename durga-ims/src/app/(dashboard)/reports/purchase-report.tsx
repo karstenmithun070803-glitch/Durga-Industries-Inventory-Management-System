@@ -48,6 +48,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   useEffect(() => {
     setFy(defaultFY);
   }, [defaultFY]);
+
   const [status, setStatus] = useState("Received");
   const [supplierId, setSupplierId] = useState("");
   const [materialId, setMaterialId] = useState("");
@@ -57,11 +58,6 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   const [isLoading, setIsLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);
   const [groupByMonth, setGroupByMonth] = useState(false);
-  const [filtersChanged, setFiltersChanged] = useState(false);
-
-  function markChanged() {
-    if (hasRun) setFiltersChanged(true);
-  }
 
   const supplierOptions = suppliers.map((s) => ({ value: s.id, label: s.name }));
   const materialOptions = materials.map((m) => ({
@@ -70,7 +66,6 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   }));
 
   async function runReport() {
-    setFiltersChanged(false);
     setGroupByMonth(false);
     setIsLoading(true);
     try {
@@ -90,6 +85,27 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
       setIsLoading(false);
     }
   }
+
+  // Auto-run when filters change after the first manual run
+  useEffect(() => {
+    if (!hasRun) return;
+    const t = setTimeout(() => {
+      setIsLoading(true);
+      getPurchaseReport({
+        fy,
+        status: status === "All" ? undefined : status,
+        supplierId: supplierId || undefined,
+        materialId: materialId || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      })
+        .then((data) => setRows(data))
+        .catch(() => toast.error("Failed to load report data."))
+        .finally(() => setIsLoading(false));
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fy, status, supplierId, materialId, dateFrom, dateTo]);
 
   const totals = useMemo(() => {
     const active = rows.filter((r) => r.status === "Received");
@@ -179,18 +195,18 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
       <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap gap-4 items-end">
         <div className="space-y-1 w-44">
           <label className="text-xs font-medium text-slate-600">Financial Year</label>
-          <Combobox options={FY_OPTIONS} value={fy} onChange={(v) => { setFy(v); markChanged(); }} placeholder="Select FY" />
+          <Combobox options={FY_OPTIONS} value={fy} onChange={setFy} placeholder="Select FY" />
         </div>
         <div className="space-y-1 w-44">
           <label className="text-xs font-medium text-slate-600">Status</label>
-          <Combobox options={STATUS_OPTIONS} value={status} onChange={(v) => { setStatus(v); markChanged(); }} placeholder="Status" />
+          <Combobox options={STATUS_OPTIONS} value={status} onChange={setStatus} placeholder="Status" />
         </div>
         <div className="space-y-1 w-52">
           <label className="text-xs font-medium text-slate-600">Supplier (optional)</label>
           <Combobox
             options={[{ value: "", label: "All Suppliers" }, ...supplierOptions]}
             value={supplierId}
-            onChange={(v) => { setSupplierId(v); markChanged(); }}
+            onChange={setSupplierId}
             placeholder="All Suppliers"
           />
         </div>
@@ -199,29 +215,25 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
           <Combobox
             options={[{ value: "", label: "All Materials" }, ...materialOptions]}
             value={materialId}
-            onChange={(v) => { setMaterialId(v); markChanged(); }}
+            onChange={setMaterialId}
             placeholder="All Materials"
           />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Date From</label>
-          <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); markChanged(); }} className="h-9 text-sm w-36" />
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 text-sm w-36" />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Date To</label>
-          <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); markChanged(); }} className="h-9 text-sm w-36" />
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9 text-sm w-36" />
         </div>
         <div className="flex gap-2 items-end">
-          <Button
-            onClick={runReport}
-            disabled={isLoading}
-            className={cn("h-9", filtersChanged && "bg-amber-600 hover:bg-amber-700 text-white animate-pulse")}
-          >
-            {isLoading ? "Loading…" : filtersChanged ? "⚠ Filters changed — Run Report" : "Run Report"}
+          <Button onClick={runReport} disabled={isLoading} className="h-9">
+            {isLoading ? "Loading…" : "Run Report"}
           </Button>
           {(supplierId || materialId || dateFrom || dateTo || status !== "Received" || fy !== defaultFY) && (
             <button
-              onClick={() => { setSupplierId(""); setMaterialId(""); setDateFrom(""); setDateTo(""); setStatus("Received"); setFy(defaultFY); setFiltersChanged(false); setGroupByMonth(false); }}
+              onClick={() => { setSupplierId(""); setMaterialId(""); setDateFrom(""); setDateTo(""); setStatus("Received"); setFy(defaultFY); setGroupByMonth(false); }}
               className="text-xs text-blue-600 underline h-9 px-1"
             >
               Clear filters
@@ -247,8 +259,6 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
               size="sm"
               className="h-8 text-xs"
               onClick={() => setGroupByMonth((g) => !g)}
-              disabled={filtersChanged}
-              title={filtersChanged ? "Run Report to apply filters first" : undefined}
             >
               {groupByMonth ? "Monthly View" : "Group by Month"}
             </Button>

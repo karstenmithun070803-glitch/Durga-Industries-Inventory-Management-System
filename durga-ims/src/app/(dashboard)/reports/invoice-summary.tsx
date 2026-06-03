@@ -44,6 +44,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
   useEffect(() => {
     setFy(defaultFY);
   }, [defaultFY]);
+
   const [status, setStatus] = useState("Finalized");
   const [vehicleId, setVehicleId] = useState("");
   const [customerId, setCustomerId] = useState("");
@@ -82,6 +83,27 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
       setIsLoading(false);
     }
   }
+
+  // Auto-run when filters change after the first manual run
+  useEffect(() => {
+    if (!hasRun) return;
+    const t = setTimeout(() => {
+      setIsLoading(true);
+      getInvoiceSummaryReport({
+        fy,
+        status: status === "All" ? undefined : status,
+        vehicleId: vehicleId || undefined,
+        customerId: customerId || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      })
+        .then((data) => setRows(data))
+        .catch(() => toast.error("Failed to load report data."))
+        .finally(() => setIsLoading(false));
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fy, status, vehicleId, customerId, dateFrom, dateTo]);
 
   // Totals — when viewing Cancelled Only, show cancelled totals for reference.
   // Otherwise exclude Cancelled (they are void for GST filing purposes).
