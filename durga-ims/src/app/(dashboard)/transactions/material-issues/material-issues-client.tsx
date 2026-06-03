@@ -136,7 +136,7 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">Material Issues</h1>
+          <h1 className="text-xl font-semibold text-slate-800">Vehicle Material Issues</h1>
           <p className="text-sm text-slate-500 mt-0.5">FY {activeFY}</p>
         </div>
         <Link href="/transactions/material-issues/new">

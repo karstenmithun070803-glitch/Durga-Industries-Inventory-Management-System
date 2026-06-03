@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { FileText, ShoppingCart, BarChart2 } from "lucide-react";
+import { FileText, ShoppingCart, BarChart2, Building2 } from "lucide-react";
 import { InvoiceSummaryReport } from "./invoice-summary";
 import { PurchaseReport } from "./purchase-report";
 import { MonthlyStockReport } from "./monthly-stock";
+import { SupplierReport } from "./supplier-report";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { useFY } from "@/lib/financial-year";
 
-type ReportTab = "invoice-summary" | "purchase" | "monthly-stock";
+type ReportTab = "invoice-summary" | "purchase" | "monthly-stock" | "supplier";
 
 interface Props {
   vehicles: { id: string; vehicle_name: string; job_ref_no: string }[];
@@ -23,6 +24,7 @@ const NAV_ITEMS: { id: ReportTab; label: string; icon: React.ElementType }[] = [
   { id: "invoice-summary", label: "Invoice Summary", icon: FileText },
   { id: "purchase", label: "Purchase Report", icon: ShoppingCart },
   { id: "monthly-stock", label: "Monthly Stock Report", icon: BarChart2 },
+  { id: "supplier", label: "Supplier Report", icon: Building2 },
 ];
 
 export function ReportsClient({ vehicles, suppliers, materials, customers, companySetting }: Props) {
@@ -77,6 +79,13 @@ export function ReportsClient({ vehicles, suppliers, materials, customers, compa
             materials={materials}
             defaultFY={activeFY}
             companySetting={companySetting}
+          />
+        )}
+        {activeTab === "supplier" && (
+          <SupplierReport
+            suppliers={suppliers}
+            materials={materials}
+            defaultFY={activeFY}
           />
         )}
       </div>

@@ -2,6 +2,9 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { getDashboardStats } from "@/lib/actions/dashboard.actions";
+import { getVehiclesForJobSearch } from "@/lib/actions/stock.actions";
+import { getCompanySettings } from "@/lib/actions/settings.actions";
+import { JobCostPanel } from "@/components/job-cost-panel";
 import { getCurrentFY } from "@/lib/fy";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +81,11 @@ function RecentTable({
 
 export default async function HomePage() {
   const fy = getCurrentFY();
-  const stats = await getDashboardStats();
+  const [stats, vehicles, companySetting] = await Promise.all([
+    getDashboardStats(),
+    getVehiclesForJobSearch(),
+    getCompanySettings(),
+  ]);
 
   return (
     <div className="p-6 max-w-6xl">
@@ -160,6 +167,9 @@ export default async function HomePage() {
           />
         </div>
       </div>
+
+      <SectionTitle>Job Cost Search</SectionTitle>
+      <JobCostPanel vehicles={vehicles} companySetting={companySetting ?? undefined} />
     </div>
   );
 }

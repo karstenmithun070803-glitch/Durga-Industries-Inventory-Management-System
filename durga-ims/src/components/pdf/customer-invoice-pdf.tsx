@@ -43,47 +43,56 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
 
             <Text style={styles.docTypeCentered}>INVOICE</Text>
 
-            {/* ── Header info ── */}
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>BILL NO.</Text>
-              <Text style={styles.infoLineValue}>: {first.bill_number}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>BILL DATE</Text>
-              <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>VEHICLE</Text>
-              <Text style={styles.infoLineValue}>: {first.vehicle_name}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>JOB NO.</Text>
-              <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
-            </View>
-            {first.customer_name && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>CUSTOMER</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
+            {/* ── Two-column header: bill info left, customer info right ── */}
+            <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
+              {/* Left column — bill info */}
+              <View style={{ flex: 1 }}>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>BILL NO.</Text>
+                  <Text style={styles.infoLineValue}>: {first.bill_number}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>BILL DATE</Text>
+                  <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>VEHICLE</Text>
+                  <Text style={styles.infoLineValue}>: {first.vehicle_name}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>JOB NO.</Text>
+                  <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
+                </View>
               </View>
-            )}
-            {first.customer_gstin && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>GSTIN</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_gstin}</Text>
+
+              {/* Right column — customer info */}
+              <View style={{ flex: 1 }}>
+                {first.customer_name && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>CUSTOMER</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
+                  </View>
+                )}
+                {first.customer_gstin && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>GSTIN</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_gstin}</Text>
+                  </View>
+                )}
+                {first.customer_address && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
+                  </View>
+                )}
+                {first.customer_state && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>PLACE OF SUPPLY</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
+                  </View>
+                )}
               </View>
-            )}
-            {first.customer_address && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>ADDRESS</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
-              </View>
-            )}
-            {first.customer_state && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>PLACE OF SUPPLY</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
-              </View>
-            )}
+            </View>
             {/* ── Table — simplified (no tax columns) ── */}
             <View style={[styles.table, { marginTop: 8 }]}>
               <View style={styles.separator} />

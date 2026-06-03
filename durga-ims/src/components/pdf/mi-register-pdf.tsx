@@ -9,42 +9,8 @@ import {
   fmtQty,
   fmtDate,
 } from "./pdf-styles";
+import type { MaterialIssueRow } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
-
-type MaterialIssueRow = {
-  id: string;
-  slip_number: number;
-  issue_date: string;
-  financial_year: string;
-  status: string;
-  margin_percentage: string;
-  total_amount: string;
-  vehicle_id: string;
-  vehicle_name: string;
-  job_ref_no: string;
-  customer_id: string | null;
-  customer_name: string | null;
-  customer_gstin: string | null;
-  customer_state: string | null;
-  item_id: string;
-  material_id: string;
-  material_name: string;
-  material_no: number;
-  hsn_code: string | null;
-  contractor_id: string | null;
-  contractor_name: string | null;
-  qty: string;
-  unit_id: string | null;
-  unit_name: string | null;
-  rate: string;
-  tax_percentage: string;
-  cgst_amount: string;
-  sgst_amount: string;
-  igst_amount: string;
-  amount: string;
-  gst_type: string | null;
-  affects_inventory: boolean;
-};
 
 interface Props {
   rows: MaterialIssueRow[];
@@ -64,6 +30,7 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
   const coName    = companySetting?.company_name ?? COMPANY_NAME;
   const coAddress = companySetting?.address      ?? COMPANY_ADDRESS;
   const coGstin   = companySetting?.gstin        ?? COMPANY_GSTIN;
+
   const slipMap = new Map<string, MaterialIssueRow[]>();
   for (const r of rows) {
     if (!slipMap.has(r.id)) slipMap.set(r.id, []);
@@ -72,12 +39,17 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
   const slipGroups = Array.from(slipMap.entries());
 
   return (
-    <Document title="Material Issue Slip">
+    <Document title="Vehicle Material Issue Slip">
       {slipGroups.map(([slipId, items]) => {
         const first = items[0];
         const slipLabel = formatCode("MI-", first.slip_number, 4);
         const jobLabel = first.job_ref_no;
-        const slipTotal = items.reduce((s, r) => s + parseFloat(r.amount ?? "0"), 0);
+
+        const slipTotal   = items.reduce((s, r) => s + parseFloat(r.amount ?? "0"), 0);
+        const cgstTotal   = items.reduce((s, r) => s + parseFloat(r.cgst_amount ?? "0"), 0);
+        const sgstTotal   = items.reduce((s, r) => s + parseFloat(r.sgst_amount ?? "0"), 0);
+        const igstTotal   = items.reduce((s, r) => s + parseFloat(r.igst_amount ?? "0"), 0);
+        const grandTotal  = slipTotal + cgstTotal + sgstTotal + igstTotal;
 
         return (
           <Page key={slipId} size="A4" style={styles.page}>
@@ -90,7 +62,7 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
             </View>
 
             {/* ── Document type ── */}
-            <Text style={styles.docTypeCentered}>MATERIAL ISSUE SLIP</Text>
+            <Text style={styles.docTypeCentered}>VEHICLE MATERIAL ISSUE SLIP</Text>
 
             {/* ── Info block ── */}
             <View style={styles.infoLine}>
@@ -109,6 +81,12 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabel}>CUSTOMER</Text>
                 <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
+              </View>
+            )}
+            {first.customer_address && (
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
               </View>
             )}
 
@@ -162,12 +140,23 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
 
               <View style={styles.separator} />
 
-              {/* Total — only when showRates */}
+              {/* Totals — only when showRates */}
               {showRates && (
-                <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2 }}>
-                  <Text style={styles.plainTableCellBold}>
-                    Total : Rs. {fmtAmt(String(slipTotal))}
-                  </Text>
+                <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2, gap: 8 }}>
+                  <View style={{ alignItems: "flex-end", gap: 3 }}>
+                    <Text style={styles.plainTableCell}>Subtotal</Text>
+                    {cgstTotal > 0 && <Text style={styles.plainTableCell}>CGST</Text>}
+                    {sgstTotal > 0 && <Text style={styles.plainTableCell}>SGST</Text>}
+                    {igstTotal > 0 && <Text style={styles.plainTableCell}>IGST</Text>}
+                    <Text style={styles.plainTableCellBold}>Grand Total</Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end", gap: 3, minWidth: 90 }}>
+                    <Text style={styles.plainTableCell}>Rs. {fmtAmt(String(slipTotal))}</Text>
+                    {cgstTotal > 0 && <Text style={styles.plainTableCell}>{fmtAmt(String(cgstTotal))}</Text>}
+                    {sgstTotal > 0 && <Text style={styles.plainTableCell}>{fmtAmt(String(sgstTotal))}</Text>}
+                    {igstTotal > 0 && <Text style={styles.plainTableCell}>{fmtAmt(String(igstTotal))}</Text>}
+                    <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(String(grandTotal))}</Text>
+                  </View>
                 </View>
               )}
             </View>

@@ -20,26 +20,19 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Combobox } from "@/components/ui/combobox";
 import { cn, formatCode } from "@/lib/utils";
 import {
   getStockMovementHistory,
   adjustStock,
-  getJobCostData,
   getStockForMaterial,
 } from "@/lib/actions/stock.actions";
 import type {
   StockMaterialRow,
   StockSummary,
   StockLedgerEntry,
-  VehicleSearchRow,
-  JobCostResult,
 } from "@/lib/actions/stock.actions";
-import type { CompanySetting } from "@/lib/actions/settings.actions";
-import { History, SlidersHorizontal, RefreshCw, ChevronDown, ChevronUp, ShoppingCart } from "lucide-react";
+import { History, SlidersHorizontal, RefreshCw, ShoppingCart } from "lucide-react";
 import Link from "next/link";
-import { PrintButton } from "@/components/pdf/print-button";
-import { JobCostDocument } from "@/components/pdf/job-cost-pdf";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -111,15 +104,13 @@ const LEDGER_TYPE_LABELS: Record<string, string> = {
 interface Props {
   initialRows: StockMaterialRow[];
   summary: StockSummary;
-  vehicles: VehicleSearchRow[];
-  companySetting?: CompanySetting;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function StockClient({ initialRows, summary: initialSummary, vehicles, companySetting }: Props) {
+export function StockClient({ initialRows, summary: initialSummary }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [rows, setRows] = useState(initialRows);
@@ -144,11 +135,6 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
   const [adjustReason, setAdjustReason] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Job cost search
-  const [jobCostOpen, setJobCostOpen] = useState(false);
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
-  const [jobCostResult, setJobCostResult] = useState<JobCostResult | null>(null);
-  const [jobCostLoading, setJobCostLoading] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Refresh
@@ -254,28 +240,6 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
   }
 
   // ---------------------------------------------------------------------------
-  // Job cost search
-  // ---------------------------------------------------------------------------
-
-  async function handleVehicleSelect(vehicleId: string) {
-    setSelectedVehicleId(vehicleId);
-    setJobCostResult(null);
-    setJobCostLoading(true);
-    const result = await getJobCostData(vehicleId);
-    setJobCostResult(result);
-    setJobCostLoading(false);
-  }
-
-  const vehicleOptions = useMemo(
-    () =>
-      vehicles.map((v) => ({
-        value: v.id,
-        label: `${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` (${v.customer_name})` : ""}${!v.is_active ? " [Inactive]" : ""}`,
-      })),
-    [vehicles]
-  );
-
-  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
@@ -333,18 +297,6 @@ export function StockClient({ initialRows, summary: initialSummary, vehicles, co
           clickable
         />
       </div>
-
-      {/* ── Job Cost Search ── */}
-      <JobCostPanel
-        vehicleOptions={vehicleOptions}
-        selectedVehicleId={selectedVehicleId}
-        onSelect={handleVehicleSelect}
-        result={jobCostResult}
-        loading={jobCostLoading}
-        companySetting={companySetting}
-        open={jobCostOpen}
-        onToggle={() => setJobCostOpen((p) => !p)}
-      />
 
       {/* ── Materials Table ── */}
       <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg flex flex-col">
@@ -703,120 +655,3 @@ function StatusBadge({ status }: { status: StockStatus }) {
   return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>;
 }
 
-// ---------------------------------------------------------------------------
-// Job Cost Panel
-// ---------------------------------------------------------------------------
-
-function JobCostPanel({
-  vehicleOptions, selectedVehicleId, onSelect, result, loading, companySetting, open, onToggle,
-}: {
-  vehicleOptions: { value: string; label: string }[];
-  selectedVehicleId: string | null;
-  onSelect: (id: string) => void;
-  result: JobCostResult | null;
-  loading: boolean;
-  companySetting?: CompanySetting;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors rounded-lg"
-      >
-        <span>Job Cost Search</span>
-        {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-      </button>
-
-      {open && (
-        <div className="px-4 pb-4 border-t border-slate-100">
-          <div className="mt-3 flex items-center gap-3">
-            <div className="w-96">
-              <Combobox
-                options={vehicleOptions}
-                value={selectedVehicleId ?? ""}
-                onChange={onSelect}
-                placeholder="Search by job #, vehicle name, or customer..."
-              />
-            </div>
-            {selectedVehicleId && (
-              <span className="text-xs text-slate-400">Select a vehicle to see material costs</span>
-            )}
-          </div>
-
-          {loading && (
-            <p className="text-sm text-slate-400 py-6 text-center">Loading job cost data…</p>
-          )}
-
-          {!loading && result && (
-            <div className="mt-4">
-              {/* Vehicle info */}
-              <div className="flex items-center gap-4 mb-3 text-sm">
-                <span className="font-medium text-slate-800">{result.vehicle.vehicle_name}</span>
-                <span className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-medium",
-                  result.vehicle.vehicle_type === "New" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
-                )}>
-                  {result.vehicle.vehicle_type === "New" ? "New Build" : "Repair"}
-                </span>
-                <span className="text-slate-400">Job #{result.vehicle.job_ref_no}</span>
-                {result.vehicle.customer_name && (
-                  <span className="text-slate-500">{result.vehicle.customer_name}</span>
-                )}
-              </div>
-
-              {result.rows.length === 0 ? (
-                <p className="text-sm text-slate-400 py-4">No materials have been issued to this vehicle yet.</p>
-              ) : (
-                <>
-                  <div className="overflow-auto border border-slate-200 rounded-lg">
-                    <table className="w-full text-xs">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
-                          <th className="px-3 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Contractor</th>
-                          <th className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
-                          <th className="px-3 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
-                          <th className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Rate</th>
-                          <th className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Total Cost</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.rows.map((r, i) => (
-                          <tr key={i} className="border-t border-slate-100">
-                            <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.material_name}</td>
-                            <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.contractor_name ?? "—"}</td>
-                            <td className="px-3 py-1.5 text-right whitespace-nowrap">{r.total_qty.toLocaleString("en-IN", { maximumFractionDigits: 4 })}</td>
-                            <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.unit_name ?? "—"}</td>
-                            <td className="px-3 py-1.5 text-right whitespace-nowrap text-slate-600">{fmtAmt(r.rate)}</td>
-                            <td className="px-3 py-1.5 text-right whitespace-nowrap font-medium">{fmtAmt(r.total_amount)}</td>
-                          </tr>
-                        ))}
-                        {/* Totals row */}
-                        <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold text-sm">
-                          <td colSpan={5} className="px-3 py-2 text-right text-slate-600">TOTAL</td>
-                          <td className="px-3 py-2 text-right text-slate-800">{fmtAmt(result.totals.total_cost)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Print button */}
-                  <div className="mt-3 flex justify-end">
-                    <PrintButton
-                      label="Print Job Cost PDF"
-                      getDocument={() => (
-                        <JobCostDocument result={result} companySetting={companySetting} />
-                      )}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

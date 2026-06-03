@@ -34,7 +34,6 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
         const cgst = items.reduce((s, r) => s + parseFloat(r.cgst_amount || "0"), 0);
         const sgst = items.reduce((s, r) => s + parseFloat(r.sgst_amount || "0"), 0);
         const igst = items.reduce((s, r) => s + parseFloat(r.igst_amount || "0"), 0);
-        const gross = subtotal + cgst + sgst + igst;
 
         const hasCgstSgst = cgst > 0 || sgst > 0;
         const hasIgst = igst > 0;
@@ -51,47 +50,56 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
 
             <Text style={styles.docTypeCentered}>INVOICE</Text>
 
-            {/* ── Header info ── */}
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>BILL NO.</Text>
-              <Text style={styles.infoLineValue}>: {first.bill_number}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>BILL DATE</Text>
-              <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>VEHICLE</Text>
-              <Text style={styles.infoLineValue}>: {first.vehicle_name}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>JOB NO.</Text>
-              <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
-            </View>
-            {first.customer_name && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>CUSTOMER</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
+            {/* ── Two-column header: bill info left, customer info right ── */}
+            <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
+              {/* Left column — bill info */}
+              <View style={{ flex: 1 }}>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>BILL NO.</Text>
+                  <Text style={styles.infoLineValue}>: {first.bill_number}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>BILL DATE</Text>
+                  <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>VEHICLE</Text>
+                  <Text style={styles.infoLineValue}>: {first.vehicle_name}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>JOB NO.</Text>
+                  <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
+                </View>
               </View>
-            )}
-            {first.customer_gstin && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>GSTIN</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_gstin}</Text>
+
+              {/* Right column — customer info */}
+              <View style={{ flex: 1 }}>
+                {first.customer_name && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>CUSTOMER</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
+                  </View>
+                )}
+                {first.customer_gstin && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>GSTIN</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_gstin}</Text>
+                  </View>
+                )}
+                {first.customer_address && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
+                  </View>
+                )}
+                {first.customer_state && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>PLACE OF SUPPLY</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
+                  </View>
+                )}
               </View>
-            )}
-            {first.customer_address && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>ADDRESS</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
-              </View>
-            )}
-            {first.customer_state && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>PLACE OF SUPPLY</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
-              </View>
-            )}
+            </View>
 
             {/* ── Table ── */}
             <View style={[styles.table, { marginTop: 8 }]}>
@@ -99,21 +107,12 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
 
               <View style={styles.plainTableHead}>
                 <Text style={[styles.plainTableHeadCell, { width: "6%" }]}>S No.</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "right" }]}>HSN</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "center" }]}>HSN</Text>
                 <Text style={[styles.plainTableHeadCell, { flex: 1, marginLeft: 6 }]}>Material Name</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>Qty</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "8%", marginLeft: 4 }]}>Unit</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Rate</Text>
-                {hasCgstSgst && (
-                  <>
-                    <Text style={[styles.plainTableHeadCell, { width: "9%", textAlign: "right" }]}>CGST</Text>
-                    <Text style={[styles.plainTableHeadCell, { width: "9%", textAlign: "right" }]}>SGST</Text>
-                  </>
-                )}
-                {hasIgst && (
-                  <Text style={[styles.plainTableHeadCell, { width: "9%", textAlign: "right" }]}>IGST</Text>
-                )}
-                <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Amount</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Rate</Text>
+                <Text style={[styles.plainTableHeadCell, { width: "14%", textAlign: "right" }]}>Amount</Text>
               </View>
 
               <View style={styles.separator} />
@@ -121,34 +120,24 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
               {items.map((r, idx) => (
                 <View key={r.item_id} style={styles.plainTableRow}>
                   <Text style={[styles.plainTableCell, { width: "6%" }]}>{idx + 1}</Text>
-                  <Text style={[styles.plainTableCell, { width: "12%", textAlign: "right" }]}>{r.hsn_code ?? "—"}</Text>
+                  <Text style={[styles.plainTableCell, { width: "12%", textAlign: "center" }]}>{r.hsn_code ?? "—"}</Text>
                   <Text style={[styles.plainTableCell, { flex: 1, marginLeft: 6 }]}>{r.material_name}</Text>
                   <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQty(r.qty)}</Text>
                   <Text style={[styles.plainTableCell, { width: "8%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
-                  <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
-                  {hasCgstSgst && (
-                    <>
-                      <Text style={[styles.plainTableCell, { width: "9%", textAlign: "right" }]}>{fmtAmt(r.cgst_amount)}</Text>
-                      <Text style={[styles.plainTableCell, { width: "9%", textAlign: "right" }]}>{fmtAmt(r.sgst_amount)}</Text>
-                    </>
-                  )}
-                  {hasIgst && (
-                    <Text style={[styles.plainTableCell, { width: "9%", textAlign: "right" }]}>{fmtAmt(r.igst_amount)}</Text>
-                  )}
-                  <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>{fmtAmt(r.amount)}</Text>
+                  <Text style={[styles.plainTableCell, { width: "13%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
+                  <Text style={[styles.plainTableCellBold, { width: "14%", textAlign: "right" }]}>{fmtAmt(r.amount)}</Text>
                 </View>
               ))}
 
               <View style={styles.separator} />
 
-              {/* Totals */}
+              {/* Totals — Subtotal → tax lines → Net Amount (no Gross Total) */}
               <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2, gap: 8 }}>
                 <View style={{ alignItems: "flex-end", gap: 3 }}>
                   <Text style={styles.plainTableCell}>Subtotal</Text>
                   {hasCgstSgst && <Text style={styles.plainTableCell}>CGST</Text>}
                   {hasCgstSgst && <Text style={styles.plainTableCell}>SGST</Text>}
                   {hasIgst && <Text style={styles.plainTableCell}>IGST</Text>}
-                  <Text style={styles.plainTableCell}>Gross Total</Text>
                   <Text style={styles.plainTableCellBold}>Net Amount</Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 3, minWidth: 90 }}>
@@ -156,7 +145,6 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
                   {hasCgstSgst && <Text style={styles.plainTableCell}>{fmtAmt(String(cgst))}</Text>}
                   {hasCgstSgst && <Text style={styles.plainTableCell}>{fmtAmt(String(sgst))}</Text>}
                   {hasIgst && <Text style={styles.plainTableCell}>{fmtAmt(String(igst))}</Text>}
-                  <Text style={styles.plainTableCell}>{fmtAmt(String(gross))}</Text>
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>

@@ -36,10 +36,12 @@ interface VehicleOption {
   id: string;
   job_ref_no: string;
   vehicle_name: string;
+  type: string;
   customer_id: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
   customer_state: string | null;
+  customer_address: string | null;
 }
 
 interface ContractorOption {
@@ -154,6 +156,9 @@ export function MaterialIssueForm({
   const [rows, setRows] = useState<LineItemDraft[]>(
     issue ? issueItemsToRows(issue) : [newRow()]
   );
+
+  // Vehicle type filter
+  const [vehicleTypeFilter, setVehicleTypeFilter] = useState<"all" | "New" | "Old">("all");
 
   // Dialog states
   const [showIssueDialog, setShowIssueDialog] = useState(false);
@@ -306,7 +311,11 @@ export function MaterialIssueForm({
     })
     .filter(Boolean) as string[];
 
-  const vehicleOptions = vehicles.map((v) => ({
+  const filteredVehicles = vehicleTypeFilter === "all"
+    ? vehicles
+    : vehicles.filter((v) => v.type === vehicleTypeFilter);
+
+  const vehicleOptions = filteredVehicles.map((v) => ({
     value: v.id,
     label: `${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
   }));
@@ -386,13 +395,32 @@ export function MaterialIssueForm({
                     : issue?.vehicle_name ?? "—"}
                 </div>
               ) : (
-                <Combobox
-                  options={vehicleOptions}
-                  value={vehicleId}
-                  onChange={handleVehicleChange}
-                  placeholder="Select vehicle / job..."
-                  searchPlaceholder="Search by job no or vehicle..."
-                />
+                <>
+                  {/* New / Old filter toggle */}
+                  <div className="flex gap-1 mb-1.5">
+                    {(["all", "New", "Old"] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setVehicleTypeFilter(f)}
+                        className={`px-2.5 py-0.5 rounded text-xs font-medium border transition-colors ${
+                          vehicleTypeFilter === f
+                            ? "bg-slate-800 text-white border-slate-800"
+                            : "text-slate-500 border-slate-200 hover:border-slate-400"
+                        }`}
+                      >
+                        {f === "all" ? "All" : f === "New" ? "New Build" : "Repair"}
+                      </button>
+                    ))}
+                  </div>
+                  <Combobox
+                    options={vehicleOptions}
+                    value={vehicleId}
+                    onChange={handleVehicleChange}
+                    placeholder="Select vehicle / job..."
+                    searchPlaceholder="Search by job no or vehicle..."
+                  />
+                </>
               )}
             </div>
             <div className="flex items-end gap-3">
@@ -437,42 +465,58 @@ export function MaterialIssueForm({
 
           {/* Row 3: Customer info (auto-filled, read-only) */}
           {selectedVehicle?.customer_name && (
-            <div className="grid grid-cols-3 gap-4 pt-1 border-t border-slate-100">
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Customer</label>
-                <div className="text-sm text-slate-700 font-medium">
-                  {selectedVehicle.customer_name}
+            <div className="pt-1 border-t border-slate-100 space-y-2">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Customer</label>
+                  <div className="text-sm text-slate-700 font-medium">
+                    {selectedVehicle.customer_name}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">GSTIN</label>
+                  <div className="text-sm text-slate-600 font-mono">
+                    {selectedVehicle.customer_gstin ?? "—"}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">State</label>
+                  <div className="text-sm text-slate-600">
+                    {selectedVehicle.customer_state ?? "—"}
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">GSTIN</label>
-                <div className="text-sm text-slate-600 font-mono">
-                  {selectedVehicle.customer_gstin ?? "—"}
+              {selectedVehicle.customer_address && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Address</label>
+                  <div className="text-sm text-slate-600">{selectedVehicle.customer_address}</div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">State</label>
-                <div className="text-sm text-slate-600">
-                  {selectedVehicle.customer_state ?? "—"}
-                </div>
-              </div>
+              )}
             </div>
           )}
           {/* Customer info for view mode (from issue data) */}
           {isReadOnly && issue?.customer_name && !selectedVehicle && (
-            <div className="grid grid-cols-3 gap-4 pt-1 border-t border-slate-100">
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Customer</label>
-                <div className="text-sm text-slate-700 font-medium">{issue.customer_name}</div>
+            <div className="pt-1 border-t border-slate-100 space-y-2">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Customer</label>
+                  <div className="text-sm text-slate-700 font-medium">{issue.customer_name}</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">GSTIN</label>
+                  <div className="text-sm text-slate-600 font-mono">{issue.customer_gstin ?? "—"}</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">State</label>
+                  <div className="text-sm text-slate-600">{issue.customer_state ?? "—"}</div>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">GSTIN</label>
-                <div className="text-sm text-slate-600 font-mono">{issue.customer_gstin ?? "—"}</div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">State</label>
-                <div className="text-sm text-slate-600">{issue.customer_state ?? "—"}</div>
-              </div>
+              {issue.customer_address && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Address</label>
+                  <div className="text-sm text-slate-600">{issue.customer_address}</div>
+                </div>
+              )}
             </div>
           )}
         </div>

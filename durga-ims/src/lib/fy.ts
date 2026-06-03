@@ -22,6 +22,16 @@ export function isDateInFY(dateStr: string, fy: string): boolean {
   return dateStr >= `${startYear}-04-01` && dateStr <= `${startYear + 1}-03-31`;
 }
 
+// Returns { from: "YYYY-MM", to: "YYYY-MM" } for the first and last month of a FY.
+// Used by month-range report filters to auto-set from/to on FY change.
+export function fyToMonthRange(fy: string): { from: string; to: string } {
+  const [startYear] = fy.split("-").map(Number);
+  return {
+    from: `${startYear}-04`,
+    to: `${startYear + 1}-03`,
+  };
+}
+
 // Returns an array of FY strings (e.g. "2026-2027") going `count` years back
 // from the current FY, most recent first. Used to populate the FY switcher dropdown.
 export function getFYOptions(count = 5): string[] {

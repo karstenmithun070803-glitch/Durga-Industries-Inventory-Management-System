@@ -154,6 +154,7 @@ export interface MaterialIssueRow {
   customer_name: string | null;
   customer_gstin: string | null;
   customer_state: string | null;
+  customer_address: string | null;
   // item
   item_id: string;
   material_id: string;
@@ -214,6 +215,7 @@ export interface MaterialIssueWithDetails {
   customer_name: string | null;
   customer_gstin: string | null;
   customer_state: string | null;
+  customer_address: string | null;
   items: MaterialIssueItemWithDetails[];
 }
 

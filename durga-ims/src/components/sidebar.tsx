@@ -51,7 +51,7 @@ const nav = [
     icon: ShoppingCart,
     children: [
       { label: "Purchase Orders", href: "/transactions/purchase-orders", icon: ShoppingCart },
-      { label: "Material Issue", href: "/transactions/material-issues", icon: ClipboardList },
+      { label: "Vehicle Material Issue", href: "/transactions/material-issues", icon: ClipboardList },
     ],
   },
   { label: "Invoice", href: "/invoice", icon: FileText },

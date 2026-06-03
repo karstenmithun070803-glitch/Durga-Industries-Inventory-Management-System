@@ -116,20 +116,34 @@ function itemValues(issueId: string, item: IssueItemInput) {
 // ---------------------------------------------------------------------------
 
 export async function getActiveVehicles() {
-  return db
+  const rows = await db
     .select({
       id: vehicles.id,
       job_ref_no: vehicles.job_ref_no,
       vehicle_name: vehicles.vehicle_name,
+      type: vehicles.type,
       customer_id: vehicles.customer_id,
       customer_name: customers.customer_name,
       customer_gstin: customers.gstin,
       customer_state: customers.state,
+      address_1: customers.address_1,
+      address_2: customers.address_2,
+      street: customers.street,
+      city: customers.city,
     })
     .from(vehicles)
     .leftJoin(customers, eq(vehicles.customer_id, customers.id))
     .where(eq(vehicles.is_active, true))
     .orderBy(vehicles.job_ref_no);
+
+  return rows.map((r) => ({
+    ...r,
+    customer_address: [r.address_1, r.address_2, r.street, r.city].filter(Boolean).join(", ") || null,
+    address_1: undefined,
+    address_2: undefined,
+    street: undefined,
+    city: undefined,
+  }));
 }
 
 export async function getActiveContractors() {
@@ -222,6 +236,10 @@ export async function getMaterialIssues(financialYear: string): Promise<Material
       customer_name: cu.customer_name,
       customer_gstin: cu.gstin,
       customer_state: cu.state,
+      customer_address_1: cu.address_1,
+      customer_address_2: cu.address_2,
+      customer_street: cu.street,
+      customer_city: cu.city,
       // item
       item_id: materialIssueItems.id,
       material_id: materialIssueItems.material_id,
@@ -260,6 +278,11 @@ export async function getMaterialIssues(financialYear: string): Promise<Material
     customer_name: r.customer_name ?? null,
     customer_gstin: r.customer_gstin ?? null,
     customer_state: r.customer_state ?? null,
+    customer_address: [r.customer_address_1, r.customer_address_2, r.customer_street, r.customer_city].filter(Boolean).join(", ") || null,
+    customer_address_1: undefined,
+    customer_address_2: undefined,
+    customer_street: undefined,
+    customer_city: undefined,
     contractor_id: r.contractor_id ?? null,
     contractor_name: r.contractor_name ?? null,
     unit_id: r.unit_id ?? null,
@@ -285,6 +308,10 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
       customer_name: customers.customer_name,
       customer_gstin: customers.gstin,
       customer_state: customers.state,
+      customer_address_1: customers.address_1,
+      customer_address_2: customers.address_2,
+      customer_street: customers.street,
+      customer_city: customers.city,
     })
     .from(materialIssues)
     .innerJoin(vehicles, eq(materialIssues.vehicle_id, vehicles.id))
@@ -358,6 +385,7 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
     customer_name: header.customer_name ?? null,
     customer_gstin: header.customer_gstin ?? null,
     customer_state: header.customer_state ?? null,
+    customer_address: [header.customer_address_1, header.customer_address_2, header.customer_street, header.customer_city].filter(Boolean).join(", ") || null,
     items,
   };
 }

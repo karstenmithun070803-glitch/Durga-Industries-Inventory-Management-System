@@ -257,7 +257,7 @@ export function TransactionGrid({
 
   const materialOptions = materials.map((m) => ({
     value: m.id,
-    label: `${formatCode("M", m.material_no)} — ${m.name}`,
+    label: isInvoiceMode ? m.name : `${formatCode("M", m.material_no)} — ${m.name}`,
   }));
 
   const supplierOptions = suppliers.map((s) => ({
@@ -311,10 +311,10 @@ export function TransactionGrid({
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">Qty</th>
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Unit</th>
             <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">Rate</th>
-            <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Tax %</th>
-            <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">CGST</th>
-            <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">SGST</th>
-            <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">IGST</th>
+            {!isInvoiceMode && <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Tax %</th>}
+            {!isInvoiceMode && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">CGST</th>}
+            {!isInvoiceMode && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">SGST</th>}
+            {!isInvoiceMode && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">IGST</th>}
             <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-28">Amount</th>
             {!readOnly && <th className="px-3 py-2.5 w-10" />}
           </tr>
@@ -494,35 +494,43 @@ export function TransactionGrid({
                   )}
                 </td>
 
-                {/* Tax % */}
-                <td className="px-3 py-1.5">
-                  {readOnly ? (
-                    <span className="text-slate-800">{row.tax_percentage}</span>
-                  ) : (
-                    <Input
-                      type="number"
-                      className="w-16 h-8 text-sm"
-                      value={row.tax_percentage}
-                      onChange={(e) => update(row._key, { tax_percentage: e.target.value })}
-                      min="0"
-                      max="100"
-                      step="any"
-                    />
-                  )}
-                </td>
+                {/* Tax % — hidden in invoice mode */}
+                {!isInvoiceMode && (
+                  <td className="px-3 py-1.5">
+                    {readOnly ? (
+                      <span className="text-slate-800">{row.tax_percentage}</span>
+                    ) : (
+                      <Input
+                        type="number"
+                        className="w-16 h-8 text-sm"
+                        value={row.tax_percentage}
+                        onChange={(e) => update(row._key, { tax_percentage: e.target.value })}
+                        min="0"
+                        max="100"
+                        step="any"
+                      />
+                    )}
+                  </td>
+                )}
 
-                {/* CGST — always shown */}
-                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
-                  {fmt2(row.cgst_amount)}
-                </td>
-                {/* SGST — always shown */}
-                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
-                  {fmt2(row.sgst_amount)}
-                </td>
-                {/* IGST — always shown */}
-                <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
-                  {fmt2(row.igst_amount)}
-                </td>
+                {/* CGST — hidden in invoice mode */}
+                {!isInvoiceMode && (
+                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
+                    {fmt2(row.cgst_amount)}
+                  </td>
+                )}
+                {/* SGST — hidden in invoice mode */}
+                {!isInvoiceMode && (
+                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
+                    {fmt2(row.sgst_amount)}
+                  </td>
+                )}
+                {/* IGST — hidden in invoice mode */}
+                {!isInvoiceMode && (
+                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
+                    {fmt2(row.igst_amount)}
+                  </td>
+                )}
 
                 {/* Amount */}
                 <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">
