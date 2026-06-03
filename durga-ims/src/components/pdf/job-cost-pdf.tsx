@@ -49,7 +49,7 @@ export function JobCostDocument({ result, companySetting }: Props) {
           </View>
           <View style={styles.infoLine}>
             <Text style={styles.infoLineLabel}>TYPE</Text>
-            <Text style={styles.infoLineValue}>: {result.vehicle.vehicle_type === "New" ? "New Build" : "Repair"}</Text>
+            <Text style={styles.infoLineValue}>: {result.vehicle.vehicle_type === "New" ? "New Build" : "Old Build"}</Text>
           </View>
           {result.vehicle.customer_name && (
             <View style={styles.infoLine}>

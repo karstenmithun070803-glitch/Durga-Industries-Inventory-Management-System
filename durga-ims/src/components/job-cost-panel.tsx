@@ -73,7 +73,7 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
               "px-2 py-0.5 rounded-full text-xs font-medium",
               result.vehicle.vehicle_type === "New" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
             )}>
-              {result.vehicle.vehicle_type === "New" ? "New Build" : "Repair"}
+              {result.vehicle.vehicle_type === "New" ? "New Build" : "Old Build"}
             </span>
             <span className="text-slate-400">Job #{result.vehicle.job_ref_no}</span>
             {result.vehicle.customer_name && (

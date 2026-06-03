@@ -103,7 +103,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
     const headers = ["Bill #", "Date", "Vehicle", "Type", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Gross Total", "Discount", "Net Amount", "Status"];
     const csvRows = rows.map((r) => [
       r.bill_number, r.bill_date, r.vehicle_name ?? "",
-      r.vehicle_type === "New" ? "New Build" : r.vehicle_type === "Old" ? "Repair" : "",
+      r.vehicle_type === "New" ? "New Build" : r.vehicle_type === "Old" ? "Old Build" : "",
       r.customer_name ?? "", r.customer_gstin ?? "",
       r.taxable_value.toFixed(2), r.total_cgst.toFixed(2),
       r.total_sgst.toFixed(2), r.total_igst.toFixed(2), r.gross_total.toFixed(2),
@@ -222,7 +222,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                           "px-2 py-0.5 rounded-full text-xs font-medium",
                           r.vehicle_type === "New" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                         )}>
-                          {r.vehicle_type === "New" ? "New Build" : "Repair"}
+                          {r.vehicle_type === "New" ? "New Build" : "Old Build"}
                         </span>
                       ) : "—"}
                     </td>

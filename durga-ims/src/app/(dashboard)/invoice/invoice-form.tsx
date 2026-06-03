@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -530,14 +532,18 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
   return (
     <div className="flex flex-col h-full">
       {/* Breadcrumb */}
-      <div className="px-6 pt-5 pb-3">
-        <p className="text-xs text-slate-400">
-          Transactions &rsaquo; Invoices &rsaquo;{" "}
-          {invoice ? invoice.bill_number : "New Invoice"}
-        </p>
-        <h1 className="text-lg font-semibold text-slate-800 mt-0.5">
+      <div className="flex items-center gap-2 px-6 pt-5 pb-3">
+        <Link
+          href="/invoice"
+          className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Invoices
+        </Link>
+        <span className="text-slate-300">/</span>
+        <span className="text-sm text-slate-700 font-medium">
           {mode === "new" ? "New Invoice" : invoice?.bill_number ?? "Invoice"}
-        </h1>
+        </span>
       </div>
 
       {/* Finalized amber warning (edit mode only) */}
@@ -778,7 +784,7 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
           </span>
         </div>
 
-        <div className="flex items-center gap-3 px-6 py-3">
+        <div className="flex items-center gap-3 px-6 py-3 justify-end">
           {mode === "view" ? (
             <>
               <Button
@@ -838,30 +844,17 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
                 Finalize Invoice
               </Button>
               {invoice && (
-                <div className="ml-auto flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => setShowDeleteDialog(true)}
-                    disabled={isSaving}
-                  >
-                    Delete
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mr-auto text-red-500 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isSaving}
+                >
+                  Delete
+                </Button>
               )}
             </>
-          )}
-          {mode !== "view" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className={isFinalized && !invoice ? "ml-auto" : ""}
-              onClick={() => router.push("/invoice")}
-              disabled={isSaving}
-            >
-              Back
-            </Button>
           )}
         </div>
       </div>
