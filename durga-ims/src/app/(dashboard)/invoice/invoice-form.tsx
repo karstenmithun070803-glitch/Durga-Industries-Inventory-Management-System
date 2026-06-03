@@ -442,7 +442,7 @@ export function InvoiceForm({ mode, invoice, vehicles, taxRates, materials, unit
       inv_prefix: invPrefix ?? "",
       financial_year: fy,
       tax_percentage: "0",
-      material_margin: materialMargin,
+      material_margin: materialMargin || "0",
       net_amount: netAmount.toFixed(2),
       items: filledRows.map((r) => ({
         material_id: r.material_id,

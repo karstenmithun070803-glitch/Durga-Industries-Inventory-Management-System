@@ -542,7 +542,7 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
           bill_number: billNumber,
           bill_date: new Date(data.bill_date),
           tax_percentage: data.tax_percentage,
-          material_margin: data.material_margin,
+          material_margin: data.material_margin || null,
           vehicle_id: data.vehicle_id,
           net_amount: data.net_amount,
           financial_year: data.financial_year,
@@ -630,7 +630,7 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
       .set({
         bill_date: new Date(data.bill_date),
         tax_percentage: data.tax_percentage,
-        material_margin: data.material_margin,
+        material_margin: data.material_margin || null,
         vehicle_id: data.vehicle_id,
         net_amount: data.net_amount,
         customer_name: vData?.customer_name ?? null,
