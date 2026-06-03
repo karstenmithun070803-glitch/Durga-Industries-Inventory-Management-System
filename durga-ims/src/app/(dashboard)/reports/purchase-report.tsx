@@ -57,6 +57,11 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   const [isLoading, setIsLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);
   const [groupByMonth, setGroupByMonth] = useState(false);
+  const [filtersChanged, setFiltersChanged] = useState(false);
+
+  function markChanged() {
+    if (hasRun) setFiltersChanged(true);
+  }
 
   const supplierOptions = suppliers.map((s) => ({ value: s.id, label: s.name }));
   const materialOptions = materials.map((m) => ({
@@ -65,6 +70,8 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   }));
 
   async function runReport() {
+    setFiltersChanged(false);
+    setGroupByMonth(false);
     setIsLoading(true);
     try {
       const data = await getPurchaseReport({
@@ -96,25 +103,44 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
     };
   }, [rows]);
 
-  const monthlyRows = useMemo(() => {
+  type MonthlyGroup = {
+    key: string;
+    monthKey: string;
+    monthLabel: string;
+    supplier: string;
+    material: string;
+    qty: number;
+    taxable: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    total: number;
+  };
+
+  const monthlyRows = useMemo((): MonthlyGroup[] => {
     if (!groupByMonth) return [];
-    const map = new Map<string, { key: string; label: string; qty: number; taxable: number; cgst: number; sgst: number; igst: number; total: number }>();
+    const map = new Map<string, MonthlyGroup>();
     for (const r of rows.filter((r) => r.status === "Received")) {
       const parts = r.po_date.split("/"); // ["03", "06", "2026"]
-      const key = `${parts[2]}-${parts[1]}`; // "2026-06"
-      const label = new Date(+parts[2], +parts[1] - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
-      const prev = map.get(key) ?? { key, label, qty: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 };
+      const monthKey = `${parts[2]}-${parts[1]}`; // "2026-06"
+      const monthLabel = new Date(+parts[2], +parts[1] - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+      const supplier = r.supplier_name ?? "—";
+      const material = r.material_name;
+      const key = `${monthKey}/${supplier}/${material}`;
+      const prev = map.get(key) ?? { key, monthKey, monthLabel, supplier, material, qty: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 };
       map.set(key, { ...prev, qty: prev.qty + r.qty, taxable: prev.taxable + r.taxable_amount, cgst: prev.cgst + r.cgst_amount, sgst: prev.sgst + r.sgst_amount, igst: prev.igst + r.igst_amount, total: prev.total + r.total_amount });
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+    return Array.from(map.values()).sort((a, b) =>
+      a.monthKey.localeCompare(b.monthKey) || a.supplier.localeCompare(b.supplier) || a.material.localeCompare(b.material)
+    );
   }, [rows, groupByMonth]);
 
   function downloadCsv() {
     let headers: string[];
     let csvRows: (string | number)[][];
     if (groupByMonth) {
-      headers = ["Month", "Qty", "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount"];
-      csvRows = monthlyRows.map((r) => [r.label, r.qty.toFixed(3), r.taxable.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2), r.igst.toFixed(2), r.total.toFixed(2)]);
+      headers = ["Month", "Supplier", "Material", "Qty", "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount"];
+      csvRows = monthlyRows.map((r) => [r.monthLabel, r.supplier, r.material, r.qty.toFixed(3), r.taxable.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2), r.igst.toFixed(2), r.total.toFixed(2)]);
     } else {
       headers = [
         "PO #", "Date", "Supplier Bill No.", "Supplier Bill Date", "Supplier", "Material", "Qty", "Unit", "Rate",
@@ -153,18 +179,18 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
       <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap gap-4 items-end">
         <div className="space-y-1 w-44">
           <label className="text-xs font-medium text-slate-600">Financial Year</label>
-          <Combobox options={FY_OPTIONS} value={fy} onChange={setFy} placeholder="Select FY" />
+          <Combobox options={FY_OPTIONS} value={fy} onChange={(v) => { setFy(v); markChanged(); }} placeholder="Select FY" />
         </div>
         <div className="space-y-1 w-44">
           <label className="text-xs font-medium text-slate-600">Status</label>
-          <Combobox options={STATUS_OPTIONS} value={status} onChange={setStatus} placeholder="Status" />
+          <Combobox options={STATUS_OPTIONS} value={status} onChange={(v) => { setStatus(v); markChanged(); }} placeholder="Status" />
         </div>
         <div className="space-y-1 w-52">
           <label className="text-xs font-medium text-slate-600">Supplier (optional)</label>
           <Combobox
             options={[{ value: "", label: "All Suppliers" }, ...supplierOptions]}
             value={supplierId}
-            onChange={setSupplierId}
+            onChange={(v) => { setSupplierId(v); markChanged(); }}
             placeholder="All Suppliers"
           />
         </div>
@@ -173,25 +199,29 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
           <Combobox
             options={[{ value: "", label: "All Materials" }, ...materialOptions]}
             value={materialId}
-            onChange={setMaterialId}
+            onChange={(v) => { setMaterialId(v); markChanged(); }}
             placeholder="All Materials"
           />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Date From</label>
-          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 text-sm w-36" />
+          <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); markChanged(); }} className="h-9 text-sm w-36" />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Date To</label>
-          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9 text-sm w-36" />
+          <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); markChanged(); }} className="h-9 text-sm w-36" />
         </div>
         <div className="flex gap-2 items-end">
-          <Button onClick={runReport} disabled={isLoading} className="h-9">
-            {isLoading ? "Loading…" : "Run Report"}
+          <Button
+            onClick={runReport}
+            disabled={isLoading}
+            className={cn("h-9", filtersChanged && "bg-amber-600 hover:bg-amber-700 text-white animate-pulse")}
+          >
+            {isLoading ? "Loading…" : filtersChanged ? "⚠ Filters changed — Run Report" : "Run Report"}
           </Button>
           {(supplierId || materialId || dateFrom || dateTo || status !== "Received" || fy !== defaultFY) && (
             <button
-              onClick={() => { setSupplierId(""); setMaterialId(""); setDateFrom(""); setDateTo(""); setStatus("Received"); setFy(defaultFY); }}
+              onClick={() => { setSupplierId(""); setMaterialId(""); setDateFrom(""); setDateTo(""); setStatus("Received"); setFy(defaultFY); setFiltersChanged(false); setGroupByMonth(false); }}
               className="text-xs text-blue-600 underline h-9 px-1"
             >
               Clear filters
@@ -217,6 +247,8 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
               size="sm"
               className="h-8 text-xs"
               onClick={() => setGroupByMonth((g) => !g)}
+              disabled={filtersChanged}
+              title={filtersChanged ? "Run Report to apply filters first" : undefined}
             >
               {groupByMonth ? "Monthly View" : "Group by Month"}
             </Button>
@@ -231,6 +263,8 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Month</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">CGST</th>
@@ -241,11 +275,13 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                 </thead>
                 <tbody>
                   {monthlyRows.length === 0 ? (
-                    <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">No received purchases in selected range.</td></tr>
+                    <tr><td colSpan={9} className="px-3 py-8 text-center text-slate-400">No received purchases in selected range.</td></tr>
                   ) : (
                     monthlyRows.map((r) => (
                       <tr key={r.key} className="border-t border-slate-100 hover:bg-slate-50/50">
-                        <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.label}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.monthLabel}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.supplier}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.material}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable)}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.cgst > 0 ? fmtAmt(r.cgst) : "—"}</td>
@@ -258,7 +294,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                 </tbody>
                 <tfoot className="bg-slate-100 sticky bottom-0">
                   <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                    <td className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">TOTAL</td>
+                    <td colSpan={3} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">TOTAL</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.qty)}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right">{totals.cgst > 0 ? fmtAmt(totals.cgst) : "—"}</td>
