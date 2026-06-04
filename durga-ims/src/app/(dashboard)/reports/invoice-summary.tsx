@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
@@ -53,6 +53,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
   const [rows, setRows] = useState<InvoiceSummaryRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);
+  const fetchGenRef = useRef(0);
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
@@ -64,30 +65,27 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
     label: c.gstin ? `${c.customer_name} (${c.gstin})` : c.customer_name,
   }));
 
-  async function runReport() {
+  function runReport() {
+    const gen = ++fetchGenRef.current;
     setIsLoading(true);
-    try {
-      const data = await getInvoiceSummaryReport({
-        fy,
-        status: status === "All" ? undefined : status,
-        vehicleId: vehicleId || undefined,
-        customerId: customerId || undefined,
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined,
-      });
-      setRows(data);
-      setHasRun(true);
-    } catch {
-      toast.error("Failed to load report data.");
-    } finally {
-      setIsLoading(false);
-    }
+    getInvoiceSummaryReport({
+      fy,
+      status: status === "All" ? undefined : status,
+      vehicleId: vehicleId || undefined,
+      customerId: customerId || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    })
+      .then((data) => { if (gen === fetchGenRef.current) { setRows(data); setHasRun(true); } })
+      .catch(() => { if (gen === fetchGenRef.current) toast.error("Failed to load report data."); })
+      .finally(() => { if (gen === fetchGenRef.current) setIsLoading(false); });
   }
 
-  // Auto-run when filters change after the first manual run
+  // Auto-run on mount and whenever filters change
   useEffect(() => {
-    if (!hasRun) return;
+    const gen = ++fetchGenRef.current;
     const t = setTimeout(() => {
+      if (gen !== fetchGenRef.current) return;
       setIsLoading(true);
       getInvoiceSummaryReport({
         fy,
@@ -97,9 +95,9 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
       })
-        .then((data) => setRows(data))
-        .catch(() => toast.error("Failed to load report data."))
-        .finally(() => setIsLoading(false));
+        .then((data) => { if (gen === fetchGenRef.current) { setRows(data); setHasRun(true); } })
+        .catch(() => { if (gen === fetchGenRef.current) toast.error("Failed to load report data."); })
+        .finally(() => { if (gen === fetchGenRef.current) setIsLoading(false); });
     }, 300);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,7 +188,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
       {/* Results */}
       {!hasRun ? (
         <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-          Set filters and click Run Report
+          {isLoading ? "Loading…" : "Set filters and click Run Report"}
         </div>
       ) : rows.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
