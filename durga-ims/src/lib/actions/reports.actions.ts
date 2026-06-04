@@ -185,7 +185,7 @@ export async function getPurchaseReport(params: {
       and(
         eq(purchaseOrders.financial_year, fy),
         status && status !== "All" ? eq(purchaseOrders.status, status) : undefined,
-        supplierId ? eq(purchaseOrders.supplier_id, supplierId) : undefined,
+        supplierId ? eq(purchaseOrderItems.supplier_id, supplierId) : undefined,
         materialId ? eq(purchaseOrderItems.material_id, materialId) : undefined,
         dateFrom ? gte(purchaseOrders.po_date, new Date(dateFrom + "T00:00:00+05:30")) : undefined,
         dateTo ? lte(purchaseOrders.po_date, new Date(dateTo + "T23:59:59+05:30")) : undefined,
