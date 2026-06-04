@@ -126,6 +126,7 @@ export async function getInvoiceSummaryReport(params: {
 // ---------------------------------------------------------------------------
 
 export interface PurchaseReportRow {
+  item_id: string;
   id: string;
   po_number: number;
   po_date: string;
@@ -158,6 +159,7 @@ export async function getPurchaseReport(params: {
 
   const rows = await db
     .select({
+      item_id: purchaseOrderItems.id,
       id: purchaseOrders.id,
       po_number: purchaseOrders.po_number,
       po_date: purchaseOrders.po_date,
@@ -199,6 +201,7 @@ export async function getPurchaseReport(params: {
     const sgst = parseFloat(r.sgst_amount ?? "0");
     const igst = parseFloat(r.igst_amount ?? "0");
     return {
+      item_id: r.item_id,
       id: r.id,
       po_number: r.po_number,
       po_date: new Date(r.po_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),

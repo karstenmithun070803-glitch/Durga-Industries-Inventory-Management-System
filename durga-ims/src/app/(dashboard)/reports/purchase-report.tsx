@@ -339,7 +339,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
               <tbody>
                 {rows.map((r) => (
                   <tr
-                    key={`${r.id}-${r.material_no}`}
+                    key={r.item_id}
                     className="border-t border-slate-100 hover:bg-slate-50/50"
                   >
                     <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">PO-{String(r.po_number).padStart(4, "0")}</td>
