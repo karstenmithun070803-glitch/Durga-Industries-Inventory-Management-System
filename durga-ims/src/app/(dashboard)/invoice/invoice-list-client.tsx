@@ -15,7 +15,7 @@ import { deleteInvoice, getInvoices } from "@/lib/actions/invoices.actions";
 import type { InvoiceRow } from "@/types";
 import { useFY } from "@/lib/financial-year";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import { INVOICE_STATUS } from "@/lib/constants";
 
 interface Props {
@@ -273,7 +273,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                   const stickyBg = "bg-white";
                   const extraItems = (itemCounts.get(r.id) ?? 1) - 1;
                   return (
-                    <tr key={r.item_id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <tr key={r.item_id} className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer" onClick={() => router.push(`/invoice/${r.id}/edit`)}>
                       <td className={`px-3 py-2.5 text-slate-400 text-xs sticky left-0 z-10 ${stickyBg}`}>
                         {i + 1}
                       </td>
@@ -331,29 +331,17 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                         </span>
                       </td>
                       <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-1">
-                          <Link href={`/invoice/${r.id}/edit`}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400 hover:text-slate-700"
-                              title="Edit"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                          </Link>
-                          {r.status === INVOICE_STATUS.DRAFT && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                              title="Delete"
-                              onClick={() => setDeleteTarget({ id: r.id, bill_number: r.bill_number })}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                        </div>
+                        {r.status === INVOICE_STATUS.DRAFT && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                            title="Delete"
+                            onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: r.id, bill_number: r.bill_number }); }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   );

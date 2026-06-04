@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createMaterial, updateMaterial, deleteMaterial, reactivateMaterial } from "@/lib/actions/materials.actions";
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Material, TaxRate, Unit } from "@/types";
-import { Pencil, RotateCcw, UserX } from "lucide-react";
+import { RotateCcw, UserX } from "lucide-react";
 import { toast } from "sonner";
 
 const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", sales_unit_id: "", conversion_value: "1", opening_stock: "0", min_level: "0", max_level: "" };
@@ -135,6 +135,19 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
               <Button onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}
             </div>
+            {editing && (
+              <div className="pt-3 border-t border-slate-200 mt-1">
+                {editing.is_active ? (
+                  <Button type="button" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
+                    <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
+                  </Button>
+                ) : (
+                  <Button type="button" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
+                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         }
         tablePanel={
@@ -154,7 +167,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-0 z-20 bg-slate-50 w-12">S.No</th>
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-12 z-20 bg-slate-50 w-28">Material Code</th>
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-40 z-20 bg-slate-50 w-44 border-r border-slate-200">Material Name</th>
-                    {["HSN", "Tax Rate", "Pur. Unit", "Sal. Unit", "Conv.", "Min", "Max", "Stock", "Actions"].map((h) => (
+                    {["HSN", "Tax Rate", "Pur. Unit", "Sal. Unit", "Conv.", "Min", "Max", "Stock"].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -170,7 +183,11 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                     const stockLow = m.min_level && parseFloat(m.current_stock) < parseFloat(m.min_level);
                     const stickyBg = !m.is_active ? "bg-slate-50" : stockLow ? "bg-red-50" : "bg-white";
                     return (
-                      <tr key={m.id} className={`border-t border-slate-100 ${!m.is_active ? "opacity-50 bg-slate-50" : stockLow ? "bg-red-50" : "hover:bg-slate-50"}`}>
+                      <tr
+                        key={m.id}
+                        className={`border-t border-slate-100 cursor-pointer ${!m.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : stockLow ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-blue-50/40"}`}
+                        onClick={() => startEdit(m)}
+                      >
                         <td className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
                         <td className={`px-3 py-2.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("M", m.material_no)}</td>
                         <td className={`px-3 py-2.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{m.name}</td>
@@ -182,18 +199,6 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                         <td className="px-3 py-2.5 text-slate-500">{m.min_level ?? "—"}</td>
                         <td className="px-3 py-2.5 text-slate-500">{m.max_level ?? "—"}</td>
                         <td className={`px-3 py-2.5 font-semibold ${stockLow ? "text-red-600" : "text-slate-800"}`}>{m.current_stock}</td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex gap-1">
-                            {m.is_active ? (
-                              <>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(m)}><Pencil className="w-3.5 h-3.5" /></Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:bg-amber-50" onClick={() => setDeactivatingId(m.id)} disabled={isPending}><UserX className="w-3.5 h-3.5" /></Button>
-                              </>
-                            ) : (
-                              <Button variant="ghost" size="sm" className="h-7 text-xs text-emerald-600 hover:bg-emerald-50" onClick={() => handleReactivate(m.id)} disabled={isPending}><RotateCcw className="w-3 h-3 mr-1" />Reactivate</Button>
-                            )}
-                          </div>
-                        </td>
                       </tr>
                     );
                   })}

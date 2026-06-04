@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { deleteMaterialIssue, getMaterialIssues } from "@/lib/actions/material-issues.actions";
 import type { MaterialIssueRow } from "@/types";
 import { formatCode, matchesCode } from "@/lib/utils";
@@ -16,7 +17,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Pencil, Trash2, Eye, Plus } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PrintButton } from "@/components/pdf/print-button";
 import { MIRegisterDocument } from "@/components/pdf/mi-register-pdf";
@@ -31,6 +32,7 @@ interface Props {
 type StatusTab = "All" | "Draft" | "Issued";
 
 export function MaterialIssuesClient({ initialRows, initialFY, companySetting }: Props) {
+  const router = useRouter();
   const { activeFY } = useFY();
   const [rows, setRows] = useState<MaterialIssueRow[]>(initialRows);
   const [loadedFY, setLoadedFY] = useState(initialFY);
@@ -317,7 +319,7 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
                       : (parseFloat(r.cgst_amount) + parseFloat(r.sgst_amount)).toFixed(2);
 
                   return (
-                    <tr key={r.item_id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <tr key={r.item_id} className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer" onClick={() => router.push(`/transactions/material-issues/${r.id}/edit`)}>
                       <td className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>
                         {i + 1}
                       </td>
@@ -382,31 +384,15 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
                         </span>
                       </td>
                       <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-1">
-                          <Link
-                            href={`/transactions/material-issues/${r.id}/view`}
-                            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors"
-                            title="View"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </Link>
-                          <Link
-                            href={`/transactions/material-issues/${r.id}/edit`}
-                            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                            onClick={() => setDeleteTarget(r)}
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }}
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </td>
                     </tr>
                   );

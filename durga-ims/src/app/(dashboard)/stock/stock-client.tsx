@@ -401,7 +401,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                     : "";
 
                   return (
-                    <tr key={row.id} className={cn("border-t border-slate-100 hover:bg-slate-50/50 transition-colors", rowBg)}>
+                    <tr key={row.id} className={cn("border-t border-slate-100 hover:bg-slate-50/80 transition-colors cursor-pointer", rowBg)} onClick={() => openHistory(row)}>
                       <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-mono text-xs">
                         {formatCode("M", row.material_no)}
                       </td>
@@ -429,28 +429,30 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => openHistory(row)}
+                            onClick={(e) => { e.stopPropagation(); openHistory(row); }}
                             title="View stock history"
                             className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                           >
                             <History className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => openAdjust(row)}
+                            onClick={(e) => { e.stopPropagation(); openAdjust(row); }}
                             title="Adjust stock"
                             className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                           >
                             <SlidersHorizontal className="w-4 h-4" />
                           </button>
                           {(status === "low" || status === "out") && (
-                            <Link
-                              href={`/transactions/purchase-orders/new?prefill=${row.id}`}
-                              title="Create Purchase Order for this material"
-                            >
-                              <button className="p-1 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors">
-                                <ShoppingCart className="w-4 h-4" />
-                              </button>
-                            </Link>
+                            <span onClick={(e) => e.stopPropagation()}>
+                              <Link
+                                href={`/transactions/purchase-orders/new?prefill=${row.id}`}
+                                title="Create Purchase Order for this material"
+                              >
+                                <button className="p-1 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors">
+                                  <ShoppingCart className="w-4 h-4" />
+                                </button>
+                              </Link>
+                            </span>
                           )}
                         </div>
                       </td>

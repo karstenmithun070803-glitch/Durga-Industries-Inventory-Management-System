@@ -66,6 +66,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { activeFY, setActiveFY, isCurrentFY } = useFY();
   const [openSections, setOpenSections] = useState<string[]>(["Masters"]);
+  const [fyOpen, setFyOpen] = useState(false);
 
   const toggle = (label: string) =>
     setOpenSections((prev) =>
@@ -159,17 +160,34 @@ export function Sidebar() {
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Viewing historical data" />
             )}
           </p>
-          <select
-            value={activeFY}
-            onChange={(e) => setActiveFY(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-slate-500"
-          >
-            {fyOptions.map((fy) => (
-              <option key={fy} value={fy}>
-                FY {fy}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <button
+              onClick={() => setFyOpen((v) => !v)}
+              className="w-full flex items-center justify-between bg-slate-800 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            >
+              <span>FY {activeFY}</span>
+              <ChevronDown className={cn("w-3 h-3 text-slate-400 transition-transform", fyOpen && "rotate-180")} />
+            </button>
+            {fyOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setFyOpen(false)} />
+                <div className="absolute bottom-full mb-1 left-0 w-full bg-slate-800 border border-slate-600 rounded shadow-lg z-20 overflow-hidden">
+                  {fyOptions.map((fy) => (
+                    <button
+                      key={fy}
+                      onClick={() => { setActiveFY(fy); setFyOpen(false); }}
+                      className={cn(
+                        "w-full text-left px-2 py-1.5 text-xs hover:bg-slate-700 transition-colors",
+                        activeFY === fy ? "text-white font-medium bg-slate-700" : "text-slate-300"
+                      )}
+                    >
+                      FY {fy}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <form action={logout}>
           <button

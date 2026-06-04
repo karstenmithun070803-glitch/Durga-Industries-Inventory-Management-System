@@ -2,13 +2,14 @@
 
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useFY } from "@/lib/financial-year";
 import { getPurchaseOrders, deletePurchaseOrder } from "@/lib/actions/purchase-orders.actions";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCode } from "@/lib/utils";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PrintButton } from "@/components/pdf/print-button";
 import { PORegisterDocument } from "@/components/pdf/po-register-pdf";
@@ -69,6 +70,7 @@ function taxDisplay(row: ItemRow): string {
 }
 
 export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }: Props) {
+  const router = useRouter();
   const { activeFY } = useFY();
   const [rows, setRows] = useState<ItemRow[]>(initialRows);
   const [loadedFY, setLoadedFY] = useState(initialFY);
@@ -326,7 +328,11 @@ export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }:
                 </tr>
               )}
               {visible.map((r, i) => (
-                <tr key={r.item_id ?? r.id + i} className="border-t border-slate-100 hover:bg-slate-50">
+                <tr
+                  key={r.item_id ?? r.id + i}
+                  className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer"
+                  onClick={() => router.push(`/transactions/purchase-orders/${r.id}/edit`)}
+                >
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{i + 1}</td>
                   <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(r.po_date)}</td>
                   <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-800 whitespace-nowrap">
@@ -357,28 +363,16 @@ export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }:
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <div className="flex gap-1">
-                      <Link href={`/transactions/purchase-orders/${r.id}/edit`}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-7 w-7 ${r.status === "Received" ? "text-amber-600 hover:bg-amber-50" : "text-slate-600 hover:bg-slate-100"}`}
-                          title={r.status === "Received" ? "Edit (will reverse & reapply stock)" : "Edit"}
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-red-500 hover:bg-red-50"
-                        title="Delete entire PO"
-                        onClick={() => handleDeleteClick(r)}
-                        disabled={isPending}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-500 hover:bg-red-50"
+                      title="Delete entire PO"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(r); }}
+                      disabled={isPending}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </td>
                 </tr>
               ))}
