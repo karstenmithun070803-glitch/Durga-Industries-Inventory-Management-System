@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { getInvoiceSummaryReport } from "@/lib/actions/reports.actions";
 import type { InvoiceSummaryRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
+import { PrintButton } from "@/components/pdf/print-button";
+import { InvoiceSummaryReportDocument } from "@/components/pdf/invoice-summary-report-pdf";
 
 function buildFYOptions(defaultFY: string) {
   const [startYear] = defaultFY.split("-").map(Number);
@@ -201,6 +203,19 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadCsv}>
               Export CSV ({rows.length})
             </Button>
+            <PrintButton
+              label={`Print (${rows.length})`}
+              getDocument={() => (
+                <InvoiceSummaryReportDocument
+                  rows={rows}
+                  fy={fy}
+                  statusFilter={status}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  companySetting={companySetting}
+                />
+              )}
+            />
           </div>
 
           {/* Table */}

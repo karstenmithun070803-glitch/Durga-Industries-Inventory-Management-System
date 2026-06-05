@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { getPurchaseReport } from "@/lib/actions/reports.actions";
 import type { PurchaseReportRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
+import { PrintButton } from "@/components/pdf/print-button";
+import { PurchaseReportDocument } from "@/components/pdf/purchase-report-pdf";
 
 function buildFYOptions(defaultFY: string) {
   const [startYear] = defaultFY.split("-").map(Number);
@@ -263,6 +265,23 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadCsv}>
               Export CSV ({groupByMonth ? monthlyRows.length : rows.length})
             </Button>
+            <PrintButton
+              label={`Print (${groupByMonth ? monthlyRows.length : rows.length})`}
+              getDocument={() => (
+                <PurchaseReportDocument
+                  rows={rows}
+                  monthlyRows={monthlyRows}
+                  groupByMonth={groupByMonth}
+                  fy={fy}
+                  statusFilter={status}
+                  supplierName={supplierId ? suppliers.find((s) => s.id === supplierId)?.name : undefined}
+                  materialName={materialId ? materials.find((m) => m.id === materialId)?.name : undefined}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  companySetting={companySetting}
+                />
+              )}
+            />
           </div>
 
           {groupByMonth ? (

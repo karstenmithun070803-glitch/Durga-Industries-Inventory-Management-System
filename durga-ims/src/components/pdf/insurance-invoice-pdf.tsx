@@ -183,14 +183,6 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
                 </Text>
               </View>
             )}
-            {companySetting?.invoice_terms && (
-              <View style={{ marginTop: 6 }}>
-                <Text style={{ fontSize: 7, color: "#6B7280", fontFamily: "Helvetica-Oblique" }}>
-                  Terms: {companySetting.invoice_terms}
-                </Text>
-              </View>
-            )}
-
             {/* ── Authorised Signatory ── */}
             <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "flex-end" }}>
               <View style={{ alignItems: "center" }}>
