@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { bulkImportMaterials } from "@/lib/actions/materials.actions";
 import type { Unit, TaxRate, Material } from "@/types";
-import { Upload, Download, CheckCircle, XCircle, SkipForward } from "lucide-react";
+import { Download, CheckCircle, XCircle, SkipForward } from "lucide-react";
 
 interface ParsedRow {
   rowNum: number;
@@ -128,7 +128,14 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
       const wb = xlsx.read(buffer, { type: "array" });
       const wsName = wb.SheetNames[0];
       const ws = wb.Sheets[wsName];
-      const rawRows: Record<string, unknown>[] = xlsx.utils.sheet_to_json(ws, { defval: "" });
+      const rawRowsRaw: Record<string, unknown>[] = xlsx.utils.sheet_to_json(ws, { defval: "", raw: false });
+      const rawRows = rawRowsRaw.map((row) => {
+        const normalized: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(row)) {
+          normalized[key.trim()] = value;
+        }
+        return normalized;
+      });
 
       const nonEmpty = rawRows.filter((row) =>
         Object.values(row).some((v) => v !== "" && v !== null && v !== undefined)
@@ -292,6 +299,9 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
               </Button>
               <p className="text-xs text-slate-500">
                 The template includes a <strong>Reference</strong> sheet listing all available unit names and tax rates.
+              </p>
+              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
+                <strong>Mac Numbers users:</strong> use <em>File → Export To → Excel (.xlsx)</em> after editing — do not just Save, as Numbers saves in .numbers format which cannot be uploaded here.
               </p>
             </div>
 
