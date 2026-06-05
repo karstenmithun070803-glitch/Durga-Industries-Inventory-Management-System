@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { createVehicle, updateVehicle, deleteVehicle, reactivateVehicle } from "@/lib/actions/vehicles.actions";
+import { createVehicle, updateVehicle, deleteVehicle, reactivateVehicle, bulkImportVehicles } from "@/lib/actions/vehicles.actions";
 import { formatCode } from "@/lib/utils";
 import type { Customer } from "@/types";
-import { RotateCcw, UserX } from "lucide-react";
+import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
 type VehicleRow = { id: string; job_ref_no: string; vehicle_name: string; type: string; customer_id: string | null; customer_name: string | null; is_active: boolean; created_at: Date; updated_at: Date };
 const EMPTY = { job_ref_no: "", vehicle_name: "", type: "New", customer_id: "" };
@@ -25,6 +26,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
+  const [importOpen, setImportOpen] = useState(false);
 
   const inactive = vehicles.filter((v) => !v.is_active);
   const visible = (showInactive ? vehicles : vehicles.filter((v) => v.is_active)).filter((v) => {
@@ -135,6 +137,9 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                   {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
+                <Upload className="w-3.5 h-3.5 mr-1.5" />Import
+              </Button>
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
@@ -169,6 +174,70 @@ export function VehiclesClient({ vehicles, customers }: Props) {
             </div>
           </div>
         }
+      />
+      <GenericBulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Vehicles / Jobs"
+        templateFileName="vehicles-import-template.xlsx"
+        templateColumns={["Job Ref No", "Vehicle Name", "Type", "Customer Name"]}
+        exampleRow={["JB-2024-001", "TN 01 AB 1234", "New", "Ravi Motors"]}
+        referenceSheet={{ rows: [
+          ["REFERENCE — do not edit this sheet"],
+          [],
+          ["Type must be one of:"],
+          ["New"],
+          ["Old"],
+          [],
+          ["Existing Customers (copy exact name into Customer Name column)"],
+          ...customers.map((c) => [c.customer_name]),
+        ]}}
+        existingKeys={new Set(vehicles.map((v) => v.job_ref_no.toUpperCase()))}
+        processRow={(row) => {
+          const errors: string[] = [];
+          const jobRef = row["Job Ref No"]?.trim() ?? "";
+          const vehicleName = row["Vehicle Name"]?.trim() ?? "";
+          const typeRaw = row["Type"]?.trim() ?? "";
+          const custNameRaw = row["Customer Name"]?.trim() ?? "";
+
+          if (!jobRef) errors.push("Job Ref No is required");
+          if (!vehicleName) errors.push("Vehicle Name is required");
+          if (!typeRaw) errors.push("Type is required (New or Old)");
+
+          const normalizedType = typeRaw
+            ? typeRaw.charAt(0).toUpperCase() + typeRaw.slice(1).toLowerCase()
+            : "New";
+          if (typeRaw && !["New", "Old"].includes(normalizedType)) {
+            errors.push(`Type "${typeRaw}" must be "New" or "Old"`);
+          }
+
+          let customer_id: string | null = null;
+          if (custNameRaw) {
+            const match = customers.find(
+              (c) => c.customer_name.toLowerCase() === custNameRaw.toLowerCase()
+            );
+            if (!match) errors.push(`Customer "${custNameRaw}" not found — check Reference sheet`);
+            else customer_id = match.id;
+          }
+
+          return {
+            errors,
+            displayName: jobRef ? `${jobRef}${vehicleName ? ` — ${vehicleName}` : ""}` : vehicleName || "—",
+            dedupKey: jobRef,
+            data: {
+              job_ref_no: jobRef,
+              vehicle_name: vehicleName.toUpperCase(),
+              type: normalizedType,
+              customer_id,
+            },
+          };
+        }}
+        onImport={(rows) => bulkImportVehicles(rows.map((r) => ({
+          job_ref_no: r.job_ref_no as string,
+          vehicle_name: r.vehicle_name as string,
+          type: r.type as string,
+          customer_id: r.customer_id as string | null,
+        })))}
       />
       <ConfirmDialog
         open={deactivatingId !== null}

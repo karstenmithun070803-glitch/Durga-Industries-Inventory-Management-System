@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { createCustomer, updateCustomer, deleteCustomer, reactivateCustomer } from "@/lib/actions/customers.actions";
+import { createCustomer, updateCustomer, deleteCustomer, reactivateCustomer, bulkImportCustomers } from "@/lib/actions/customers.actions";
 import { INDIAN_STATES } from "@/lib/constants";
 import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Customer } from "@/types";
-import { RotateCcw, UserX } from "lucide-react";
+import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
 const EMPTY = { customer_name: "", address_1: "", address_2: "", street: "", city: "", state: "", gstin: "" };
 
@@ -22,6 +23,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
+  const [importOpen, setImportOpen] = useState(false);
 
   const inactive = customers.filter((c) => !c.is_active);
   const visible = (showInactive ? customers : customers.filter((c) => c.is_active)).filter((c) => {
@@ -136,6 +138,9 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                   {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
+                <Upload className="w-3.5 h-3.5 mr-1.5" />Import
+              </Button>
             </div>
             <div className="overflow-auto flex-1">
               <table className="min-w-max text-sm">
@@ -177,6 +182,58 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
             </div>
           </div>
         }
+      />
+      <GenericBulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Customers"
+        templateFileName="customers-import-template.xlsx"
+        templateColumns={["Customer Name", "Address Line 1", "Address Line 2", "Street", "City", "State", "GSTIN"]}
+        exampleRow={["Ravi Motors", "12/A Gandhi Street", "Near Bus Stand", "Main Road", "Chennai", "Tamil Nadu", "33AAAAA0000A1Z5"]}
+        referenceSheet={{ rows: [
+          ["REFERENCE — do not edit this sheet"],
+          [],
+          ["Available States (copy exact name into State column)"],
+          ...INDIAN_STATES.map((s) => [s]),
+        ]}}
+        existingKeys={new Set(customers.map((c) => c.customer_name.toUpperCase()))}
+        processRow={(row) => {
+          const errors: string[] = [];
+          const name = row["Customer Name"]?.trim() ?? "";
+          if (!name) errors.push("Customer Name is required");
+
+          const stateRaw = row["State"]?.trim() ?? "";
+          let resolvedState: string | null = null;
+          if (stateRaw) {
+            const match = INDIAN_STATES.find((s) => s.toLowerCase() === stateRaw.toLowerCase());
+            if (!match) errors.push(`State "${stateRaw}" not recognized — check Reference sheet`);
+            else resolvedState = match;
+          }
+
+          return {
+            errors,
+            displayName: name || "—",
+            dedupKey: name,
+            data: {
+              customer_name: name,
+              address_1: row["Address Line 1"]?.trim() || null,
+              address_2: row["Address Line 2"]?.trim() || null,
+              street: row["Street"]?.trim() || null,
+              city: row["City"]?.trim() || null,
+              state: resolvedState,
+              gstin: row["GSTIN"]?.trim().toUpperCase() || null,
+            },
+          };
+        }}
+        onImport={(rows) => bulkImportCustomers(rows.map((r) => ({
+          customer_name: r.customer_name as string,
+          address_1: r.address_1 as string | null,
+          address_2: r.address_2 as string | null,
+          street: r.street as string | null,
+          city: r.city as string | null,
+          state: r.state as string | null,
+          gstin: r.gstin as string | null,
+        })))}
       />
       <ConfirmDialog
         open={deactivatingId !== null}

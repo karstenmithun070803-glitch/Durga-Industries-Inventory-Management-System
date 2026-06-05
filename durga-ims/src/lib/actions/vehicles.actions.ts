@@ -124,3 +124,36 @@ export async function reactivateVehicle(id: string) {
   await db.update(vehicles).set({ is_active: true }).where(eq(vehicles.id, id));
   revalidatePath("/masters/vehicles");
 }
+
+export async function bulkImportVehicles(
+  rows: Array<{
+    job_ref_no: string;
+    vehicle_name: string;
+    type: string;
+    customer_id?: string | null;
+  }>
+): Promise<{ imported: number; skipped: number }> {
+  if (rows.length === 0) return { imported: 0, skipped: 0 };
+
+  const existing = await db.select({ job_ref_no: vehicles.job_ref_no }).from(vehicles);
+  const existingRefs = new Set(existing.map((v) => v.job_ref_no.toUpperCase()));
+
+  const toInsert = rows.filter((r) => !existingRefs.has(r.job_ref_no.toUpperCase()));
+  const skipped = rows.length - toInsert.length;
+
+  if (toInsert.length === 0) return { imported: 0, skipped };
+
+  await db.transaction(async (tx) => {
+    await tx.insert(vehicles).values(
+      toInsert.map((r) => ({
+        job_ref_no: r.job_ref_no,
+        vehicle_name: r.vehicle_name,
+        type: r.type,
+        customer_id: r.customer_id || null,
+      }))
+    );
+  });
+
+  revalidatePath("/masters/vehicles");
+  return { imported: toInsert.length, skipped };
+}

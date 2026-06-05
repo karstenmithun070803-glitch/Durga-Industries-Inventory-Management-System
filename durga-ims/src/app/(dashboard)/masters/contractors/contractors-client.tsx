@@ -5,11 +5,12 @@ import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { createContractor, updateContractor, deleteContractor, reactivateContractor } from "@/lib/actions/contractors.actions";
+import { createContractor, updateContractor, deleteContractor, reactivateContractor, bulkImportContractors } from "@/lib/actions/contractors.actions";
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Contractor } from "@/types";
-import { RotateCcw, UserX } from "lucide-react";
+import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
 export function ContractorsClient({ contractors }: { contractors: Contractor[] }) {
   const [search, setSearch] = useState("");
@@ -18,6 +19,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", role: "", contact: "" });
   const [isPending, startTransition] = useTransition();
+  const [importOpen, setImportOpen] = useState(false);
 
   const inactive = contractors.filter((c) => !c.is_active);
   const visible = (showInactive ? contractors : contractors.filter((c) => c.is_active)).filter((c) => {
@@ -96,6 +98,9 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
                   {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
+                <Upload className="w-3.5 h-3.5 mr-1.5" />Import
+              </Button>
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
@@ -128,6 +133,35 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
             </div>
           </div>
         }
+      />
+      <GenericBulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Contractors"
+        templateFileName="contractors-import-template.xlsx"
+        templateColumns={["Contractor Name", "Role", "Contact"]}
+        exampleRow={["Kumar Fabrications", "Fabrication & Welding", "9876543210"]}
+        existingKeys={new Set(contractors.map((c) => c.name.toUpperCase()))}
+        processRow={(row) => {
+          const errors: string[] = [];
+          const name = row["Contractor Name"]?.trim() ?? "";
+          if (!name) errors.push("Contractor Name is required");
+          return {
+            errors,
+            displayName: name || "—",
+            dedupKey: name,
+            data: {
+              name,
+              role: row["Role"]?.trim() || null,
+              contact: row["Contact"]?.trim() || null,
+            },
+          };
+        }}
+        onImport={(rows) => bulkImportContractors(rows.map((r) => ({
+          name: r.name as string,
+          role: r.role as string | null,
+          contact: r.contact as string | null,
+        })))}
       />
       <ConfirmDialog
         open={deactivatingId !== null}

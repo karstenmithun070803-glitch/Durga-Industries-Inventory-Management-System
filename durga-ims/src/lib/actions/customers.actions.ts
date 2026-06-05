@@ -76,3 +76,42 @@ export async function reactivateCustomer(id: string) {
   await db.update(customers).set({ is_active: true }).where(eq(customers.id, id));
   revalidatePath("/masters/customers");
 }
+
+export async function bulkImportCustomers(
+  rows: Array<{
+    customer_name: string;
+    address_1?: string | null;
+    address_2?: string | null;
+    street?: string | null;
+    city?: string | null;
+    state?: string | null;
+    gstin?: string | null;
+  }>
+): Promise<{ imported: number; skipped: number }> {
+  if (rows.length === 0) return { imported: 0, skipped: 0 };
+
+  const existing = await db.select({ customer_name: customers.customer_name }).from(customers);
+  const existingNames = new Set(existing.map((c) => c.customer_name.toUpperCase()));
+
+  const toInsert = rows.filter((r) => !existingNames.has(r.customer_name.toUpperCase()));
+  const skipped = rows.length - toInsert.length;
+
+  if (toInsert.length === 0) return { imported: 0, skipped };
+
+  await db.transaction(async (tx) => {
+    await tx.insert(customers).values(
+      toInsert.map((r) => ({
+        customer_name: r.customer_name,
+        address_1: r.address_1 || null,
+        address_2: r.address_2 || null,
+        street: r.street || null,
+        city: r.city || null,
+        state: r.state || null,
+        gstin: r.gstin || null,
+      }))
+    );
+  });
+
+  revalidatePath("/masters/customers");
+  return { imported: toInsert.length, skipped };
+}

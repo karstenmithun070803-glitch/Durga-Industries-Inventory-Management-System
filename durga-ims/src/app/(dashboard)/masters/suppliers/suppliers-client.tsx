@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { createSupplier, updateSupplier, deleteSupplier, reactivateSupplier } from "@/lib/actions/suppliers.actions";
+import { createSupplier, updateSupplier, deleteSupplier, reactivateSupplier, bulkImportSuppliers } from "@/lib/actions/suppliers.actions";
 import { INDIAN_STATES } from "@/lib/constants";
 import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Supplier } from "@/types";
-import { RotateCcw, UserX } from "lucide-react";
+import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
 const EMPTY = { name: "", tin_no: "", cst_no: "", gstin: "", address: "", state: "" };
 
@@ -23,6 +24,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
+  const [importOpen, setImportOpen] = useState(false);
 
   const inactive = suppliers.filter((s) => !s.is_active);
   const visible = (showInactive ? suppliers : suppliers.filter((s) => s.is_active)).filter((s) => {
@@ -126,6 +128,9 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                   {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
+                <Upload className="w-3.5 h-3.5 mr-1.5" />Import
+              </Button>
             </div>
             <div className="overflow-auto flex-1">
               <table className="min-w-max text-sm">
@@ -166,6 +171,56 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
             </div>
           </div>
         }
+      />
+      <GenericBulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Suppliers"
+        templateFileName="suppliers-import-template.xlsx"
+        templateColumns={["Supplier Name", "Address", "State", "GSTIN", "TIN No", "CST No"]}
+        exampleRow={["Steel India Pvt Ltd", "45 Industrial Area, Coimbatore", "Tamil Nadu", "33BBBBB1111B1Z6", "", ""]}
+        referenceSheet={{ rows: [
+          ["REFERENCE — do not edit this sheet"],
+          [],
+          ["Available States (copy exact name into State column)"],
+          ...INDIAN_STATES.map((s) => [s]),
+        ]}}
+        existingKeys={new Set(suppliers.map((s) => s.name.toUpperCase()))}
+        processRow={(row) => {
+          const errors: string[] = [];
+          const name = row["Supplier Name"]?.trim() ?? "";
+          if (!name) errors.push("Supplier Name is required");
+
+          const stateRaw = row["State"]?.trim() ?? "";
+          let resolvedState: string | null = null;
+          if (stateRaw) {
+            const match = INDIAN_STATES.find((s) => s.toLowerCase() === stateRaw.toLowerCase());
+            if (!match) errors.push(`State "${stateRaw}" not recognized — check Reference sheet`);
+            else resolvedState = match;
+          }
+
+          return {
+            errors,
+            displayName: name || "—",
+            dedupKey: name,
+            data: {
+              name,
+              address: row["Address"]?.trim() || null,
+              state: resolvedState,
+              gstin: row["GSTIN"]?.trim().toUpperCase() || null,
+              tin_no: row["TIN No"]?.trim() || null,
+              cst_no: row["CST No"]?.trim() || null,
+            },
+          };
+        }}
+        onImport={(rows) => bulkImportSuppliers(rows.map((r) => ({
+          name: r.name as string,
+          address: r.address as string | null,
+          state: r.state as string | null,
+          gstin: r.gstin as string | null,
+          tin_no: r.tin_no as string | null,
+          cst_no: r.cst_no as string | null,
+        })))}
       />
       <ConfirmDialog
         open={deactivatingId !== null}

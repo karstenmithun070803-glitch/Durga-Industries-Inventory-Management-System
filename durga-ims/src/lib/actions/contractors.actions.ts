@@ -66,3 +66,34 @@ export async function reactivateContractor(id: string) {
   await db.update(contractors).set({ is_active: true }).where(eq(contractors.id, id));
   revalidatePath("/masters/contractors");
 }
+
+export async function bulkImportContractors(
+  rows: Array<{
+    name: string;
+    role?: string | null;
+    contact?: string | null;
+  }>
+): Promise<{ imported: number; skipped: number }> {
+  if (rows.length === 0) return { imported: 0, skipped: 0 };
+
+  const existing = await db.select({ name: contractors.name }).from(contractors);
+  const existingNames = new Set(existing.map((c) => c.name.toUpperCase()));
+
+  const toInsert = rows.filter((r) => !existingNames.has(r.name.toUpperCase()));
+  const skipped = rows.length - toInsert.length;
+
+  if (toInsert.length === 0) return { imported: 0, skipped };
+
+  await db.transaction(async (tx) => {
+    await tx.insert(contractors).values(
+      toInsert.map((r) => ({
+        name: r.name,
+        role: r.role || null,
+        contact: r.contact || null,
+      }))
+    );
+  });
+
+  revalidatePath("/masters/contractors");
+  return { imported: toInsert.length, skipped };
+}

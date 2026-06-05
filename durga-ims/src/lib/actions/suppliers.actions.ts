@@ -75,3 +75,40 @@ export async function reactivateSupplier(id: string) {
   await db.update(suppliers).set({ is_active: true }).where(eq(suppliers.id, id));
   revalidatePath("/masters/suppliers");
 }
+
+export async function bulkImportSuppliers(
+  rows: Array<{
+    name: string;
+    tin_no?: string | null;
+    cst_no?: string | null;
+    gstin?: string | null;
+    address?: string | null;
+    state?: string | null;
+  }>
+): Promise<{ imported: number; skipped: number }> {
+  if (rows.length === 0) return { imported: 0, skipped: 0 };
+
+  const existing = await db.select({ name: suppliers.name }).from(suppliers);
+  const existingNames = new Set(existing.map((s) => s.name.toUpperCase()));
+
+  const toInsert = rows.filter((r) => !existingNames.has(r.name.toUpperCase()));
+  const skipped = rows.length - toInsert.length;
+
+  if (toInsert.length === 0) return { imported: 0, skipped };
+
+  await db.transaction(async (tx) => {
+    await tx.insert(suppliers).values(
+      toInsert.map((r) => ({
+        name: r.name,
+        tin_no: r.tin_no || null,
+        cst_no: r.cst_no || null,
+        gstin: r.gstin || null,
+        address: r.address || null,
+        state: r.state || null,
+      }))
+    );
+  });
+
+  revalidatePath("/masters/suppliers");
+  return { imported: toInsert.length, skipped };
+}
