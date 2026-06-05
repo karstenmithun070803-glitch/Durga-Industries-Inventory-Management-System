@@ -9,8 +9,9 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createMaterial, updateMaterial, deleteMaterial, reactivateMaterial } from "@/lib/actions/materials.actions";
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Material, TaxRate, Unit } from "@/types";
-import { RotateCcw, UserX } from "lucide-react";
+import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { BulkImportDialog } from "@/components/masters/bulk-import-dialog";
 
 const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", sales_unit_id: "", conversion_value: "1", opening_stock: "0", min_level: "0", max_level: "" };
 
@@ -23,6 +24,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
+  const [importOpen, setImportOpen] = useState(false);
 
   const inactive = materials.filter((m) => !m.is_active);
   const activeUnits = units.filter((u) => u.is_active);
@@ -159,6 +161,9 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                   {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
+                <Upload className="w-3.5 h-3.5 mr-1.5" />Import
+              </Button>
             </div>
             <div className="overflow-auto flex-1">
               <table className="min-w-max text-sm">
@@ -207,6 +212,13 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
             </div>
           </div>
         }
+      />
+      <BulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        units={units}
+        taxRates={taxRates}
+        existingMaterials={materials}
       />
       <ConfirmDialog
         open={deactivatingId !== null}

@@ -98,3 +98,49 @@ export async function reactivateMaterial(id: string) {
   await db.update(materials).set({ is_active: true }).where(eq(materials.id, id));
   revalidatePath("/masters/materials");
 }
+
+export async function bulkImportMaterials(
+  rows: Array<{
+    name: string;
+    hsn_code?: string | null;
+    tax_rate_id?: string | null;
+    purchase_unit_id: string;
+    sales_unit_id?: string | null;
+    conversion_value?: string;
+    opening_stock?: string;
+    min_level?: string;
+    max_level?: string | null;
+  }>
+): Promise<{ imported: number; skipped: number }> {
+  if (rows.length === 0) return { imported: 0, skipped: 0 };
+
+  const existing = await db
+    .select({ name: materials.name })
+    .from(materials);
+  const existingNames = new Set(existing.map((m) => m.name.toUpperCase()));
+
+  const toInsert = rows.filter((r) => !existingNames.has(r.name.toUpperCase()));
+  const skipped = rows.length - toInsert.length;
+
+  if (toInsert.length === 0) return { imported: 0, skipped };
+
+  await db.transaction(async (tx) => {
+    await tx.insert(materials).values(
+      toInsert.map((r) => ({
+        name: r.name.toUpperCase(),
+        hsn_code: r.hsn_code || null,
+        tax_rate_id: r.tax_rate_id || null,
+        purchase_unit_id: r.purchase_unit_id,
+        sales_unit_id: r.sales_unit_id || null,
+        conversion_value: r.conversion_value || "1",
+        opening_stock: r.opening_stock || "0",
+        current_stock: r.opening_stock || "0",
+        min_level: r.min_level || "0",
+        max_level: r.max_level || null,
+      }))
+    );
+  });
+
+  revalidatePath("/masters/materials");
+  return { imported: toInsert.length, skipped };
+}
