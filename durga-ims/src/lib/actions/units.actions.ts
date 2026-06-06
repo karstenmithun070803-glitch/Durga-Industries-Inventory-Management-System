@@ -1,28 +1,37 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { units, materials } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
-export async function getUnits() {
-  return db.select().from(units).where(eq(units.is_active, true)).orderBy(units.unit_code);
-}
+// ─── Reads (cached) ──────────────────────────────────────────────────────────
 
-export async function getAllUnits() {
-  return db.select().from(units).orderBy(units.unit_code);
-}
+export const getUnits = unstable_cache(
+  async () => db.select().from(units).where(eq(units.is_active, true)).orderBy(units.unit_code),
+  ["active-units"],
+  { tags: [CACHE_TAGS.units], revalidate: false }
+);
+
+export const getAllUnits = unstable_cache(
+  async () => db.select().from(units).orderBy(units.unit_code),
+  ["all-units"],
+  { tags: [CACHE_TAGS.units], revalidate: false }
+);
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function createUnit(name: string) {
   if (!name.trim()) throw new Error("Unit name is required");
   await db.insert(units).values({ unit_name: name.trim().toUpperCase() });
-  revalidatePath("/masters/units");
+  revalidateTag(CACHE_TAGS.units);
 }
 
 export async function updateUnit(id: string, name: string) {
   if (!name.trim()) throw new Error("Unit name is required");
   await db.update(units).set({ unit_name: name.trim().toUpperCase() }).where(eq(units.id, id));
-  revalidatePath("/masters/units");
+  revalidateTag(CACHE_TAGS.units);
 }
 
 export async function deleteUnit(id: string) {
@@ -42,10 +51,10 @@ export async function deleteUnit(id: string) {
   }
 
   await db.update(units).set({ is_active: false }).where(eq(units.id, id));
-  revalidatePath("/masters/units");
+  revalidateTag(CACHE_TAGS.units);
 }
 
 export async function reactivateUnit(id: string) {
   await db.update(units).set({ is_active: true }).where(eq(units.id, id));
-  revalidatePath("/masters/units");
+  revalidateTag(CACHE_TAGS.units);
 }

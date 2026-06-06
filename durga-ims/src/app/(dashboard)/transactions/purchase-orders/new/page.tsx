@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-import { getActiveSuppliers, getActiveMaterials, getActiveUnits, getPurchaseOrders } from "@/lib/actions/purchase-orders.actions";
+import { getActiveSuppliers, getActiveMaterials, getActiveUnits, getNextPONumber } from "@/lib/actions/purchase-orders.actions";
 import { getAllTaxRates } from "@/lib/actions/tax.actions";
 import { getCurrentFY } from "@/lib/fy";
 import { POForm } from "../po-form";
@@ -11,16 +11,13 @@ interface Props {
 export default async function NewPOPage({ searchParams }: Props) {
   const { prefill } = await searchParams;
   const fy = getCurrentFY();
-  const [suppliers, materials, taxRates, units, orders] = await Promise.all([
+  const [suppliers, materials, taxRates, units, nextPoNumber] = await Promise.all([
     getActiveSuppliers(),
     getActiveMaterials(),
     getAllTaxRates(),
     getActiveUnits(),
-    getPurchaseOrders(fy),
+    getNextPONumber(fy),
   ]);
-
-  const maxNo = orders.reduce((max, o) => Math.max(max, o.po_number), 0);
-  const nextPoNumber = maxNo + 1;
 
   return (
     <POForm

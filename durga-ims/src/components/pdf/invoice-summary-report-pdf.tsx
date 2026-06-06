@@ -44,18 +44,18 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
 
   const hasDiscount = totals.discount > 0;
 
-  // Column widths — portrait A4
+  // Column widths — portrait A4 (97% total, 3% breathing room for flex layout)
   const W = {
     sno:      "5%",
-    bill:     "10%",
+    bill:     "9%",
     date:     "9%",
-    vehicle:  "15%",
-    customer: "20%",
-    taxable:  "12%",
+    vehicle:  "13%",
+    customer: "18%",
+    taxable:  "11%",
     tax:      "10%",
-    gross:    "10%",
+    gross:    "11%",
     discount: "9%",   // conditional
-    net:      "9%",
+    net:      "11%",
   };
 
   return (

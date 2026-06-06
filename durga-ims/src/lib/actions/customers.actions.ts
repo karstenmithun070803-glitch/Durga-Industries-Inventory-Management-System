@@ -1,17 +1,26 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { customers, vehicles } from "@/lib/db/schema";
 import { eq, and, count } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
-export async function getCustomers() {
-  return db.select().from(customers).where(eq(customers.is_active, true)).orderBy(customers.customer_no);
-}
+// ─── Reads (cached) ──────────────────────────────────────────────────────────
 
-export async function getAllCustomers() {
-  return db.select().from(customers).orderBy(customers.customer_no);
-}
+export const getCustomers = unstable_cache(
+  async () => db.select().from(customers).where(eq(customers.is_active, true)).orderBy(customers.customer_no),
+  ["active-customers"],
+  { tags: [CACHE_TAGS.customers], revalidate: false }
+);
+
+export const getAllCustomers = unstable_cache(
+  async () => db.select().from(customers).orderBy(customers.customer_no),
+  ["all-customers"],
+  { tags: [CACHE_TAGS.customers], revalidate: false }
+);
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function createCustomer(data: {
   customer_name: string;
@@ -32,7 +41,7 @@ export async function createCustomer(data: {
     state: data.state || null,
     gstin: data.gstin?.trim().toUpperCase() || null,
   });
-  revalidatePath("/masters/customers");
+  revalidateTag(CACHE_TAGS.customers);
 }
 
 export async function updateCustomer(id: string, data: {
@@ -53,7 +62,7 @@ export async function updateCustomer(id: string, data: {
     state: data.state || null,
     gstin: data.gstin?.trim().toUpperCase() || null,
   }).where(eq(customers.id, id));
-  revalidatePath("/masters/customers");
+  revalidateTag(CACHE_TAGS.customers);
 }
 
 export async function deleteCustomer(id: string) {
@@ -69,12 +78,12 @@ export async function deleteCustomer(id: string) {
   }
 
   await db.update(customers).set({ is_active: false }).where(eq(customers.id, id));
-  revalidatePath("/masters/customers");
+  revalidateTag(CACHE_TAGS.customers);
 }
 
 export async function reactivateCustomer(id: string) {
   await db.update(customers).set({ is_active: true }).where(eq(customers.id, id));
-  revalidatePath("/masters/customers");
+  revalidateTag(CACHE_TAGS.customers);
 }
 
 export async function bulkImportCustomers(
@@ -112,6 +121,6 @@ export async function bulkImportCustomers(
     );
   });
 
-  revalidatePath("/masters/customers");
+  revalidateTag(CACHE_TAGS.customers);
   return { imported: toInsert.length, skipped };
 }

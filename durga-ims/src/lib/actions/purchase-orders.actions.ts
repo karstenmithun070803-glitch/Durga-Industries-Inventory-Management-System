@@ -1,31 +1,22 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { purchaseOrders, purchaseOrderItems, materials, stockLedger } from "@/lib/db/schema";
 import { suppliers, units } from "@/lib/db/schema";
-import { eq, and, max, desc } from "drizzle-orm";
+import { eq, and, max, desc, inArray } from "drizzle-orm";
 import type { PurchaseOrderWithDetails, PurchaseOrderItemWithDetails } from "@/types";
 
-const REVALIDATE_PATH = "/transactions/purchase-orders";
-
 // ---------------------------------------------------------------------------
-// READ — list (one row per line item, expanded)
+// READ — list (two-query: headers first, then items; merged into flat rows)
 // ---------------------------------------------------------------------------
 
-export async function getPurchaseOrders(financialYear: string) {
-  const rows = await db
+async function fetchPOItemsForIds(poIds: string[]) {
+  if (poIds.length === 0) return [];
+  return db
     .select({
-      // PO header
-      id: purchaseOrders.id,
-      po_number: purchaseOrders.po_number,
-      po_date: purchaseOrders.po_date,
-      status: purchaseOrders.status,
-      financial_year: purchaseOrders.financial_year,
-      affects_stock: purchaseOrders.affects_stock,
-      supplier_bill_no: purchaseOrders.supplier_bill_no,
-      supplier_bill_date: purchaseOrders.supplier_bill_date,
-      // line item
+      po_id: purchaseOrderItems.po_id,
       item_id: purchaseOrderItems.id,
       material_id: purchaseOrderItems.material_id,
       material_name: materials.name,
@@ -42,15 +33,52 @@ export async function getPurchaseOrders(financialYear: string) {
       amount: purchaseOrderItems.amount,
       gst_type: purchaseOrderItems.gst_type,
     })
-    .from(purchaseOrders)
-    .innerJoin(purchaseOrderItems, eq(purchaseOrderItems.po_id, purchaseOrders.id))
+    .from(purchaseOrderItems)
     .innerJoin(materials, eq(purchaseOrderItems.material_id, materials.id))
     .leftJoin(suppliers, eq(purchaseOrderItems.supplier_id, suppliers.id))
     .leftJoin(units, eq(purchaseOrderItems.unit_id, units.id))
+    .where(inArray(purchaseOrderItems.po_id, poIds));
+}
+
+export async function getPurchaseOrders(financialYear: string) {
+  const headers = await db
+    .select({
+      id: purchaseOrders.id,
+      po_number: purchaseOrders.po_number,
+      po_date: purchaseOrders.po_date,
+      status: purchaseOrders.status,
+      financial_year: purchaseOrders.financial_year,
+      affects_stock: purchaseOrders.affects_stock,
+      supplier_bill_no: purchaseOrders.supplier_bill_no,
+      supplier_bill_date: purchaseOrders.supplier_bill_date,
+    })
+    .from(purchaseOrders)
     .where(eq(purchaseOrders.financial_year, financialYear))
     .orderBy(desc(purchaseOrders.po_date), desc(purchaseOrders.po_number));
 
-  return rows;
+  if (headers.length === 0) return [];
+
+  const allItems = await fetchPOItemsForIds(headers.map((h) => h.id));
+
+  const headerMap = new Map(headers.map((h) => [h.id, h]));
+  return allItems.map((item) => ({
+    ...headerMap.get(item.po_id)!,
+    item_id: item.item_id,
+    material_id: item.material_id,
+    material_name: item.material_name,
+    material_no: item.material_no,
+    supplier_id: item.supplier_id,
+    supplier_name: item.supplier_name,
+    qty: item.qty,
+    unit_name: item.unit_name,
+    rate: item.rate,
+    tax_percentage: item.tax_percentage,
+    cgst_amount: item.cgst_amount,
+    sgst_amount: item.sgst_amount,
+    igst_amount: item.igst_amount,
+    amount: item.amount,
+    gst_type: item.gst_type,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -130,47 +158,56 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
 }
 
 // ---------------------------------------------------------------------------
-// READ — dropdown data (active only)
+// READ — dropdown data (active only, cached)
 // ---------------------------------------------------------------------------
 
-export async function getActiveSuppliers() {
-  return db
-    .select({
-      id: suppliers.id,
-      code_no: suppliers.code_no,
-      name: suppliers.name,
-      gstin: suppliers.gstin,
-      state: suppliers.state,
-      address: suppliers.address,
-    })
-    .from(suppliers)
-    .where(eq(suppliers.is_active, true))
-    .orderBy(suppliers.name);
-}
+export const getActiveSuppliers = unstable_cache(
+  async () =>
+    db
+      .select({
+        id: suppliers.id,
+        code_no: suppliers.code_no,
+        name: suppliers.name,
+        gstin: suppliers.gstin,
+        state: suppliers.state,
+        address: suppliers.address,
+      })
+      .from(suppliers)
+      .where(eq(suppliers.is_active, true))
+      .orderBy(suppliers.name),
+  ["po-active-suppliers"],
+  { tags: [CACHE_TAGS.suppliers], revalidate: false }
+);
 
-export async function getActiveMaterials() {
-  return db
-    .select({
-      id: materials.id,
-      material_no: materials.material_no,
-      name: materials.name,
-      hsn_code: materials.hsn_code,
-      tax_rate_id: materials.tax_rate_id,
-      purchase_unit_id: materials.purchase_unit_id,
-      current_stock: materials.current_stock,
-    })
-    .from(materials)
-    .where(eq(materials.is_active, true))
-    .orderBy(materials.name);
-}
+export const getActiveMaterials = unstable_cache(
+  async () =>
+    db
+      .select({
+        id: materials.id,
+        material_no: materials.material_no,
+        name: materials.name,
+        hsn_code: materials.hsn_code,
+        tax_rate_id: materials.tax_rate_id,
+        purchase_unit_id: materials.purchase_unit_id,
+        current_stock: materials.current_stock,
+      })
+      .from(materials)
+      .where(eq(materials.is_active, true))
+      .orderBy(materials.name),
+  ["po-active-materials"],
+  { tags: [CACHE_TAGS.materials], revalidate: false }
+);
 
-export async function getActiveUnits() {
-  return db
-    .select({ id: units.id, unit_code: units.unit_code, unit_name: units.unit_name })
-    .from(units)
-    .where(eq(units.is_active, true))
-    .orderBy(units.unit_name);
-}
+export const getActiveUnits = unstable_cache(
+  async () =>
+    db
+      .select({ id: units.id, unit_code: units.unit_code, unit_name: units.unit_name })
+      .from(units)
+      .where(eq(units.is_active, true))
+      .orderBy(units.unit_name),
+  ["po-active-units"],
+  { tags: [CACHE_TAGS.units], revalidate: false }
+);
 
 // ---------------------------------------------------------------------------
 // READ — last material rate (from Received POs only)
@@ -194,16 +231,20 @@ export async function getLastMaterialRate(materialId: string): Promise<string | 
 }
 
 // ---------------------------------------------------------------------------
-// WRITE — helpers
+// READ — next PO number (cheap single-row query, non-cached — always fresh)
 // ---------------------------------------------------------------------------
 
-async function getNextPoNumber(financialYear: string): Promise<number> {
+export async function getNextPONumber(financialYear: string): Promise<number> {
   const [row] = await db
     .select({ maxNo: max(purchaseOrders.po_number) })
     .from(purchaseOrders)
     .where(eq(purchaseOrders.financial_year, financialYear));
   return (row?.maxNo ?? 0) + 1;
 }
+
+// ---------------------------------------------------------------------------
+// WRITE — helpers
+// ---------------------------------------------------------------------------
 
 interface LineItemInput {
   material_id: string;
@@ -278,7 +319,7 @@ function itemValues(poId: string, item: LineItemInput) {
 
 export async function createPurchaseOrder(data: POHeaderInput): Promise<string> {
   validateItems(data.items);
-  const poNumber = await getNextPoNumber(data.financial_year);
+  const poNumber = await getNextPONumber(data.financial_year);
 
   const [po] = await db
     .insert(purchaseOrders)
@@ -299,7 +340,7 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
     await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(po.id, item)));
   }
 
-  revalidatePath(REVALIDATE_PATH);
+  revalidatePath("/transactions/purchase-orders");
   return po.id;
 }
 
@@ -328,7 +369,7 @@ export async function updatePurchaseOrder(id: string, data: Omit<POHeaderInput, 
     await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item)));
   }
 
-  revalidatePath(REVALIDATE_PATH);
+  revalidatePath("/transactions/purchase-orders");
 }
 
 // ---------------------------------------------------------------------------
@@ -382,7 +423,7 @@ export async function receivePurchaseOrder(id: string): Promise<void> {
     }
   });
 
-  revalidatePath(REVALIDATE_PATH);
+  revalidatePath("/transactions/purchase-orders");
 }
 
 // ---------------------------------------------------------------------------
@@ -476,7 +517,7 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
     }
   });
 
-  revalidatePath(REVALIDATE_PATH);
+  revalidatePath("/transactions/purchase-orders");
 }
 
 // ---------------------------------------------------------------------------
@@ -493,7 +534,7 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
 
   if (po.status === "Draft") {
     await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
-    revalidatePath(REVALIDATE_PATH);
+    revalidatePath("/transactions/purchase-orders");
     return;
   }
 
@@ -554,5 +595,5 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
     await tx.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
   });
 
-  revalidatePath(REVALIDATE_PATH);
+  revalidatePath("/transactions/purchase-orders");
 }

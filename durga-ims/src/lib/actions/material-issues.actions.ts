@@ -15,7 +15,8 @@ import {
   invoices,
 } from "@/lib/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { fyDateRange } from "@/lib/fy";
 import type { MaterialIssueWithDetails, MaterialIssueItemWithDetails, MaterialIssueRow } from "@/types";
 
@@ -115,81 +116,95 @@ function itemValues(issueId: string, item: IssueItemInput) {
 // Read — dropdown data
 // ---------------------------------------------------------------------------
 
-export async function getActiveVehicles() {
-  const rows = await db
-    .select({
-      id: vehicles.id,
-      job_ref_no: vehicles.job_ref_no,
-      vehicle_name: vehicles.vehicle_name,
-      type: vehicles.type,
-      customer_id: vehicles.customer_id,
-      customer_name: customers.customer_name,
-      customer_gstin: customers.gstin,
-      customer_state: customers.state,
-      address_1: customers.address_1,
-      address_2: customers.address_2,
-      street: customers.street,
-      city: customers.city,
-    })
-    .from(vehicles)
-    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
-    .where(eq(vehicles.is_active, true))
-    .orderBy(vehicles.job_ref_no);
+export const getActiveVehicles = unstable_cache(
+  async () => {
+    const rows = await db
+      .select({
+        id: vehicles.id,
+        job_ref_no: vehicles.job_ref_no,
+        vehicle_name: vehicles.vehicle_name,
+        type: vehicles.type,
+        customer_id: vehicles.customer_id,
+        customer_name: customers.customer_name,
+        customer_gstin: customers.gstin,
+        customer_state: customers.state,
+        address_1: customers.address_1,
+        address_2: customers.address_2,
+        street: customers.street,
+        city: customers.city,
+      })
+      .from(vehicles)
+      .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+      .where(eq(vehicles.is_active, true))
+      .orderBy(vehicles.job_ref_no);
 
-  return rows.map((r) => ({
-    ...r,
-    customer_address: [r.address_1, r.address_2, r.street, r.city].filter(Boolean).join(", ") || null,
-    address_1: undefined,
-    address_2: undefined,
-    street: undefined,
-    city: undefined,
-  }));
-}
+    return rows.map((r) => ({
+      ...r,
+      customer_address: [r.address_1, r.address_2, r.street, r.city].filter(Boolean).join(", ") || null,
+      address_1: undefined,
+      address_2: undefined,
+      street: undefined,
+      city: undefined,
+    }));
+  },
+  ["mi-active-vehicles"],
+  { tags: [CACHE_TAGS.vehicles], revalidate: false }
+);
 
-export async function getActiveContractors() {
-  return db
-    .select({
-      id: contractors.id,
-      code_no: contractors.code_no,
-      name: contractors.name,
-      role: contractors.role,
-    })
-    .from(contractors)
-    .where(eq(contractors.is_active, true))
-    .orderBy(contractors.code_no);
-}
+export const getActiveContractors = unstable_cache(
+  async () =>
+    db
+      .select({
+        id: contractors.id,
+        code_no: contractors.code_no,
+        name: contractors.name,
+        role: contractors.role,
+      })
+      .from(contractors)
+      .where(eq(contractors.is_active, true))
+      .orderBy(contractors.code_no),
+  ["mi-active-contractors"],
+  { tags: [CACHE_TAGS.contractors], revalidate: false }
+);
 
-export async function getActiveIssueMaterials() {
-  const pu = units;
+export const getActiveIssueMaterials = unstable_cache(
+  async () => {
+    const pu = units;
 
-  return db
-    .select({
-      id: materials.id,
-      material_no: materials.material_no,
-      name: materials.name,
-      hsn_code: materials.hsn_code,
-      tax_rate_id: materials.tax_rate_id,
-      tax_percentage: taxRates.tax_percentage,
-      purchase_unit_id: materials.purchase_unit_id,
-      purchase_unit_name: pu.unit_name,
-      sales_unit_id: materials.sales_unit_id,
-      current_stock: materials.current_stock,
-      min_level: materials.min_level,
-    })
-    .from(materials)
-    .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
-    .leftJoin(pu, eq(materials.purchase_unit_id, pu.id))
-    .where(eq(materials.is_active, true))
-    .orderBy(materials.material_no);
-}
+    return db
+      .select({
+        id: materials.id,
+        material_no: materials.material_no,
+        name: materials.name,
+        hsn_code: materials.hsn_code,
+        tax_rate_id: materials.tax_rate_id,
+        tax_percentage: taxRates.tax_percentage,
+        purchase_unit_id: materials.purchase_unit_id,
+        purchase_unit_name: pu.unit_name,
+        sales_unit_id: materials.sales_unit_id,
+        current_stock: materials.current_stock,
+        min_level: materials.min_level,
+      })
+      .from(materials)
+      .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
+      .leftJoin(pu, eq(materials.purchase_unit_id, pu.id))
+      .where(eq(materials.is_active, true))
+      .orderBy(materials.material_no);
+  },
+  ["mi-active-materials"],
+  { tags: [CACHE_TAGS.materials], revalidate: false }
+);
 
-export async function getActiveSalesUnits() {
-  return db
-    .select({ id: units.id, unit_name: units.unit_name })
-    .from(units)
-    .where(eq(units.is_active, true))
-    .orderBy(units.unit_code);
-}
+export const getActiveSalesUnits = unstable_cache(
+  async () =>
+    db
+      .select({ id: units.id, unit_name: units.unit_name })
+      .from(units)
+      .where(eq(units.is_active, true))
+      .orderBy(units.unit_code),
+  ["mi-active-sales-units"],
+  { tags: [CACHE_TAGS.units], revalidate: false }
+);
 
 export async function getLastMaterialRate(materialId: string): Promise<string | null> {
   const { purchaseOrders, purchaseOrderItems } = await import("@/lib/db/schema");

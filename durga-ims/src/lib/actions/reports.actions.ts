@@ -13,7 +13,9 @@ import {
   stockLedger,
   customers,
 } from "@/lib/db/schema";
-import { eq, and, gte, lte, sql, desc, asc } from "drizzle-orm";
+import { eq, and, gte, lte, sql, asc } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 
 // ---------------------------------------------------------------------------
 // Invoice Summary Report
@@ -277,52 +279,41 @@ export async function getMonthlyStockReport(params: {
   const unitRows = await db.select({ id: units.id, unit_name: units.unit_name }).from(units);
   const unitMap = new Map(unitRows.map((u) => [u.id, u.unit_name]));
 
-  // Last PO rates
-  const poRates = await db
-    .select({
-      material_id: purchaseOrderItems.material_id,
-      rate: purchaseOrderItems.rate,
-      po_date: purchaseOrders.po_date,
-    })
-    .from(purchaseOrderItems)
-    .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
-    .where(eq(purchaseOrders.status, "Received"))
-    .orderBy(desc(purchaseOrders.po_date))
-    .limit(2000);
+  // DISTINCT ON returns exactly one row per material (the most recent received PO rate).
+  const latestRates = await db.execute<{ material_id: string; rate: string }>(sql`
+    SELECT DISTINCT ON (poi.material_id)
+      poi.material_id,
+      poi.rate
+    FROM purchase_order_items poi
+    INNER JOIN purchase_orders po ON poi.po_id = po.id
+    WHERE po.status = 'Received'
+    ORDER BY poi.material_id, po.po_date DESC
+  `);
 
-  const rateMap = new Map<string, number>();
-  for (const row of poRates) {
-    if (row.material_id && !rateMap.has(row.material_id)) {
-      rateMap.set(row.material_id, parseFloat(row.rate));
-    }
-  }
+  const rateMap = new Map<string, number>(
+    Array.from(latestRates).map((r) => [r.material_id, parseFloat(r.rate)])
+  );
 
-  // Ledger entries before period start (for opening stock).
-  // Capped at 10000 rows — deduplication in JS keeps only the latest per material.
-  // Sufficient for ~300 materials × 30 entries of history before the period.
-  const preLedger = await db
-    .select({
-      material_id: stockLedger.material_id,
-      stock_after: stockLedger.stock_after,
-      created_at: stockLedger.created_at,
-    })
-    .from(stockLedger)
-    .where(
-      and(
-        lte(stockLedger.created_at, from),
-        materialId ? eq(stockLedger.material_id, materialId) : undefined
-      )
-    )
-    .orderBy(desc(stockLedger.created_at))
-    .limit(10000);
+  // DISTINCT ON returns exactly one row per material (the last stock snapshot before period start).
+  const preLedger = await db.execute<{ material_id: string; stock_after: string }>(
+    materialId
+      ? sql`
+          SELECT DISTINCT ON (sl.material_id) sl.material_id, sl.stock_after
+          FROM stock_ledger sl
+          WHERE sl.created_at <= ${from} AND sl.material_id = ${materialId}
+          ORDER BY sl.material_id, sl.created_at DESC
+        `
+      : sql`
+          SELECT DISTINCT ON (sl.material_id) sl.material_id, sl.stock_after
+          FROM stock_ledger sl
+          WHERE sl.created_at <= ${from}
+          ORDER BY sl.material_id, sl.created_at DESC
+        `
+  );
 
-  // Keep last entry before period per material
-  const openingMap = new Map<string, number>();
-  for (const e of preLedger) {
-    if (!openingMap.has(e.material_id)) {
-      openingMap.set(e.material_id, parseFloat(e.stock_after));
-    }
-  }
+  const openingMap = new Map<string, number>(
+    Array.from(preLedger).map((e) => [e.material_id, parseFloat(e.stock_after)])
+  );
 
   // Aggregate period movements in SQL — returns at most (materials × 4) rows regardless of history depth
   const periodAggRows = await db
@@ -383,34 +374,46 @@ export async function getMonthlyStockReport(params: {
 // Filter dropdown data
 // ---------------------------------------------------------------------------
 
-export async function getActiveVehiclesForReports() {
-  return db
-    .select({ id: vehicles.id, vehicle_name: vehicles.vehicle_name, job_ref_no: vehicles.job_ref_no })
-    .from(vehicles)
-    .where(eq(vehicles.is_active, true))
-    .orderBy(vehicles.job_ref_no);
-}
+export const getActiveVehiclesForReports = unstable_cache(
+  async () =>
+    db
+      .select({ id: vehicles.id, vehicle_name: vehicles.vehicle_name, job_ref_no: vehicles.job_ref_no })
+      .from(vehicles)
+      .where(eq(vehicles.is_active, true))
+      .orderBy(vehicles.job_ref_no),
+  ["reports-active-vehicles"],
+  { tags: [CACHE_TAGS.vehicles], revalidate: false }
+);
 
-export async function getActiveSuppliersForReports() {
-  return db
-    .select({ id: suppliers.id, name: suppliers.name })
-    .from(suppliers)
-    .where(eq(suppliers.is_active, true))
-    .orderBy(suppliers.name);
-}
+export const getActiveSuppliersForReports = unstable_cache(
+  async () =>
+    db
+      .select({ id: suppliers.id, name: suppliers.name })
+      .from(suppliers)
+      .where(eq(suppliers.is_active, true))
+      .orderBy(suppliers.name),
+  ["reports-active-suppliers"],
+  { tags: [CACHE_TAGS.suppliers], revalidate: false }
+);
 
-export async function getActiveMaterialsForReports() {
-  return db
-    .select({ id: materials.id, name: materials.name, material_no: materials.material_no })
-    .from(materials)
-    .where(eq(materials.is_active, true))
-    .orderBy(materials.material_no);
-}
+export const getActiveMaterialsForReports = unstable_cache(
+  async () =>
+    db
+      .select({ id: materials.id, name: materials.name, material_no: materials.material_no })
+      .from(materials)
+      .where(eq(materials.is_active, true))
+      .orderBy(materials.material_no),
+  ["reports-active-materials"],
+  { tags: [CACHE_TAGS.materials], revalidate: false }
+);
 
-export async function getActiveCustomersForReports() {
-  return db
-    .select({ id: customers.id, customer_name: customers.customer_name, gstin: customers.gstin })
-    .from(customers)
-    .where(eq(customers.is_active, true))
-    .orderBy(customers.customer_name);
-}
+export const getActiveCustomersForReports = unstable_cache(
+  async () =>
+    db
+      .select({ id: customers.id, customer_name: customers.customer_name, gstin: customers.gstin })
+      .from(customers)
+      .where(eq(customers.is_active, true))
+      .orderBy(customers.customer_name),
+  ["reports-active-customers"],
+  { tags: [CACHE_TAGS.customers], revalidate: false }
+);

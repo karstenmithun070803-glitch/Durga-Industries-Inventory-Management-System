@@ -10,6 +10,7 @@ import {
   date,
   check,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
@@ -47,7 +48,9 @@ export const customers = pgTable("customers", {
   gstin: text("gstin"),
   ...softDelete,
   ...timestamps,
-});
+}, (table) => [
+  index("idx_customers_is_active").on(table.is_active),
+]);
 
 export const contractors = pgTable("contractors", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -57,7 +60,9 @@ export const contractors = pgTable("contractors", {
   contact: text("contact"),
   ...softDelete,
   ...timestamps,
-});
+}, (table) => [
+  index("idx_contractors_is_active").on(table.is_active),
+]);
 
 export const suppliers = pgTable("suppliers", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -70,7 +75,9 @@ export const suppliers = pgTable("suppliers", {
   state: text("state"),
   ...softDelete,
   ...timestamps,
-});
+}, (table) => [
+  index("idx_suppliers_is_active").on(table.is_active),
+]);
 
 export const taxRates = pgTable("tax_rates", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -110,6 +117,7 @@ export const materials = pgTable(
   },
   (table) => [
     check("current_stock_non_negative", sql`${table.current_stock} >= 0`),
+    index("idx_materials_is_active").on(table.is_active),
   ]
 );
 
@@ -122,7 +130,10 @@ export const vehicles = pgTable("vehicles", {
   customer_id: uuid("customer_id").references(() => customers.id),
   ...softDelete,
   ...timestamps,
-});
+}, (table) => [
+  index("idx_vehicles_is_active").on(table.is_active),
+  index("idx_vehicles_customer_id").on(table.customer_id),
+]);
 
 // Auth bridge: maps a username to a Supabase auth email
 export const appUsers = pgTable("app_users", {
@@ -157,6 +168,9 @@ export const purchaseOrders = pgTable("purchase_orders", {
   ...timestamps,
 }, (t) => [
   unique("po_number_fy_unique").on(t.po_number, t.financial_year),
+  index("idx_po_financial_year").on(t.financial_year),
+  index("idx_po_fy_status").on(t.financial_year, t.status),
+  index("idx_po_supplier_id").on(t.supplier_id),
 ]);
 
 export const purchaseOrderItems = pgTable("purchase_order_items", {
@@ -181,7 +195,10 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   // gst_type frozen at entry time — historical integrity if supplier GSTIN changes later
   gst_type: text("gst_type"), // "CGST_SGST" | "IGST"
   ...timestamps,
-});
+}, (table) => [
+  index("idx_poi_po_id").on(table.po_id),
+  index("idx_poi_material_id").on(table.material_id),
+]);
 
 export const materialIssues = pgTable("material_issues", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -199,6 +216,9 @@ export const materialIssues = pgTable("material_issues", {
   ...timestamps,
 }, (t) => [
   unique("slip_number_fy_unique").on(t.slip_number, t.financial_year),
+  index("idx_mi_financial_year").on(t.financial_year),
+  index("idx_mi_vehicle_id").on(t.vehicle_id),
+  index("idx_mi_fy_status").on(t.financial_year, t.status),
 ]);
 
 export const materialIssueItems = pgTable("material_issue_items", {
@@ -225,7 +245,10 @@ export const materialIssueItems = pgTable("material_issue_items", {
   // frozen at save time — "CGST_SGST" | "IGST"
   gst_type: text("gst_type"),
   ...timestamps,
-});
+}, (table) => [
+  index("idx_mii_issue_id").on(table.issue_id),
+  index("idx_mii_material_id").on(table.material_id),
+]);
 
 export const invoices = pgTable("invoices", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -259,6 +282,9 @@ export const invoices = pgTable("invoices", {
   ...timestamps,
 }, (t) => [
   unique("bill_number_fy_unique").on(t.bill_number, t.financial_year),
+  index("idx_inv_financial_year").on(t.financial_year),
+  index("idx_inv_fy_status").on(t.financial_year, t.status),
+  index("idx_inv_vehicle_id").on(t.vehicle_id),
 ]);
 
 export const invoiceSlipLinks = pgTable("invoice_slip_links", {
@@ -291,7 +317,10 @@ export const invoiceItems = pgTable("invoice_items", {
   // frozen at save time — "CGST_SGST" | "IGST" (historical integrity)
   gst_type: text("gst_type"),
   ...timestamps,
-});
+}, (table) => [
+  index("idx_ii_invoice_id").on(table.invoice_id),
+  index("idx_ii_material_id").on(table.material_id),
+]);
 
 // ---------------------------------------------------------------------------
 // COMPANY SETTINGS  (single-row settings table)
@@ -334,7 +363,11 @@ export const stockLedger = pgTable("stock_ledger", {
   adjusted_by: text("adjusted_by"), // username, required for ADJUSTMENT
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // no updated_at — this table is append-only
-});
+}, (table) => [
+  index("idx_sl_material_id").on(table.material_id),
+  index("idx_sl_created_at").on(table.created_at),
+  index("idx_sl_material_created").on(table.material_id, table.created_at),
+]);
 
 // ---------------------------------------------------------------------------
 // RELATIONS  (used by Drizzle for type-safe joins — no DB impact)

@@ -162,14 +162,9 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>
-              <View style={{ marginTop: 6, borderWidth: 0.5, borderColor: "#CBD5E1", paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", gap: 4 }}>
-                <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", color: "#374151" }}>
-                  Amount in Words:
-                </Text>
-                <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", color: "#374151", flex: 1 }}>
-                  {numberToWords(parseFloat(first.net_amount))}
-                </Text>
-              </View>
+              <Text style={{ marginTop: 6, fontSize: 8, fontFamily: "Helvetica-Oblique", color: "#374151" }}>
+                {numberToWords(parseFloat(first.net_amount))}
+              </Text>
             </View>
 
             {/* ── Bottom: bank details LEFT, signatory RIGHT ── */}

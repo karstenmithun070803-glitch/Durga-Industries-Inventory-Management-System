@@ -1,17 +1,26 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { materials, materialIssueItems, materialIssues } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
-export async function getMaterials() {
-  return db.select().from(materials).where(eq(materials.is_active, true)).orderBy(materials.material_no);
-}
+// ─── Reads (cached) ──────────────────────────────────────────────────────────
 
-export async function getAllMaterials() {
-  return db.select().from(materials).orderBy(materials.material_no);
-}
+export const getMaterials = unstable_cache(
+  async () => db.select().from(materials).where(eq(materials.is_active, true)).orderBy(materials.material_no),
+  ["active-materials"],
+  { tags: [CACHE_TAGS.materials], revalidate: false }
+);
+
+export const getAllMaterials = unstable_cache(
+  async () => db.select().from(materials).orderBy(materials.material_no),
+  ["all-materials"],
+  { tags: [CACHE_TAGS.materials], revalidate: false }
+);
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function createMaterial(data: {
   name: string;
@@ -38,7 +47,7 @@ export async function createMaterial(data: {
     min_level: data.min_level || "0",
     max_level: data.max_level || null,
   });
-  revalidatePath("/masters/materials");
+  revalidateTag(CACHE_TAGS.materials);
 }
 
 export async function updateMaterial(id: string, data: {
@@ -63,7 +72,7 @@ export async function updateMaterial(id: string, data: {
     min_level: data.min_level || "0",
     max_level: data.max_level || null,
   }).where(eq(materials.id, id));
-  revalidatePath("/masters/materials");
+  revalidateTag(CACHE_TAGS.materials);
 }
 
 export async function deleteMaterial(id: string) {
@@ -78,7 +87,6 @@ export async function deleteMaterial(id: string) {
     );
   }
 
-  // Guard: block if referenced in any Draft issue slip
   const inUse = await db
     .select({ slip_number: materialIssues.slip_number })
     .from(materialIssueItems)
@@ -91,12 +99,12 @@ export async function deleteMaterial(id: string) {
     );
 
   await db.update(materials).set({ is_active: false }).where(eq(materials.id, id));
-  revalidatePath("/masters/materials");
+  revalidateTag(CACHE_TAGS.materials);
 }
 
 export async function reactivateMaterial(id: string) {
   await db.update(materials).set({ is_active: true }).where(eq(materials.id, id));
-  revalidatePath("/masters/materials");
+  revalidateTag(CACHE_TAGS.materials);
 }
 
 export async function bulkImportMaterials(
@@ -114,9 +122,7 @@ export async function bulkImportMaterials(
 ): Promise<{ imported: number; skipped: number }> {
   if (rows.length === 0) return { imported: 0, skipped: 0 };
 
-  const existing = await db
-    .select({ name: materials.name })
-    .from(materials);
+  const existing = await db.select({ name: materials.name }).from(materials);
   const existingNames = new Set(existing.map((m) => m.name.toUpperCase()));
 
   const toInsert = rows.filter((r) => !existingNames.has(r.name.toUpperCase()));
@@ -141,6 +147,6 @@ export async function bulkImportMaterials(
     );
   });
 
-  revalidatePath("/masters/materials");
+  revalidateTag(CACHE_TAGS.materials);
   return { imported: toInsert.length, skipped };
 }

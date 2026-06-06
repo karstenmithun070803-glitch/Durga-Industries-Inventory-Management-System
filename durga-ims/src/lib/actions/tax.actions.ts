@@ -1,17 +1,26 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { taxRates, materials } from "@/lib/db/schema";
 import { eq, ne, and, isNotNull } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
-export async function getTaxRates() {
-  return db.select().from(taxRates).where(eq(taxRates.is_active, true)).orderBy(taxRates.vat_code);
-}
+// ─── Reads (cached) ──────────────────────────────────────────────────────────
 
-export async function getAllTaxRates() {
-  return db.select().from(taxRates).orderBy(taxRates.vat_code);
-}
+export const getTaxRates = unstable_cache(
+  async () => db.select().from(taxRates).where(eq(taxRates.is_active, true)).orderBy(taxRates.vat_code),
+  ["active-tax-rates"],
+  { tags: [CACHE_TAGS.taxRates], revalidate: false }
+);
+
+export const getAllTaxRates = unstable_cache(
+  async () => db.select().from(taxRates).orderBy(taxRates.vat_code),
+  ["all-tax-rates"],
+  { tags: [CACHE_TAGS.taxRates], revalidate: false }
+);
+
+// ─── Reads (non-cached) ──────────────────────────────────────────────────────
 
 async function checkInvPrefixUnique(prefix: string, excludeId?: string) {
   const rows = await db
@@ -26,6 +35,8 @@ async function checkInvPrefixUnique(prefix: string, excludeId?: string) {
     throw new Error(`Invoice prefix "${prefix}" is already used by another tax rate. Each prefix must be unique.`);
 }
 
+// ─── Mutations ───────────────────────────────────────────────────────────────
+
 export async function createTaxRate(data: {
   tax_percentage: string;
   description: string;
@@ -39,7 +50,7 @@ export async function createTaxRate(data: {
     description: data.description.trim(),
     inv_prefix: prefix,
   });
-  revalidatePath("/masters/tax");
+  revalidateTag(CACHE_TAGS.taxRates);
 }
 
 export async function updateTaxRate(
@@ -53,7 +64,7 @@ export async function updateTaxRate(
     description: data.description.trim(),
     inv_prefix: prefix,
   }).where(eq(taxRates.id, id));
-  revalidatePath("/masters/tax");
+  revalidateTag(CACHE_TAGS.taxRates);
 }
 
 export async function deleteTaxRate(id: string) {
@@ -71,10 +82,10 @@ export async function deleteTaxRate(id: string) {
   }
 
   await db.update(taxRates).set({ is_active: false }).where(eq(taxRates.id, id));
-  revalidatePath("/masters/tax");
+  revalidateTag(CACHE_TAGS.taxRates);
 }
 
 export async function reactivateTaxRate(id: string) {
   await db.update(taxRates).set({ is_active: true }).where(eq(taxRates.id, id));
-  revalidatePath("/masters/tax");
+  revalidateTag(CACHE_TAGS.taxRates);
 }

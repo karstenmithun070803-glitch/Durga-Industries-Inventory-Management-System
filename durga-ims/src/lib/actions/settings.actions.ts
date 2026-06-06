@@ -1,8 +1,10 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
+import { cache } from "react";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { companySettings } from "@/lib/db/schema";
-import { revalidatePath } from "next/cache";
 
 export interface CompanySetting {
   company_name: string;
@@ -30,23 +32,34 @@ const DEFAULTS: CompanySetting = {
   invoice_terms: null,
 };
 
-export async function getCompanySettings(): Promise<CompanySetting> {
-  const rows = await db.select().from(companySettings).limit(1);
-  if (rows.length === 0) return DEFAULTS;
-  const r = rows[0];
-  return {
-    company_name: r.company_name,
-    address: r.address,
-    gstin: r.gstin,
-    pan_no: r.pan_no,
-    tan_no: r.tan_no,
-    bank_name: r.bank_name,
-    bank_account_no: r.bank_account_no,
-    bank_ifsc: r.bank_ifsc,
-    bank_branch: r.bank_branch,
-    invoice_terms: r.invoice_terms,
-  };
-}
+// ─── Reads (cached) ──────────────────────────────────────────────────────────
+// React.cache deduplicates within a single request; unstable_cache persists across requests.
+
+export const getCompanySettings: () => Promise<CompanySetting> = cache(
+  unstable_cache(
+    async (): Promise<CompanySetting> => {
+      const rows = await db.select().from(companySettings).limit(1);
+      if (rows.length === 0) return DEFAULTS;
+      const r = rows[0];
+      return {
+        company_name: r.company_name,
+        address: r.address,
+        gstin: r.gstin,
+        pan_no: r.pan_no,
+        tan_no: r.tan_no,
+        bank_name: r.bank_name,
+        bank_account_no: r.bank_account_no,
+        bank_ifsc: r.bank_ifsc,
+        bank_branch: r.bank_branch,
+        invoice_terms: r.invoice_terms,
+      };
+    },
+    ["company-settings"],
+    { tags: [CACHE_TAGS.settings], revalidate: false }
+  )
+);
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function upsertCompanySettings(data: CompanySetting): Promise<void> {
   const existing = await db.select({ id: companySettings.id }).from(companySettings).limit(1);
@@ -69,5 +82,5 @@ export async function upsertCompanySettings(data: CompanySetting): Promise<void>
   } else {
     await db.insert(companySettings).values(values);
   }
-  revalidatePath("/settings");
+  revalidateTag(CACHE_TAGS.settings);
 }

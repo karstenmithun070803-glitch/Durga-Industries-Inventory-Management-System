@@ -13,8 +13,9 @@ import {
   vehicles,
   customers,
 } from "@/lib/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { revalidatePath, unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { createClient } from "@/lib/supabase/server";
 
 // ---------------------------------------------------------------------------
@@ -118,27 +119,20 @@ export async function getStockDashboardMaterials(): Promise<{
   const unitRows = await db.select({ id: units.id, unit_name: units.unit_name }).from(units);
   const unitMap = new Map(unitRows.map((u) => [u.id, u.unit_name]));
 
-  // For each material, get the last received PO rate via a lateral-style subquery.
-  // We do one query: get all latest PO rates grouped by material_id
-  const poRates = await db
-    .select({
-      material_id: purchaseOrderItems.material_id,
-      rate: purchaseOrderItems.rate,
-      po_date: purchaseOrders.po_date,
-    })
-    .from(purchaseOrderItems)
-    .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
-    .where(eq(purchaseOrders.status, "Received"))
-    .orderBy(desc(purchaseOrders.po_date))
-    .limit(2000);
+  // DISTINCT ON returns exactly one row per material (the most recent received PO rate).
+  const latestRates = await db.execute<{ material_id: string; rate: string }>(sql`
+    SELECT DISTINCT ON (poi.material_id)
+      poi.material_id,
+      poi.rate
+    FROM purchase_order_items poi
+    INNER JOIN purchase_orders po ON poi.po_id = po.id
+    WHERE po.status = 'Received'
+    ORDER BY poi.material_id, po.po_date DESC
+  `);
 
-  // Keep only the first (most recent) rate per material
-  const rateMap = new Map<string, string>();
-  for (const row of poRates) {
-    if (row.material_id && !rateMap.has(row.material_id)) {
-      rateMap.set(row.material_id, row.rate);
-    }
-  }
+  const rateMap = new Map<string, string>(
+    Array.from(latestRates).map((r) => [r.material_id, r.rate])
+  );
 
   const rows: StockMaterialRow[] = allMats.map((m) => ({
     id: m.id,
@@ -328,27 +322,31 @@ export async function getStockForMaterial(
 // getVehiclesForJobSearch
 // ---------------------------------------------------------------------------
 
-export async function getVehiclesForJobSearch(): Promise<VehicleSearchRow[]> {
-  const rows = await db
-    .select({
-      id: vehicles.id,
-      job_ref_no: vehicles.job_ref_no,
-      vehicle_name: vehicles.vehicle_name,
-      customer_name: customers.customer_name,
-      is_active: vehicles.is_active,
-    })
-    .from(vehicles)
-    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
-    .orderBy(desc(vehicles.job_ref_no));
+export const getVehiclesForJobSearch = unstable_cache(
+  async (): Promise<VehicleSearchRow[]> => {
+    const rows = await db
+      .select({
+        id: vehicles.id,
+        job_ref_no: vehicles.job_ref_no,
+        vehicle_name: vehicles.vehicle_name,
+        customer_name: customers.customer_name,
+        is_active: vehicles.is_active,
+      })
+      .from(vehicles)
+      .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+      .orderBy(desc(vehicles.job_ref_no));
 
-  return rows.map((r) => ({
-    id: r.id,
-    job_ref_no: r.job_ref_no,
-    vehicle_name: r.vehicle_name,
-    customer_name: r.customer_name ?? null,
-    is_active: r.is_active,
-  }));
-}
+    return rows.map((r) => ({
+      id: r.id,
+      job_ref_no: r.job_ref_no,
+      vehicle_name: r.vehicle_name,
+      customer_name: r.customer_name ?? null,
+      is_active: r.is_active,
+    }));
+  },
+  ["stock-vehicles-job-search"],
+  { tags: [CACHE_TAGS.vehicles], revalidate: false }
+);
 
 // ---------------------------------------------------------------------------
 // getJobCostData

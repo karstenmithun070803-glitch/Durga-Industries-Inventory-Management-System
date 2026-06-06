@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -10,9 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { TransactionGrid, newRow, calcRowTotals } from "@/components/forms/TransactionGrid";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import dynamic from "next/dynamic";
 import { PrintButton } from "@/components/pdf/print-button";
-import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
-import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
+const InsuranceInvoiceDocument = dynamic(
+  () => import("@/components/pdf/insurance-invoice-pdf").then((m) => ({ default: m.InsuranceInvoiceDocument })),
+  { ssr: false }
+);
+const CustomerInvoiceDocument = dynamic(
+  () => import("@/components/pdf/customer-invoice-pdf").then((m) => ({ default: m.CustomerInvoiceDocument })),
+  { ssr: false }
+);
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 
@@ -248,6 +256,7 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
 
   // Margin % — fresh per new invoice; loaded from DB when editing
   const [materialMargin, setMaterialMargin] = useState(invoice?.material_margin ?? "");
+  const debouncedMargin = useDebounce(materialMargin, 300);
 
   // ── Line items state ──────────────────────────────────────────────────────
   const [rows, setRows] = useState<LineItemDraft[]>(
@@ -277,7 +286,7 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
   // ── Margin % → recalculate all row rates when margin changes ──────────────
   useEffect(() => {
     if (rows.length === 0) return;
-    const marginFactor = 1 + parseFloat(materialMargin || "0") / 100;
+    const marginFactor = 1 + parseFloat(debouncedMargin || "0") / 100;
     setRows((prev) =>
       prev.map((row) => {
         const base = parseFloat(row.baseRate || row.rate || "0");
@@ -297,7 +306,7 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
       })
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [materialMargin]);
+  }, [debouncedMargin]);
 
   // Rebuild rows from currently selected slips + any manually added rows
   const rebuildRowsFromSlips = useCallback(

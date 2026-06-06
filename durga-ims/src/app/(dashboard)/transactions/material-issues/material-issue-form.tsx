@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFY } from "@/lib/financial-year";
@@ -152,6 +153,7 @@ export function MaterialIssueForm({
     issue ? toISODate(issue.issue_date) : new Date().toISOString().split("T")[0]
   );
   const [marginPct, setMarginPct] = useState(issue?.margin_percentage ?? "0");
+  const debouncedMarginPct = useDebounce(marginPct, 300);
   const [gstType, setGstType] = useState<"CGST_SGST" | "IGST">(initGstType);
   const [rows, setRows] = useState<LineItemDraft[]>(
     issue ? issueItemsToRows(issue) : [newRow()]
@@ -160,7 +162,7 @@ export function MaterialIssueForm({
   // ── Margin % → recalculate all row rates when margin changes ─────────────
   useEffect(() => {
     if (rows.length === 0) return;
-    const factor = 1 + parseFloat(marginPct || "0") / 100;
+    const factor = 1 + parseFloat(debouncedMarginPct || "0") / 100;
     setRows((prev) =>
       prev.map((row) => {
         const base = parseFloat(row.baseRate || row.rate || "0");
@@ -179,7 +181,7 @@ export function MaterialIssueForm({
       })
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [marginPct]);
+  }, [debouncedMarginPct]);
 
   // Vehicle type filter
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<"all" | "New" | "Old">("all");

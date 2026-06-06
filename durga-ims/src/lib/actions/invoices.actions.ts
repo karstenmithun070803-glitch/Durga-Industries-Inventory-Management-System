@@ -14,7 +14,8 @@ import {
   materialIssueItems,
 } from "@/lib/db/schema";
 import { eq, and, sql, desc, like, notExists, ne, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { fyDateRange } from "@/lib/fy";
 import { createClient } from "@/lib/supabase/server";
 import type { InvoiceWithDetails, InvoiceItemWithDetails, InvoiceRow } from "@/types";
@@ -126,23 +127,25 @@ function validateInvoiceItems(items: InvoiceItemInput[]) {
 // Read — dropdown data
 // ---------------------------------------------------------------------------
 
-export async function getActiveVehiclesForInvoice() {
-  const rows = await db
-    .select({
-      id: vehicles.id,
-      job_ref_no: vehicles.job_ref_no,
-      vehicle_name: vehicles.vehicle_name,
-      customer_id: vehicles.customer_id,
-      customer_name: customers.customer_name,
-      customer_gstin: customers.gstin,
-      customer_state: customers.state,
-    })
-    .from(vehicles)
-    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
-    .where(eq(vehicles.is_active, true))
-    .orderBy(vehicles.job_ref_no);
-  return rows;
-}
+export const getActiveVehiclesForInvoice = unstable_cache(
+  async () =>
+    db
+      .select({
+        id: vehicles.id,
+        job_ref_no: vehicles.job_ref_no,
+        vehicle_name: vehicles.vehicle_name,
+        customer_id: vehicles.customer_id,
+        customer_name: customers.customer_name,
+        customer_gstin: customers.gstin,
+        customer_state: customers.state,
+      })
+      .from(vehicles)
+      .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+      .where(eq(vehicles.is_active, true))
+      .orderBy(vehicles.job_ref_no),
+  ["inv-active-vehicles"],
+  { tags: [CACHE_TAGS.vehicles], revalidate: false }
+);
 
 export async function getIssuedMIsForVehicle(vehicleId: string, currentInvoiceId?: string) {
   const rows = await db
@@ -267,53 +270,103 @@ export async function getAllIssuedMIItemsForVehicle(vehicleId: string, currentIn
     )
     .orderBy(desc(materialIssues.issue_date));
 
-  const result = await Promise.all(
-    slips.map(async (slip) => {
-      const items = await getMIItemsForInvoice(slip.id);
-      return {
-        slip_id: slip.id,
-        slip_number: slip.slip_number,
-        issue_date: slip.issue_date.toISOString(),
-        items,
-      };
-    })
-  );
+  if (slips.length === 0) return [];
 
-  return result;
-}
-
-export async function getActiveTaxRatesWithPrefix() {
-  return db
+  const allItems = await db
     .select({
-      id: taxRates.id,
-      vat_code: taxRates.vat_code,
-      tax_percentage: taxRates.tax_percentage,
-      description: taxRates.description,
-      inv_prefix: taxRates.inv_prefix,
-    })
-    .from(taxRates)
-    .where(and(eq(taxRates.is_active, true)))
-    .orderBy(taxRates.vat_code);
-}
-
-export async function getActiveInvoiceMaterials() {
-  const rows = await db
-    .select({
-      id: materials.id,
+      issue_id: materialIssueItems.issue_id,
+      id: materialIssueItems.id,
+      material_id: materialIssueItems.material_id,
+      material_name: materials.name,
       material_no: materials.material_no,
-      name: materials.name,
-      hsn_code: materials.hsn_code,
-      tax_rate_id: materials.tax_rate_id,
-      tax_percentage: taxRates.tax_percentage,
-      sales_unit_id: materials.sales_unit_id,
-      purchase_unit_id: materials.purchase_unit_id,
+      hsn_code: materialIssueItems.hsn_code,
+      qty: materialIssueItems.qty,
+      unit_id: materialIssueItems.unit_id,
+      unit_name: units.unit_name,
+      rate: materialIssueItems.rate,
+      tax_percentage: materialIssueItems.tax_percentage,
+      cgst_amount: materialIssueItems.cgst_amount,
+      sgst_amount: materialIssueItems.sgst_amount,
+      igst_amount: materialIssueItems.igst_amount,
+      amount: materialIssueItems.amount,
+      gst_type: materialIssueItems.gst_type,
     })
-    .from(materials)
-    .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
-    .where(eq(materials.is_active, true))
+    .from(materialIssueItems)
+    .innerJoin(materials, eq(materialIssueItems.material_id, materials.id))
+    .leftJoin(units, eq(materialIssueItems.unit_id, units.id))
+    .where(inArray(materialIssueItems.issue_id, slips.map((s) => s.id)))
     .orderBy(materials.material_no);
-  return rows;
+
+  const itemsBySlip = new Map<string, InvoiceItemWithDetails[]>();
+  for (const r of allItems) {
+    const item: InvoiceItemWithDetails = {
+      id: r.id,
+      invoice_id: "",
+      material_id: r.material_id,
+      material_name: r.material_name,
+      material_no: r.material_no,
+      hsn_code: r.hsn_code,
+      qty: r.qty,
+      unit_id: r.unit_id,
+      unit_name: r.unit_name,
+      rate: r.rate,
+      tax_percentage: r.tax_percentage,
+      cgst_amount: r.cgst_amount,
+      sgst_amount: r.sgst_amount,
+      igst_amount: r.igst_amount,
+      amount: r.amount,
+      gst_type: r.gst_type,
+    };
+    const list = itemsBySlip.get(r.issue_id) ?? [];
+    list.push(item);
+    itemsBySlip.set(r.issue_id, list);
+  }
+
+  return slips.map((slip) => ({
+    slip_id: slip.id,
+    slip_number: slip.slip_number,
+    issue_date: slip.issue_date.toISOString(),
+    items: itemsBySlip.get(slip.id) ?? [],
+  }));
 }
+
+export const getActiveTaxRatesWithPrefix = unstable_cache(
+  async () =>
+    db
+      .select({
+        id: taxRates.id,
+        vat_code: taxRates.vat_code,
+        tax_percentage: taxRates.tax_percentage,
+        description: taxRates.description,
+        inv_prefix: taxRates.inv_prefix,
+      })
+      .from(taxRates)
+      .where(and(eq(taxRates.is_active, true)))
+      .orderBy(taxRates.vat_code),
+  ["inv-tax-rates-with-prefix"],
+  { tags: [CACHE_TAGS.taxRates], revalidate: false }
+);
+
+export const getActiveInvoiceMaterials = unstable_cache(
+  async () =>
+    db
+      .select({
+        id: materials.id,
+        material_no: materials.material_no,
+        name: materials.name,
+        hsn_code: materials.hsn_code,
+        tax_rate_id: materials.tax_rate_id,
+        tax_percentage: taxRates.tax_percentage,
+        sales_unit_id: materials.sales_unit_id,
+        purchase_unit_id: materials.purchase_unit_id,
+      })
+      .from(materials)
+      .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
+      .where(eq(materials.is_active, true))
+      .orderBy(materials.material_no),
+  ["inv-active-materials"],
+  { tags: [CACHE_TAGS.materials], revalidate: false }
+);
 
 // ---------------------------------------------------------------------------
 // Read — list + detail

@@ -1,17 +1,26 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { suppliers, purchaseOrderItems, purchaseOrders } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
-export async function getSuppliers() {
-  return db.select().from(suppliers).where(eq(suppliers.is_active, true)).orderBy(suppliers.code_no);
-}
+// ─── Reads (cached) ──────────────────────────────────────────────────────────
 
-export async function getAllSuppliers() {
-  return db.select().from(suppliers).orderBy(suppliers.code_no);
-}
+export const getSuppliers = unstable_cache(
+  async () => db.select().from(suppliers).where(eq(suppliers.is_active, true)).orderBy(suppliers.code_no),
+  ["active-suppliers"],
+  { tags: [CACHE_TAGS.suppliers], revalidate: false }
+);
+
+export const getAllSuppliers = unstable_cache(
+  async () => db.select().from(suppliers).orderBy(suppliers.code_no),
+  ["all-suppliers"],
+  { tags: [CACHE_TAGS.suppliers], revalidate: false }
+);
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function createSupplier(data: {
   name: string;
@@ -30,7 +39,7 @@ export async function createSupplier(data: {
     address: data.address?.trim() || null,
     state: data.state || null,
   });
-  revalidatePath("/masters/suppliers");
+  revalidateTag(CACHE_TAGS.suppliers);
 }
 
 export async function updateSupplier(id: string, data: {
@@ -49,7 +58,7 @@ export async function updateSupplier(id: string, data: {
     address: data.address?.trim() || null,
     state: data.state || null,
   }).where(eq(suppliers.id, id));
-  revalidatePath("/masters/suppliers");
+  revalidateTag(CACHE_TAGS.suppliers);
 }
 
 export async function deleteSupplier(id: string) {
@@ -68,12 +77,12 @@ export async function deleteSupplier(id: string) {
   }
 
   await db.update(suppliers).set({ is_active: false }).where(eq(suppliers.id, id));
-  revalidatePath("/masters/suppliers");
+  revalidateTag(CACHE_TAGS.suppliers);
 }
 
 export async function reactivateSupplier(id: string) {
   await db.update(suppliers).set({ is_active: true }).where(eq(suppliers.id, id));
-  revalidatePath("/masters/suppliers");
+  revalidateTag(CACHE_TAGS.suppliers);
 }
 
 export async function bulkImportSuppliers(
@@ -109,6 +118,6 @@ export async function bulkImportSuppliers(
     );
   });
 
-  revalidatePath("/masters/suppliers");
+  revalidateTag(CACHE_TAGS.suppliers);
   return { imported: toInsert.length, skipped };
 }

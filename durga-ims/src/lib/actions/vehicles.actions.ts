@@ -1,9 +1,10 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { vehicles, customers, materialIssues, invoices } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 const vehicleSelect = {
   id: vehicles.id,
@@ -17,22 +18,32 @@ const vehicleSelect = {
   updated_at: vehicles.updated_at,
 };
 
-export async function getVehicles() {
-  return db
-    .select(vehicleSelect)
-    .from(vehicles)
-    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
-    .where(eq(vehicles.is_active, true))
-    .orderBy(vehicles.job_ref_no);
-}
+// ─── Reads (cached) ──────────────────────────────────────────────────────────
 
-export async function getAllVehicles() {
-  return db
-    .select(vehicleSelect)
-    .from(vehicles)
-    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
-    .orderBy(vehicles.job_ref_no);
-}
+export const getVehicles = unstable_cache(
+  async () =>
+    db
+      .select(vehicleSelect)
+      .from(vehicles)
+      .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+      .where(eq(vehicles.is_active, true))
+      .orderBy(vehicles.job_ref_no),
+  ["active-vehicles"],
+  { tags: [CACHE_TAGS.vehicles], revalidate: false }
+);
+
+export const getAllVehicles = unstable_cache(
+  async () =>
+    db
+      .select(vehicleSelect)
+      .from(vehicles)
+      .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+      .orderBy(vehicles.job_ref_no),
+  ["all-vehicles"],
+  { tags: [CACHE_TAGS.vehicles], revalidate: false }
+);
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function createVehicle(data: {
   job_ref_no: string;
@@ -55,7 +66,7 @@ export async function createVehicle(data: {
       throw new Error(`Job number "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
     throw e;
   }
-  revalidatePath("/masters/vehicles");
+  revalidateTag(CACHE_TAGS.vehicles);
 }
 
 export async function updateVehicle(id: string, data: {
@@ -78,11 +89,10 @@ export async function updateVehicle(id: string, data: {
       throw new Error(`Job number "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
     throw e;
   }
-  revalidatePath("/masters/vehicles");
+  revalidateTag(CACHE_TAGS.vehicles);
 }
 
 export async function deleteVehicle(id: string) {
-  // Guard: block if referenced in any Draft issue slip
   const [veh] = await db.select({ vehicle_name: vehicles.vehicle_name }).from(vehicles).where(eq(vehicles.id, id));
   const inUse = await db
     .select({ slip_number: materialIssues.slip_number })
@@ -94,7 +104,6 @@ export async function deleteVehicle(id: string) {
       `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": referenced in a Draft issue slip. Complete or delete that slip first.`
     );
 
-  // Guard: block if referenced in any Draft invoice
   const draftInvoice = await db
     .select({ bill_number: invoices.bill_number })
     .from(invoices)
@@ -105,7 +114,6 @@ export async function deleteVehicle(id: string) {
       `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": has a Draft invoice ${draftInvoice[0].bill_number}. Finalize or delete it first.`
     );
 
-  // Guard: block if referenced in any Finalized invoice (permanent GST record)
   const finalizedInvoice = await db
     .select({ bill_number: invoices.bill_number })
     .from(invoices)
@@ -117,12 +125,12 @@ export async function deleteVehicle(id: string) {
     );
 
   await db.update(vehicles).set({ is_active: false }).where(eq(vehicles.id, id));
-  revalidatePath("/masters/vehicles");
+  revalidateTag(CACHE_TAGS.vehicles);
 }
 
 export async function reactivateVehicle(id: string) {
   await db.update(vehicles).set({ is_active: true }).where(eq(vehicles.id, id));
-  revalidatePath("/masters/vehicles");
+  revalidateTag(CACHE_TAGS.vehicles);
 }
 
 export async function bulkImportVehicles(
@@ -154,6 +162,6 @@ export async function bulkImportVehicles(
     );
   });
 
-  revalidatePath("/masters/vehicles");
+  revalidateTag(CACHE_TAGS.vehicles);
   return { imported: toInsert.length, skipped };
 }

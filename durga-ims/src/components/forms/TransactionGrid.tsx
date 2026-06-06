@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useMemo } from "react";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -256,23 +256,32 @@ export function TransactionGrid({
     onChange(next.length === 0 ? [newRow()] : next);
   }
 
-  const materialOptions = materials.map((m) => ({
-    value: m.id,
-    label: isInvoiceMode ? m.name : `${formatCode("M", m.material_no)} — ${m.name}`,
-  }));
-
-  const supplierOptions = suppliers.map((s) => ({
-    value: s.id,
-    label: `${formatCode("S", s.code_no)} — ${s.name}`,
-  }));
-
-  const contractorOptions = [
-    { value: "", label: "None" },
-    ...contractors.map((c) => ({
-      value: c.id,
-      label: `${formatCode("CON", c.code_no, 2)} — ${c.name}`,
+  const materialOptions = useMemo(
+    () => materials.map((m) => ({
+      value: m.id,
+      label: isInvoiceMode ? m.name : `${formatCode("M", m.material_no)} — ${m.name}`,
     })),
-  ];
+    [materials, isInvoiceMode]
+  );
+
+  const supplierOptions = useMemo(
+    () => suppliers.map((s) => ({
+      value: s.id,
+      label: `${formatCode("S", s.code_no)} — ${s.name}`,
+    })),
+    [suppliers]
+  );
+
+  const contractorOptions = useMemo(
+    () => [
+      { value: "", label: "None" },
+      ...contractors.map((c) => ({
+        value: c.id,
+        label: `${formatCode("CON", c.code_no, 2)} — ${c.name}`,
+      })),
+    ],
+    [contractors]
+  );
 
   const fmt2 = (v: string) =>
     parseFloat(v || "0").toLocaleString("en-IN", {

@@ -1,17 +1,26 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { contractors, materialIssueItems, materialIssues } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
-export async function getContractors() {
-  return db.select().from(contractors).where(eq(contractors.is_active, true)).orderBy(contractors.code_no);
-}
+// ─── Reads (cached) ──────────────────────────────────────────────────────────
 
-export async function getAllContractors() {
-  return db.select().from(contractors).orderBy(contractors.code_no);
-}
+export const getContractors = unstable_cache(
+  async () => db.select().from(contractors).where(eq(contractors.is_active, true)).orderBy(contractors.code_no),
+  ["active-contractors"],
+  { tags: [CACHE_TAGS.contractors], revalidate: false }
+);
+
+export const getAllContractors = unstable_cache(
+  async () => db.select().from(contractors).orderBy(contractors.code_no),
+  ["all-contractors"],
+  { tags: [CACHE_TAGS.contractors], revalidate: false }
+);
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
 
 export async function createContractor(data: {
   name: string;
@@ -24,7 +33,7 @@ export async function createContractor(data: {
     role: data.role?.trim() || null,
     contact: data.contact?.trim() || null,
   });
-  revalidatePath("/masters/contractors");
+  revalidateTag(CACHE_TAGS.contractors);
 }
 
 export async function updateContractor(
@@ -36,11 +45,10 @@ export async function updateContractor(
     role: data.role?.trim() || null,
     contact: data.contact?.trim() || null,
   }).where(eq(contractors.id, id));
-  revalidatePath("/masters/contractors");
+  revalidateTag(CACHE_TAGS.contractors);
 }
 
 export async function deleteContractor(id: string) {
-  // Guard: block if assigned to any Draft issue slip
   const [con] = await db.select({ name: contractors.name }).from(contractors).where(eq(contractors.id, id));
   const inUse = await db
     .select({ id: materialIssueItems.id })
@@ -59,12 +67,12 @@ export async function deleteContractor(id: string) {
     );
 
   await db.update(contractors).set({ is_active: false }).where(eq(contractors.id, id));
-  revalidatePath("/masters/contractors");
+  revalidateTag(CACHE_TAGS.contractors);
 }
 
 export async function reactivateContractor(id: string) {
   await db.update(contractors).set({ is_active: true }).where(eq(contractors.id, id));
-  revalidatePath("/masters/contractors");
+  revalidateTag(CACHE_TAGS.contractors);
 }
 
 export async function bulkImportContractors(
@@ -94,6 +102,6 @@ export async function bulkImportContractors(
     );
   });
 
-  revalidatePath("/masters/contractors");
+  revalidateTag(CACHE_TAGS.contractors);
   return { imported: toInsert.length, skipped };
 }
