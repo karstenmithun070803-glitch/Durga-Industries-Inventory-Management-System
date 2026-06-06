@@ -110,12 +110,10 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   const totals = useMemo(() => {
     const active = rows.filter((r) => r.status === "Received");
     return {
-      qty: active.reduce((s, r) => s + r.qty, 0),
+      qty:     active.reduce((s, r) => s + r.qty, 0),
       taxable: active.reduce((s, r) => s + r.taxable_amount, 0),
-      cgst: active.reduce((s, r) => s + r.cgst_amount, 0),
-      sgst: active.reduce((s, r) => s + r.sgst_amount, 0),
-      igst: active.reduce((s, r) => s + r.igst_amount, 0),
-      total: active.reduce((s, r) => s + r.total_amount, 0),
+      tax:     active.reduce((s, r) => s + r.cgst_amount + r.sgst_amount + r.igst_amount, 0),
+      total:   active.reduce((s, r) => s + r.total_amount, 0),
     };
   }, [rows]);
 
@@ -155,20 +153,19 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
     let headers: string[];
     let csvRows: (string | number)[][];
     if (groupByMonth) {
-      headers = ["Month", "Supplier", "Material", "Qty", "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount"];
-      csvRows = monthlyRows.map((r) => [r.monthLabel, r.supplier, r.material, r.qty.toFixed(3), r.taxable.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2), r.igst.toFixed(2), r.total.toFixed(2)]);
+      headers = ["Month", "Supplier", "Material", "Qty", "Taxable Amount", "Tax Amt", "Total Amount"];
+      csvRows = monthlyRows.map((r) => [r.monthLabel, r.supplier, r.material, r.qty.toFixed(3), r.taxable.toFixed(2), (r.cgst + r.sgst + r.igst).toFixed(2), r.total.toFixed(2)]);
     } else {
       headers = [
         "PO #", "Date", "Supplier Bill No.", "Supplier Bill Date", "Supplier", "Material", "Qty", "Unit", "Rate",
-        "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount", "Stock Updated", "Status",
+        "Taxable Amount", "Tax Amt", "Total Amount", "Stock Updated",
       ];
       csvRows = rows.map((r) => [
         r.po_number, r.po_date, r.supplier_bill_no ?? "", r.supplier_bill_date ?? "",
         r.supplier_name ?? "", r.material_name,
         r.qty.toFixed(3), r.unit_name ?? "", r.rate.toFixed(2),
-        r.taxable_amount.toFixed(2), r.cgst_amount.toFixed(2),
-        r.sgst_amount.toFixed(2), r.igst_amount.toFixed(2),
-        r.total_amount.toFixed(2), r.affects_stock ? "Yes" : "No", r.status,
+        r.taxable_amount.toFixed(2), (r.cgst_amount + r.sgst_amount + r.igst_amount).toFixed(2),
+        r.total_amount.toFixed(2), r.affects_stock ? "Yes" : "No",
       ]);
     }
     const bom = "﻿";
@@ -294,15 +291,13 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
-                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">CGST</th>
-                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">SGST</th>
-                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">IGST</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {monthlyRows.length === 0 ? (
-                    <tr><td colSpan={9} className="px-3 py-8 text-center text-slate-400">No received purchases in selected range.</td></tr>
+                    <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">No received purchases in selected range.</td></tr>
                   ) : (
                     monthlyRows.map((r) => (
                       <tr key={r.key} className="border-t border-slate-100 hover:bg-slate-50/50">
@@ -311,9 +306,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                         <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.material}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable)}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.cgst > 0 ? fmtAmt(r.cgst) : "—"}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.sgst > 0 ? fmtAmt(r.sgst) : "—"}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.igst > 0 ? fmtAmt(r.igst) : "—"}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.cgst + r.sgst + r.igst) > 0 ? fmtAmt(r.cgst + r.sgst + r.igst) : "—"}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.total)}</td>
                       </tr>
                     ))
@@ -324,9 +317,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                     <td colSpan={3} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">TOTAL</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.qty)}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{totals.cgst > 0 ? fmtAmt(totals.cgst) : "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{totals.sgst > 0 ? fmtAmt(totals.sgst) : "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{totals.igst > 0 ? fmtAmt(totals.igst) : "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
                   </tr>
                 </tfoot>
@@ -347,9 +338,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Rate</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">CGST</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">SGST</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">IGST</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Total</th>
                   <th className="px-3 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap">Stock Updated</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Status</th>
@@ -374,9 +363,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.unit_name ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.rate)}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_amount)}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.cgst_amount > 0 ? fmtAmt(r.cgst_amount) : "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.sgst_amount > 0 ? fmtAmt(r.sgst_amount) : "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.igst_amount > 0 ? fmtAmt(r.igst_amount) : "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.cgst_amount + r.sgst_amount + r.igst_amount) > 0 ? fmtAmt(r.cgst_amount + r.sgst_amount + r.igst_amount) : "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.total_amount)}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-center">
                       <span className={cn(
@@ -408,9 +395,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                   <td />{/* Unit */}
                   <td />{/* Rate — no total */}
                   <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.cgst > 0 ? fmtAmt(totals.cgst) : "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.sgst > 0 ? fmtAmt(totals.sgst) : "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.igst > 0 ? fmtAmt(totals.igst) : "—"}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
                   <td />{/* Stock Updated */}
                   <td />{/* Status */}

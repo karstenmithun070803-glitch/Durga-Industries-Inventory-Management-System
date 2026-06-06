@@ -70,6 +70,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
     () => filtered.filter((row, idx, arr) => arr.findIndex((r) => r.id === row.id) === idx),
     [filtered]
   );
+  const hasDraft = invoiceRows.some((r) => r.status === INVOICE_STATUS.DRAFT);
   // Item count per invoice id (for the "+N more" badge)
   const itemCounts = useMemo(() => {
     const map = new Map<string, number>();
@@ -258,13 +259,13 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-20">Tax %</th>
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">Amount</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">Status</th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Actions</th>
+                {hasDraft && <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {invoiceRows.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="px-3 py-12 text-center text-slate-400">
+                  <td colSpan={hasDraft ? 15 : 14} className="px-3 py-12 text-center text-slate-400">
                     No invoices found.
                   </td>
                 </tr>
@@ -330,19 +331,21 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                           {r.status}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5">
-                        {r.status === INVOICE_STATUS.DRAFT && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                            title="Delete"
-                            onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: r.id, bill_number: r.bill_number }); }}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
-                      </td>
+                      {hasDraft && (
+                        <td className="px-3 py-2.5">
+                          {r.status === INVOICE_STATUS.DRAFT && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                              title="Delete"
+                              onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: r.id, bill_number: r.bill_number }); }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })

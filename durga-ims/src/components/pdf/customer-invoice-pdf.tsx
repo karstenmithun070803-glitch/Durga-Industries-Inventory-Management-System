@@ -159,43 +159,51 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", marginTop: 4, color: "#374151" }}>
-                {numberToWords(parseFloat(first.net_amount || "0"))}
-              </Text>
+              <View style={{ marginTop: 6, borderWidth: 0.5, borderColor: "#CBD5E1", paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", gap: 4 }}>
+                <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", color: "#374151" }}>
+                  Amount in Words:
+                </Text>
+                <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", color: "#374151", flex: 1 }}>
+                  {numberToWords(parseFloat(first.net_amount || "0"))}
+                </Text>
+              </View>
             </View>
 
-            {/* ── Bank details + Terms ── */}
-            {companySetting?.bank_account_no && (
-              <View style={{ marginTop: 10, borderTopWidth: 0.5, borderTopColor: "#CBD5E1", paddingTop: 6 }}>
-                <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#374151", marginBottom: 2 }}>
-                  Payment Details
-                </Text>
-                <Text style={{ fontSize: 7.5, color: "#374151" }}>
-                  {[
-                    companySetting.bank_name,
-                    companySetting.bank_account_no ? `A/C: ${companySetting.bank_account_no}` : null,
-                    companySetting.bank_ifsc ? `IFSC: ${companySetting.bank_ifsc}` : null,
-                    companySetting.bank_branch ? `Branch: ${companySetting.bank_branch}` : null,
-                  ].filter(Boolean).join("  |  ")}
-                </Text>
-              </View>
-            )}
-            {companySetting?.invoice_terms && (
-              <View style={{ marginTop: 6 }}>
-                <Text style={{ fontSize: 7, color: "#6B7280", fontFamily: "Helvetica-Oblique" }}>
-                  Terms: {companySetting.invoice_terms}
-                </Text>
-              </View>
-            )}
+            {/* ── Bottom: bank + terms LEFT, signatory RIGHT ── */}
+            <View style={{ marginTop: 10, flexDirection: "row", borderTopWidth: 0.5, borderTopColor: "#CBD5E1", paddingTop: 6 }}>
 
-            {/* ── Authorised Signatory ── */}
-            <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "flex-end" }}>
-              <View style={{ alignItems: "center" }}>
+              {/* LEFT — payment details + terms */}
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                {companySetting?.bank_account_no && (
+                  <View>
+                    <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#374151", marginBottom: 2 }}>
+                      Payment Details
+                    </Text>
+                    <Text style={{ fontSize: 7.5, color: "#374151" }}>
+                      {[
+                        companySetting.bank_name,
+                        companySetting.bank_account_no ? `A/C: ${companySetting.bank_account_no}` : null,
+                        companySetting.bank_ifsc ? `IFSC: ${companySetting.bank_ifsc}` : null,
+                        companySetting.bank_branch ? `Branch: ${companySetting.bank_branch}` : null,
+                      ].filter(Boolean).join("  |  ")}
+                    </Text>
+                  </View>
+                )}
+                {companySetting?.invoice_terms && (
+                  <Text style={{ fontSize: 7, color: "#6B7280", fontFamily: "Helvetica-Oblique", marginTop: companySetting?.bank_account_no ? 6 : 0 }}>
+                    Terms: {companySetting.invoice_terms}
+                  </Text>
+                )}
+              </View>
+
+              {/* RIGHT — authorised signatory */}
+              <View style={{ alignItems: "center", justifyContent: "flex-end", minWidth: 140 }}>
                 <View style={{ height: 30 }} />
                 <View style={{ borderTopWidth: 0.5, borderTopColor: "#000", width: 140, marginBottom: 3 }} />
                 <Text style={{ fontSize: 8 }}>For {coName}</Text>
                 <Text style={{ fontSize: 8 }}>Authorised Signatory</Text>
               </View>
+
             </View>
 
             {/* ── Page footer ── */}

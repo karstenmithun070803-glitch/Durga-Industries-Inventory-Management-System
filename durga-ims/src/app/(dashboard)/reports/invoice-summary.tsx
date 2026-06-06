@@ -112,9 +112,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
     const forTotal = isCancelledOnlyView ? rows : rows.filter((r) => r.status !== "Cancelled");
     return {
       taxable: forTotal.reduce((s, r) => s + r.taxable_value, 0),
-      cgst: forTotal.reduce((s, r) => s + r.total_cgst, 0),
-      sgst: forTotal.reduce((s, r) => s + r.total_sgst, 0),
-      igst: forTotal.reduce((s, r) => s + r.total_igst, 0),
+      tax: forTotal.reduce((s, r) => s + r.total_cgst + r.total_sgst + r.total_igst, 0),
       gross: forTotal.reduce((s, r) => s + r.gross_total, 0),
       discount: forTotal.reduce((s, r) => s + r.discount, 0),
       net: forTotal.reduce((s, r) => s + r.net_amount, 0),
@@ -122,14 +120,14 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
   }, [rows, isCancelledOnlyView]);
 
   function downloadCsv() {
-    const headers = ["Bill #", "Date", "Vehicle", "Type", "Customer", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Gross Total", "Discount", "Net Amount", "Status"];
+    const headers = ["Bill #", "Date", "Vehicle", "Type", "Customer", "GSTIN", "Taxable", "Tax Amt", "Gross Total", "Discount", "Net Amount"];
     const csvRows = rows.map((r) => [
       r.bill_number, r.bill_date, r.vehicle_name ?? "",
       r.vehicle_type === "New" ? "New Build" : r.vehicle_type === "Old" ? "Old Build" : "",
       r.customer_name ?? "", r.customer_gstin ?? "",
-      r.taxable_value.toFixed(2), r.total_cgst.toFixed(2),
-      r.total_sgst.toFixed(2), r.total_igst.toFixed(2), r.gross_total.toFixed(2),
-      r.discount.toFixed(2), r.net_amount.toFixed(2), r.status,
+      r.taxable_value.toFixed(2),
+      (r.total_cgst + r.total_sgst + r.total_igst).toFixed(2),
+      r.gross_total.toFixed(2), r.discount.toFixed(2), r.net_amount.toFixed(2),
     ]);
     const bom = "﻿";
     const csv = bom + [headers, ...csvRows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -230,9 +228,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Customer</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">GSTIN</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">CGST</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">SGST</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">IGST</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Gross</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Discount</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Net Amount</th>
@@ -264,9 +260,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.customer_name ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-400 font-mono text-xs">{r.customer_gstin ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_value)}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.total_cgst > 0 ? fmtAmt(r.total_cgst) : "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.total_sgst > 0 ? fmtAmt(r.total_sgst) : "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.total_igst > 0 ? fmtAmt(r.total_igst) : "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.total_cgst + r.total_sgst + r.total_igst) > 0 ? fmtAmt(r.total_cgst + r.total_sgst + r.total_igst) : "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.gross_total)}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.discount > 0 ? fmtAmt(r.discount) : "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.net_amount)}</td>
@@ -294,9 +288,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                         : "TOTAL"}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.cgst > 0 ? fmtAmt(totals.cgst) : "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.sgst > 0 ? fmtAmt(totals.sgst) : "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.igst > 0 ? fmtAmt(totals.igst) : "—"}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.gross)}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{totals.discount > 0 ? fmtAmt(totals.discount) : "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.net)}</td>

@@ -5,7 +5,6 @@ import {
   COMPANY_NAME,
   COMPANY_ADDRESS,
   COMPANY_GSTIN,
-  fmtAmt,
 } from "./pdf-styles";
 import type { InvoiceSummaryRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
@@ -20,7 +19,7 @@ interface Props {
 }
 
 function fmt(v: number) {
-  return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom, dateTo, companySetting }: Props) {
@@ -31,13 +30,11 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
   const isCancelledOnly = statusFilter === "Cancelled";
   const forTotals = isCancelledOnly ? rows : rows.filter((r) => r.status !== "Cancelled");
   const totals = {
-    taxable: forTotals.reduce((s, r) => s + r.taxable_value, 0),
-    cgst:    forTotals.reduce((s, r) => s + r.total_cgst,    0),
-    sgst:    forTotals.reduce((s, r) => s + r.total_sgst,    0),
-    igst:    forTotals.reduce((s, r) => s + r.total_igst,    0),
-    gross:   forTotals.reduce((s, r) => s + r.gross_total,   0),
-    discount:forTotals.reduce((s, r) => s + r.discount,      0),
-    net:     forTotals.reduce((s, r) => s + r.net_amount,    0),
+    taxable:  forTotals.reduce((s, r) => s + r.taxable_value, 0),
+    tax:      forTotals.reduce((s, r) => s + r.total_cgst + r.total_sgst + r.total_igst, 0),
+    gross:    forTotals.reduce((s, r) => s + r.gross_total,   0),
+    discount: forTotals.reduce((s, r) => s + r.discount,      0),
+    net:      forTotals.reduce((s, r) => s + r.net_amount,    0),
   };
 
   const filterParts: string[] = [`FY ${fy}`];
@@ -45,29 +42,25 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
   if (dateFrom) filterParts.push(`From: ${dateFrom}`);
   if (dateTo)   filterParts.push(`To: ${dateTo}`);
 
-  const hasCgst = totals.cgst > 0;
-  const hasSgst = totals.sgst > 0;
-  const hasIgst = totals.igst > 0;
   const hasDiscount = totals.discount > 0;
 
-  // Column widths
+  // Column widths — portrait A4
   const W = {
-    sno:      "4%",
-    bill:     "8%",
+    sno:      "5%",
+    bill:     "10%",
     date:     "9%",
-    vehicle:  "12%",
-    customer: "14%",
-    taxable:  "9%",
-    tax:      "8%",
-    gross:    "9%",
-    discount: "8%",
-    net:      "10%",
-    status:   "9%",
+    vehicle:  "15%",
+    customer: "20%",
+    taxable:  "12%",
+    tax:      "10%",
+    gross:    "10%",
+    discount: "9%",   // conditional
+    net:      "9%",
   };
 
   return (
     <Document title={`Invoice Summary — FY ${fy}`}>
-      <Page size="A4" orientation="landscape" style={styles.page}>
+      <Page size="A4" style={styles.page}>
 
         {/* Company header */}
         <View>
@@ -91,13 +84,10 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           <Text style={[styles.plainTableHeadCell, { width: W.vehicle }]}>Vehicle</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.customer }]}>Customer</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.taxable, textAlign: "right" }]}>Taxable</Text>
-          {hasCgst && <Text style={[styles.plainTableHeadCell, { width: W.tax, textAlign: "right" }]}>CGST</Text>}
-          {hasSgst && <Text style={[styles.plainTableHeadCell, { width: W.tax, textAlign: "right" }]}>SGST</Text>}
-          {hasIgst && <Text style={[styles.plainTableHeadCell, { width: W.tax, textAlign: "right" }]}>IGST</Text>}
+          <Text style={[styles.plainTableHeadCell, { width: W.tax, textAlign: "right" }]}>Tax Amt</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.gross, textAlign: "right" }]}>Gross</Text>
           {hasDiscount && <Text style={[styles.plainTableHeadCell, { width: W.discount, textAlign: "right" }]}>Discount</Text>}
           <Text style={[styles.plainTableHeadCell, { width: W.net, textAlign: "right" }]}>Net Amount</Text>
-          <Text style={[styles.plainTableHeadCell, { width: W.status }]}>Status</Text>
         </View>
 
         <View style={styles.separator} />
@@ -108,6 +98,7 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           const cellStyle = cancelled
             ? { ...styles.plainTableCell, color: "#9CA3AF", textDecoration: "line-through" as const }
             : styles.plainTableCell;
+          const taxAmt = r.total_cgst + r.total_sgst + r.total_igst;
           return (
             <View key={r.id} style={styles.plainTableRow}>
               <Text style={[cellStyle, { width: W.sno }]}>{i + 1}</Text>
@@ -116,13 +107,10 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
               <Text style={[cellStyle, { width: W.vehicle }]}>{r.vehicle_name ?? "—"}</Text>
               <Text style={[cellStyle, { width: W.customer }]}>{r.customer_name ?? "—"}</Text>
               <Text style={[cellStyle, { width: W.taxable, textAlign: "right" }]}>{fmt(r.taxable_value)}</Text>
-              {hasCgst && <Text style={[cellStyle, { width: W.tax, textAlign: "right" }]}>{r.total_cgst > 0 ? fmt(r.total_cgst) : "—"}</Text>}
-              {hasSgst && <Text style={[cellStyle, { width: W.tax, textAlign: "right" }]}>{r.total_sgst > 0 ? fmt(r.total_sgst) : "—"}</Text>}
-              {hasIgst && <Text style={[cellStyle, { width: W.tax, textAlign: "right" }]}>{r.total_igst > 0 ? fmt(r.total_igst) : "—"}</Text>}
+              <Text style={[cellStyle, { width: W.tax, textAlign: "right" }]}>{taxAmt > 0 ? fmt(taxAmt) : "—"}</Text>
               <Text style={[cellStyle, { width: W.gross, textAlign: "right" }]}>{fmt(r.gross_total)}</Text>
               {hasDiscount && <Text style={[cellStyle, { width: W.discount, textAlign: "right" }]}>{r.discount > 0 ? fmt(r.discount) : "—"}</Text>}
               <Text style={[styles.plainTableCellBold, { width: W.net, textAlign: "right", color: cancelled ? "#9CA3AF" : undefined }]}>{fmt(r.net_amount)}</Text>
-              <Text style={[cellStyle, { width: W.status }]}>{r.status}</Text>
             </View>
           );
         })}
@@ -139,13 +127,10 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
             {isCancelledOnly ? "REF. TOTAL" : rows.some((r) => r.status === "Cancelled") ? "TOTAL (excl. Cancelled)" : "TOTAL"}
           </Text>
           <Text style={[styles.plainTableCellBold, { width: W.taxable, textAlign: "right" }]}>{fmt(totals.taxable)}</Text>
-          {hasCgst && <Text style={[styles.plainTableCellBold, { width: W.tax, textAlign: "right" }]}>{totals.cgst > 0 ? fmt(totals.cgst) : "—"}</Text>}
-          {hasSgst && <Text style={[styles.plainTableCellBold, { width: W.tax, textAlign: "right" }]}>{totals.sgst > 0 ? fmt(totals.sgst) : "—"}</Text>}
-          {hasIgst && <Text style={[styles.plainTableCellBold, { width: W.tax, textAlign: "right" }]}>{totals.igst > 0 ? fmt(totals.igst) : "—"}</Text>}
+          <Text style={[styles.plainTableCellBold, { width: W.tax, textAlign: "right" }]}>{totals.tax > 0 ? fmt(totals.tax) : "—"}</Text>
           <Text style={[styles.plainTableCellBold, { width: W.gross, textAlign: "right" }]}>{fmt(totals.gross)}</Text>
           {hasDiscount && <Text style={[styles.plainTableCellBold, { width: W.discount, textAlign: "right" }]}>{totals.discount > 0 ? fmt(totals.discount) : "—"}</Text>}
           <Text style={[styles.plainTableCellBold, { width: W.net, textAlign: "right" }]}>{fmt(totals.net)}</Text>
-          <Text style={[styles.plainTableCellBold, { width: W.status }]} />
         </View>
 
         {/* Footer */}

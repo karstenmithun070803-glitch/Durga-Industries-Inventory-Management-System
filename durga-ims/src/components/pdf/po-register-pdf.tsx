@@ -123,7 +123,7 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
               {/* Column headers */}
               <View style={styles.plainTableHead}>
                 <Text style={[styles.plainTableHeadCell, { width: "7%" }]}>S No.</Text>
-                <Text style={[styles.plainTableHeadCell, { flex: 1 }]}>Material Name</Text>
+                <Text style={[styles.plainTableHeadCell, { flex: 1, marginLeft: 6 }]}>Material Name</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "right" }]}>Qty</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "9%", marginLeft: 6 }]}>Unit</Text>
                 {showRates && (
@@ -145,7 +145,7 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
                 return (
                   <View key={r.item_id ?? idx} style={styles.plainTableRow}>
                     <Text style={[styles.plainTableCell, { width: "7%" }]}>{idx + 1}</Text>
-                    <Text style={[styles.plainTableCell, { flex: 1 }]}>{r.material_name ?? "—"}</Text>
+                    <Text style={[styles.plainTableCell, { flex: 1, marginLeft: 6 }]}>{r.material_name ?? "—"}</Text>
                     <Text style={[styles.plainTableCell, { width: "12%", textAlign: "right" }]}>
                       {fmtQty(r.qty)}
                     </Text>

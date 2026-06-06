@@ -64,31 +64,39 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
             {/* ── Document type ── */}
             <Text style={styles.docTypeCentered}>VEHICLE MATERIAL ISSUE SLIP</Text>
 
-            {/* ── Info block ── */}
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>SLIP NO.</Text>
-              <Text style={styles.infoLineValue}>: {slipLabel}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>DATE</Text>
-              <Text style={styles.infoLineValue}>: {fmtDate(first.issue_date)}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>VEHICLE / JOB</Text>
-              <Text style={styles.infoLineValue}>: {first.vehicle_name}  ({jobLabel})</Text>
-            </View>
-            {first.customer_name && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>CUSTOMER</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
+            {/* ── Info block: two-column layout ── */}
+            <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
+              {/* Left — slip identifiers */}
+              <View style={{ flex: 1 }}>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>SLIP NO.</Text>
+                  <Text style={styles.infoLineValue}>: {slipLabel}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>DATE</Text>
+                  <Text style={styles.infoLineValue}>: {fmtDate(first.issue_date)}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>VEHICLE / JOB</Text>
+                  <Text style={styles.infoLineValue}>: {first.vehicle_name}  ({jobLabel})</Text>
+                </View>
               </View>
-            )}
-            {first.customer_address && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>ADDRESS</Text>
-                <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
+              {/* Right — customer info */}
+              <View style={{ flex: 1 }}>
+                {first.customer_name && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>CUSTOMER</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
+                  </View>
+                )}
+                {first.customer_address && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                    <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
+                  </View>
+                )}
               </View>
-            )}
+            </View>
 
             {/* ── Table ── */}
             <View style={styles.table}>
@@ -97,7 +105,7 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
               {/* Column headers */}
               <View style={styles.plainTableHead}>
                 <Text style={[styles.plainTableHeadCell, { width: "7%" }]}>S No.</Text>
-                <Text style={[styles.plainTableHeadCell, { flex: 1 }]}>Material Name</Text>
+                <Text style={[styles.plainTableHeadCell, { flex: 1, marginLeft: 6 }]}>Material Name</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "16%" }]}>Contractor</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "12%", textAlign: "right" }]}>Qty</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "8%", marginLeft: 6 }]}>Unit</Text>
@@ -115,7 +123,7 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
               {items.map((r, idx) => (
                 <View key={r.item_id} style={styles.plainTableRow}>
                   <Text style={[styles.plainTableCell, { width: "7%" }]}>{idx + 1}</Text>
-                  <Text style={[styles.plainTableCell, { flex: 1 }]}>{r.material_name}</Text>
+                  <Text style={[styles.plainTableCell, { flex: 1, marginLeft: 6 }]}>{r.material_name}</Text>
                   <Text style={[styles.plainTableCell, { width: "16%" }]}>
                     {r.contractor_name ?? "—"}
                   </Text>
