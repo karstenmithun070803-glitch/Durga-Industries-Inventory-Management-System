@@ -5,7 +5,7 @@ import {
   getActiveSuppliersForReports,
   getActiveMaterialsForReports,
   getActiveCustomersForReports,
-} from "@/lib/actions/reports.actions";
+} from "@/lib/actions/reports.queries";
 import { getCompanySettings } from "@/lib/actions/settings.actions";
 import { ReportsClient } from "./reports-client";
 

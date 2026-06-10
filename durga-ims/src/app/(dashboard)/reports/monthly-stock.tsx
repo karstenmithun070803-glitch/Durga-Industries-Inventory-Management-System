@@ -87,7 +87,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
     const { to } = monthToDateRange(toMonth);
     getMonthlyStockReport({ fromDate: from, toDate: to, materialId: materialId || undefined })
       .then((data) => { if (gen === fetchGenRef.current) { setRows(data); setHasRun(true); } })
-      .catch(() => { if (gen === fetchGenRef.current) toast.error("Failed to load report data."); })
+      .catch(() => { if (gen === fetchGenRef.current) { toast.error("Failed to load report data."); } })
       .finally(() => { if (gen === fetchGenRef.current) setIsLoading(false); });
   }
 
@@ -102,7 +102,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
       const { to } = monthToDateRange(toMonth);
       getMonthlyStockReport({ fromDate: from, toDate: to, materialId: materialId || undefined })
         .then((data) => { if (gen === fetchGenRef.current) { setRows(data); setHasRun(true); } })
-        .catch(() => { if (gen === fetchGenRef.current) toast.error("Failed to load report data."); })
+        .catch(() => { if (gen === fetchGenRef.current) { toast.error("Failed to load report data."); } })
         .finally(() => { if (gen === fetchGenRef.current) setIsLoading(false); });
     }, 300);
     return () => clearTimeout(t);
