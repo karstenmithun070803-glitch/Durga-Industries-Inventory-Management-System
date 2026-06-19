@@ -47,6 +47,8 @@ export function UnitsClient({ units }: { units: Unit[] }) {
       try {
         await reactivateUnit(id);
         toast.success("Unit reactivated");
+        setShowInactive(false);
+        resetForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not reactivate");
       }

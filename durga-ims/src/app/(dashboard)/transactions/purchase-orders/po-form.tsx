@@ -248,6 +248,7 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
         if (mode === "new") {
           const filledRows = rows.filter((r) => r.material_id);
           const bySupplier = groupBySupplier(filledRows);
+          const poIds: string[] = [];
           for (const [, supplierRows] of Array.from(bySupplier)) {
             const { grand: g } = calcAllTotals(supplierRows);
             const newId = await createPurchaseOrder({
@@ -259,8 +260,9 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
               supplier_bill_date: "",
               items: buildItemsPayload(supplierRows),
             });
-            await receivePurchaseOrder(newId);
+            poIds.push(newId);
           }
+          await Promise.all(poIds.map((id) => receivePurchaseOrder(id)));
           const count = bySupplier.size;
           const matCount = filledRows.length;
           toast.success(`${count} PO${count > 1 ? "s" : ""} created and received. Stock updated for ${matCount} material${matCount !== 1 ? "s" : ""}.`);

@@ -63,6 +63,8 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
       try {
         await reactivateCustomer(id);
         toast.success("Customer reactivated");
+        setShowInactive(false);
+        resetForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not reactivate");
       }

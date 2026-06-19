@@ -64,6 +64,8 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
       try {
         await reactivateSupplier(id);
         toast.success("Supplier reactivated");
+        setShowInactive(false);
+        resetForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not reactivate");
       }

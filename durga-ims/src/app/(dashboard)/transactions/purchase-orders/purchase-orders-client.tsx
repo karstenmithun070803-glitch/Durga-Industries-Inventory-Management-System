@@ -44,6 +44,42 @@ type ItemRow = {
 
 type StatusFilter = "All" | "Draft" | "Received";
 
+type GroupedPO = {
+  id: string;
+  po_number: number;
+  po_date: Date | string;
+  status: string;
+  affects_stock: boolean;
+  suppliers: string[];
+  itemCount: number;
+  grandTotal: number;
+  items: ItemRow[];
+};
+
+function groupPORows(rows: ItemRow[]): GroupedPO[] {
+  const map = new Map<string, GroupedPO>();
+  for (const r of rows) {
+    if (!map.has(r.id)) {
+      map.set(r.id, {
+        id: r.id, po_number: r.po_number, po_date: r.po_date,
+        status: r.status, affects_stock: r.affects_stock,
+        suppliers: [], itemCount: 0, grandTotal: 0, items: [],
+      });
+    }
+    const g = map.get(r.id)!;
+    if (r.supplier_name && !g.suppliers.includes(r.supplier_name))
+      g.suppliers.push(r.supplier_name);
+    g.grandTotal +=
+      parseFloat(r.amount ?? "0") +
+      parseFloat(r.cgst_amount ?? "0") +
+      parseFloat(r.sgst_amount ?? "0") +
+      parseFloat(r.igst_amount ?? "0");
+    g.itemCount++;
+    g.items.push(r);
+  }
+  return Array.from(map.values());
+}
+
 interface Props {
   initialRows: ItemRow[];
   initialFY: string;
@@ -55,19 +91,7 @@ function formatDate(d: Date | string): string {
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function formatAmount(amt: string | null): string {
-  if (!amt) return "—";
-  return "₹" + parseFloat(amt).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
-function taxDisplay(row: ItemRow): string {
-  const igst = parseFloat(row.igst_amount ?? "0");
-  const cgst = parseFloat(row.cgst_amount ?? "0");
-  const sgst = parseFloat(row.sgst_amount ?? "0");
-  if (igst > 0) return formatAmount(row.igst_amount);
-  if (cgst > 0 || sgst > 0) return formatAmount(String(cgst + sgst));
-  return "—";
-}
 
 export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }: Props) {
   const router = useRouter();
@@ -124,7 +148,7 @@ export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }:
 
 
 
-  function handleDeleteClick(r: ItemRow) {
+  function handleDeleteClick(r: { id: string; status: string }) {
     setDeletingPoId(r.id);
     setDeletingStatus(r.status);
   }
@@ -299,14 +323,9 @@ export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }:
                   { label: "S.No", align: "" },
                   { label: "Date", align: "" },
                   { label: "PO#", align: "" },
-                  { label: "Mat. Code", align: "" },
-                  { label: "Material Name", align: "" },
-                  { label: "Supplier", align: "" },
-                  { label: "Qty", align: "" },
-                  { label: "Unit", align: "" },
-                  { label: "Rate", align: "text-right" },
-                  { label: "Tax", align: "text-right" },
-                  { label: "Amount", align: "text-right" },
+                  { label: "Supplier(s)", align: "" },
+                  { label: "Items", align: "text-right" },
+                  { label: "Grand Total", align: "text-right" },
                   { label: "Status", align: "" },
                   { label: "Actions", align: "" },
                 ].map((h) => (
@@ -322,43 +341,41 @@ export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }:
             <tbody>
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
                     {rows.length === 0 ? "No purchase orders yet. Create your first PO." : "No entries match your filters."}
                   </td>
                 </tr>
               )}
-              {visible.map((r, i) => (
+              {groupPORows(visible).map((g, i) => (
                 <tr
-                  key={r.item_id ?? r.id + i}
+                  key={g.id}
                   className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer"
-                  onClick={() => router.push(`/transactions/purchase-orders/${r.id}/edit`)}
+                  onClick={() => router.push(`/transactions/purchase-orders/${g.id}/edit`)}
                 >
                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{i + 1}</td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(r.po_date)}</td>
+                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(g.po_date)}</td>
                   <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-800 whitespace-nowrap">
-                    {formatCode("PO-", r.po_number, 4)}
+                    {formatCode("PO-", g.po_number, 4)}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-700 whitespace-nowrap">
-                    {r.material_no ? formatCode("M", r.material_no) : "—"}
+                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">
+                    {g.suppliers.length === 0 ? "—"
+                      : g.suppliers.length > 2
+                        ? `${g.suppliers[0]} +${g.suppliers.length - 1} more`
+                        : g.suppliers.join(", ")}
                   </td>
-                  <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap">{r.material_name ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{r.supplier_name ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{r.qty ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{r.unit_name ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-800 whitespace-nowrap text-right">
-                    {r.rate ? "₹" + parseFloat(r.rate).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "—"}
+                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap text-right">{g.itemCount}</td>
+                  <td className="px-4 py-2.5 text-slate-800 font-medium whitespace-nowrap text-right">
+                    {"₹" + g.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap text-right">{taxDisplay(r)}</td>
-                  <td className="px-4 py-2.5 text-slate-800 font-medium whitespace-nowrap text-right">{formatAmount(r.amount)}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      r.status === "Received"
+                      g.status === "Received"
                         ? "bg-emerald-50 text-emerald-700"
                         : "bg-slate-100 text-slate-600"
                     }`}>
-                      {r.status}
+                      {g.status}
                     </span>
-                    {!r.affects_stock && (
+                    {!g.affects_stock && (
                       <span className="ml-1.5 text-xs text-slate-400 italic">no stock</span>
                     )}
                   </td>
@@ -368,7 +385,7 @@ export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }:
                       size="icon"
                       className="h-7 w-7 text-red-500 hover:bg-red-50"
                       title="Delete entire PO"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(r); }}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(g); }}
                       disabled={isPending}
                     >
                       <Trash2 className="w-3.5 h-3.5" />

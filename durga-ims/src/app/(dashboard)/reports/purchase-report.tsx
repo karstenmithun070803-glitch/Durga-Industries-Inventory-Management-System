@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getPurchaseReport } from "@/lib/actions/reports.actions";
 import type { PurchaseReportRow } from "@/lib/actions/reports.actions";
@@ -158,14 +157,14 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
     } else {
       headers = [
         "PO #", "Date", "Supplier Bill No.", "Supplier Bill Date", "Supplier", "Material", "Qty", "Unit", "Rate",
-        "Taxable Amount", "Tax Amt", "Total Amount", "Stock Updated",
+        "Taxable Amount", "Tax Amt", "Total Amount",
       ];
       csvRows = rows.map((r) => [
         r.po_number, r.po_date, r.supplier_bill_no ?? "", r.supplier_bill_date ?? "",
         r.supplier_name ?? "", r.material_name,
         r.qty.toFixed(3), r.unit_name ?? "", r.rate.toFixed(2),
         r.taxable_amount.toFixed(2), (r.cgst_amount + r.sgst_amount + r.igst_amount).toFixed(2),
-        r.total_amount.toFixed(2), r.affects_stock ? "Yes" : "No",
+        r.total_amount.toFixed(2),
       ]);
     }
     const bom = "﻿";
@@ -340,8 +339,6 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Total</th>
-                  <th className="px-3 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap">Stock Updated</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -365,24 +362,6 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_amount)}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.cgst_amount + r.sgst_amount + r.igst_amount) > 0 ? fmtAmt(r.cgst_amount + r.sgst_amount + r.igst_amount) : "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.total_amount)}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-center">
-                      <span className={cn(
-                        "px-2 py-0.5 rounded-full text-xs font-medium",
-                        r.affects_stock ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"
-                      )}>
-                        {r.affects_stock ? "Yes" : "No"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">
-                      <span className={cn(
-                        "px-2 py-0.5 rounded-full text-xs font-medium",
-                        r.status === "Received" ? "bg-green-100 text-green-700"
-                        : r.status === "Draft" ? "bg-slate-100 text-slate-600"
-                        : "bg-amber-100 text-amber-700"
-                      )}>
-                        {r.status}
-                      </span>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -397,8 +376,6 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                   <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
-                  <td />{/* Stock Updated */}
-                  <td />{/* Status */}
                 </tr>
               </tfoot>
             </table>

@@ -66,6 +66,8 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
       try {
         await reactivateMaterial(id);
         toast.success("Material reactivated");
+        setShowInactive(false);
+        resetForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not reactivate");
       }

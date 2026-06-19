@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteMaterialIssue, getMaterialIssues } from "@/lib/actions/material-issues.actions";
 import type { MaterialIssueRow } from "@/types";
-import { formatCode, matchesCode } from "@/lib/utils";
+import { matchesCode } from "@/lib/utils";
 import { useFY } from "@/lib/financial-year";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,44 @@ interface Props {
 
 type StatusTab = "All" | "Draft" | "Issued";
 
+type GroupedMI = {
+  id: string;
+  slip_number: number;
+  issue_date: string;
+  status: string;
+  vehicle_name: string | null;
+  job_ref_no: string;
+  customer_name: string | null;
+  grandTotal: number;
+  itemCount: number;
+  items: MaterialIssueRow[];
+};
+
+function groupMIRows(rows: MaterialIssueRow[]): GroupedMI[] {
+  const map = new Map<string, GroupedMI>();
+  for (const r of rows) {
+    if (!map.has(r.id)) {
+      map.set(r.id, {
+        id: r.id,
+        slip_number: r.slip_number,
+        issue_date: r.issue_date,
+        status: r.status,
+        vehicle_name: r.vehicle_name,
+        job_ref_no: r.job_ref_no,
+        customer_name: r.customer_name,
+        grandTotal: 0,
+        itemCount: 0,
+        items: [],
+      });
+    }
+    const g = map.get(r.id)!;
+    g.grandTotal += parseFloat(r.amount || "0");
+    g.itemCount++;
+    g.items.push(r);
+  }
+  return Array.from(map.values());
+}
+
 export function MaterialIssuesClient({ initialRows, initialFY, companySetting }: Props) {
   const router = useRouter();
   const { activeFY } = useFY();
@@ -39,7 +77,6 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
   const [isFetching, setIsFetching] = useState(false);
   const [, startTransition] = useTransition();
 
-  // Re-fetch when FY changes in the sidebar
   useEffect(() => {
     if (activeFY === loadedFY) return;
     setIsFetching(true);
@@ -55,9 +92,8 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
   const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
   const [showRates, setShowRates] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<MaterialIssueRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; slip_number: number; status: string } | null>(null);
 
-  // ---- Filter logic ----
   const filtered = rows.filter((r) => {
     if (tab !== "All" && r.status !== tab) return false;
     if (dateFrom && r.issue_date < dateFrom) return false;
@@ -79,7 +115,6 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
     return true;
   });
 
-
   function confirmDelete() {
     if (!deleteTarget) return;
     const target = deleteTarget;
@@ -93,12 +128,6 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
       }
     });
   }
-
-  const fmt2 = (v: string) =>
-    parseFloat(v || "0").toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
 
   const fmtDate = (d: string) => {
     const date = new Date(d);
@@ -151,9 +180,8 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
 
       {/* Table card */}
       <div className="flex-1 bg-white rounded-lg border border-slate-200 flex flex-col min-h-0">
-        {/* Toolbar inside card */}
+        {/* Toolbar */}
         <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
-          {/* Status tabs */}
           <div className="flex gap-1">
             {tabs.map((t) => (
               <button
@@ -170,7 +198,6 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
             ))}
           </div>
 
-          {/* Date range */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-500">From</span>
             <Input
@@ -196,7 +223,6 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
             )}
           </div>
 
-          {/* Search */}
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -246,157 +272,80 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
           <table className="min-w-max text-sm w-full">
             <thead className="bg-slate-50 sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-0 z-20 bg-slate-50 w-12">
-                  S.No
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-12 z-20 bg-slate-50 w-24 border-r border-slate-200">
-                  Date
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">
-                  Slip #
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
-                  Vehicle / Job
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
-                  Customer
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
-                  Mat. Code
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">
-                  HSN
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-44">
-                  Material Name
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-36">
-                  Contractor
-                </th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-20">
-                  Qty
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-16">
-                  Unit
-                </th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">
-                  Rate
-                </th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">
-                  Tax
-                </th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-28">
-                  Amount
-                </th>
-                <th className="px-3 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap w-24">
-                  Stk
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
-                  Status
-                </th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">
-                  Actions
-                </th>
+                {[
+                  { label: "S.No", align: "" },
+                  { label: "Date", align: "" },
+                  { label: "Slip #", align: "" },
+                  { label: "Vehicle / Job", align: "" },
+                  { label: "Customer", align: "" },
+                  { label: "Items", align: "text-right" },
+                  { label: "Total", align: "text-right" },
+                  { label: "Status", align: "" },
+                  { label: "Actions", align: "" },
+                ].map((h) => (
+                  <th
+                    key={h.label}
+                    className={`px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap ${h.align}`}
+                  >
+                    {h.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={17} className="px-6 py-12 text-center text-slate-400 text-sm">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400 text-sm">
                     {search || tab !== "All" || dateFrom || dateTo
                       ? "No issue slips match the current filters."
                       : "No material issue slips yet. Create the first one."}
                   </td>
                 </tr>
               ) : (
-                filtered.map((r, i) => {
-                  const slipLabel = `MI-${String(r.slip_number).padStart(4, "0")}`;
-                  const stickyBg = "bg-white";
-
-                  const taxAmt =
-                    parseFloat(r.igst_amount) > 0
-                      ? r.igst_amount
-                      : (parseFloat(r.cgst_amount) + parseFloat(r.sgst_amount)).toFixed(2);
-
-                  return (
-                    <tr key={r.item_id} className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer" onClick={() => router.push(`/transactions/material-issues/${r.id}/edit`)}>
-                      <td className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>
-                        {i + 1}
-                      </td>
-                      <td className={`px-3 py-2.5 text-slate-700 whitespace-nowrap sticky left-12 z-10 w-24 border-r border-slate-200 ${stickyBg}`}>
-                        {fmtDate(r.issue_date)}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-xs font-medium text-slate-700 whitespace-nowrap">
-                        {slipLabel}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
-                        <span className="text-xs text-slate-400 mr-1">
-                          {r.job_ref_no}
-                        </span>
-                        {r.vehicle_name ?? "—"}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
-                        {r.customer_name ?? "—"}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-slate-600 whitespace-nowrap">
-                        {formatCode("M", r.material_no)}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-slate-500 whitespace-nowrap">
-                        {r.hsn_code ?? "—"}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-800 whitespace-nowrap">
-                        {r.material_name}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">
-                        {r.contractor_name ?? "—"}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-slate-700 tabular-nums">
-                        {r.qty}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
-                        {r.unit_name ?? "—"}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-slate-700 tabular-nums">
-                        {fmt2(r.rate)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums">
-                        {fmt2(taxAmt)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right font-medium text-slate-800 tabular-nums">
-                        ₹{fmt2(r.amount)}
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        {r.affects_inventory ? (
-                          <span className="text-emerald-600 text-xs font-medium">✓</span>
-                        ) : (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            r.status === "Issued"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }}
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })
+                groupMIRows(filtered).map((g, i) => (
+                  <tr
+                    key={g.id}
+                    className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer"
+                    onClick={() => router.push(`/transactions/material-issues/${g.id}/edit`)}
+                  >
+                    <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{i + 1}</td>
+                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{fmtDate(g.issue_date)}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-800 whitespace-nowrap">
+                      MI-{String(g.slip_number).padStart(4, "0")}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">
+                      <span className="text-xs text-slate-400 mr-1">{g.job_ref_no}</span>
+                      {g.vehicle_name ?? "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">
+                      {g.customer_name ?? "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500 text-right whitespace-nowrap">{g.itemCount}</td>
+                    <td className="px-4 py-2.5 text-slate-800 font-medium text-right whitespace-nowrap">
+                      {"₹" + g.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        g.status === "Issued"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {g.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: g.id, slip_number: g.slip_number, status: g.status }); }}
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

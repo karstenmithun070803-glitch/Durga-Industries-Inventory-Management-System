@@ -52,6 +52,8 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
       try {
         await reactivateContractor(id);
         toast.success("Contractor reactivated");
+        setShowInactive(false);
+        resetForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not reactivate");
       }

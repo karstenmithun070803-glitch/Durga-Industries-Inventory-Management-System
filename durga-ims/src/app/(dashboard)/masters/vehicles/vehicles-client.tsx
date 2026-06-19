@@ -68,6 +68,8 @@ export function VehiclesClient({ vehicles, customers }: Props) {
       try {
         await reactivateVehicle(id);
         toast.success("Vehicle reactivated");
+        setShowInactive(false);
+        resetForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not reactivate");
       }

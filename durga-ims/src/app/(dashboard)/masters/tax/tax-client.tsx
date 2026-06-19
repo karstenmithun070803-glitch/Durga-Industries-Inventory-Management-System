@@ -55,6 +55,8 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
       try {
         await reactivateTaxRate(id);
         toast.success("Tax rate reactivated");
+        setShowInactive(false);
+        resetForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Could not reactivate");
       }
