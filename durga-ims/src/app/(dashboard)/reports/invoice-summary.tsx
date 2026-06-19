@@ -32,7 +32,7 @@ function fmtAmt(v: number) {
 }
 
 interface Props {
-  vehicles: { id: string; vehicle_name: string; job_ref_no: string }[];
+  vehicles: { id: string; vehicle_name: string | null; job_ref_no: string }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];
   defaultFY: string;
   companySetting?: CompanySetting;
@@ -59,7 +59,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${v.job_ref_no} — ${v.vehicle_name}`,
+    label: `${v.job_ref_no}${v.vehicle_name ? ` — ${v.vehicle_name}` : ""}`,
   }));
 
   const customerOptions = customers.map((c) => ({

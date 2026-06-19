@@ -64,7 +64,7 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
                 </View>
                 <View style={styles.infoLine}>
                   <Text style={styles.infoLineLabel}>VEHICLE</Text>
-                  <Text style={styles.infoLineValue}>: {first.vehicle_name}</Text>
+                  <Text style={styles.infoLineValue}>: {first.vehicle_name ?? ""}</Text>
                 </View>
                 <View style={styles.infoLine}>
                   <Text style={styles.infoLineLabel}>JOB NO.</Text>

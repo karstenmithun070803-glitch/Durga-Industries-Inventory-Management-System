@@ -124,7 +124,7 @@ export const materials = pgTable(
 export const vehicles = pgTable("vehicles", {
   id: uuid("id").primaryKey().defaultRandom(),
   job_ref_no: text("job_ref_no").unique().notNull(),
-  vehicle_name: text("vehicle_name").notNull(),
+  vehicle_name: text("vehicle_name"),
   // 'New' = new chassis + new body | 'Old' = old chassis + new body
   type: text("type").notNull().default("New"),
   customer_id: uuid("customer_id").references(() => customers.id),

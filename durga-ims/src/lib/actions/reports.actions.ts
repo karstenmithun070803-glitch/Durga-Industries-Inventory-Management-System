@@ -259,7 +259,7 @@ export async function getMonthlyStockReport(params: {
       material_no: materials.material_no,
       name: materials.name,
       opening_stock: materials.opening_stock,
-      unit_id: materials.sales_unit_id,
+      unit_id: materials.purchase_unit_id,
     })
     .from(materials)
     .where(

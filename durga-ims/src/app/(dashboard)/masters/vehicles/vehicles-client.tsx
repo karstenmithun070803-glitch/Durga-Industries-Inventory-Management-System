@@ -14,13 +14,14 @@ import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
-type VehicleRow = { id: string; job_ref_no: string; vehicle_name: string; type: string; customer_id: string | null; customer_name: string | null; is_active: boolean; created_at: Date; updated_at: Date };
+type VehicleRow = { id: string; job_ref_no: string; vehicle_name: string | null; type: string; customer_id: string | null; customer_name: string | null; is_active: boolean; created_at: Date; updated_at: Date };
 const EMPTY = { job_ref_no: "", vehicle_name: "", type: "New", customer_id: "" };
 
 interface Props { vehicles: VehicleRow[]; customers: Customer[]; }
 
 export function VehiclesClient({ vehicles, customers }: Props) {
   const [search, setSearch] = useState("");
+  const [focusedIdx, setFocusedIdx] = useState(-1);
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<VehicleRow | null>(null);
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
@@ -29,10 +30,10 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   const [importOpen, setImportOpen] = useState(false);
 
   const inactive = vehicles.filter((v) => !v.is_active);
-  const visible = (showInactive ? vehicles : vehicles.filter((v) => v.is_active)).filter((v) => {
+  const visible = vehicles.filter((v) => showInactive ? !v.is_active : v.is_active).filter((v) => {
     const q = search.toLowerCase();
     return (
-      v.vehicle_name.toLowerCase().includes(q) ||
+      (v.vehicle_name ?? "").toLowerCase().includes(q) ||
       (v.customer_name ?? "").toLowerCase().includes(q) ||
       (v.job_ref_no ?? "").toLowerCase().includes(q)
     );
@@ -40,7 +41,8 @@ export function VehiclesClient({ vehicles, customers }: Props) {
 
   function startEdit(v: VehicleRow) {
     setEditing(v);
-    setForm({ job_ref_no: v.job_ref_no, vehicle_name: v.vehicle_name, type: v.type, customer_id: v.customer_id ?? "" });
+    setFocusedIdx(-1);
+    setForm({ job_ref_no: v.job_ref_no, vehicle_name: v.vehicle_name ?? "", type: v.type, customer_id: v.customer_id ?? "" });
   }
   function resetForm() { setEditing(null); setForm(EMPTY); }
   function set(key: string, val: string) { setForm((f) => ({ ...f, [key]: val })); }
@@ -63,8 +65,12 @@ export function VehiclesClient({ vehicles, customers }: Props) {
 
   function handleReactivate(id: string) {
     startTransition(async () => {
-      await reactivateVehicle(id);
-      toast.success("Vehicle reactivated");
+      try {
+        await reactivateVehicle(id);
+        toast.success("Vehicle reactivated");
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+      }
     });
   }
 
@@ -84,7 +90,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Vehicle Name / Reg. No *</label>
+              <label className="text-xs text-slate-500">Vehicle Name / Reg. No</label>
               <Input placeholder="e.g. TN 82 H 3560" value={form.vehicle_name} onChange={(e) => set("vehicle_name", e.target.value)} />
             </div>
             <div className="space-y-1.5">
@@ -131,10 +137,21 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         tablePanel={
           <div className="flex flex-col h-full">
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
-              <Input placeholder="Search by vehicle name, job number, or customer..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+              <Input
+                placeholder="Search by vehicle name, job number, or customer..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }
+                  else if (e.key === "Enter" && focusedIdx >= 0) { startEdit(visible[focusedIdx]); }
+                  else if (e.key === "Escape") { setFocusedIdx(-1); }
+                }}
+                className="max-w-sm"
+              />
               {inactive.length > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
-                  {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
+                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
@@ -157,12 +174,12 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                   {visible.map((v, i) => (
                     <tr
                       key={v.id}
-                      className={`border-t border-slate-100 cursor-pointer ${!v.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !v.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(v)}
                     >
                       <td className="px-4 py-2.5 text-slate-500">{i + 1}</td>
                       <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{v.job_ref_no}</td>
-                      <td className="px-4 py-2.5 font-medium">{v.vehicle_name}</td>
+                      <td className="px-4 py-2.5 font-medium">{v.vehicle_name ?? "—"}</td>
                       <td className="px-4 py-2.5">
                         <Badge variant={v.type === "New" ? "default" : "secondary"}>{v.type}</Badge>
                       </td>
@@ -248,9 +265,15 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         onConfirm={() => {
           if (!deactivatingId) return;
           startTransition(async () => {
-            await deleteVehicle(deactivatingId);
-            toast.success("Vehicle deactivated");
-            setDeactivatingId(null);
+            try {
+              await deleteVehicle(deactivatingId);
+              toast.success("Vehicle deactivated");
+              resetForm();
+            } catch (e: unknown) {
+              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+            } finally {
+              setDeactivatingId(null);
+            }
           });
         }}
         isPending={isPending}

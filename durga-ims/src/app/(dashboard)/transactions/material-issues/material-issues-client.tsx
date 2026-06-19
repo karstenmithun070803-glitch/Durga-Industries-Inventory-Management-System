@@ -68,7 +68,7 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
         r.material_name.toLowerCase().includes(q) ||
         matchesCode(search, "M", r.material_no);
       const matchesVehicle =
-        r.vehicle_name.toLowerCase().includes(q) ||
+        (r.vehicle_name ?? "").toLowerCase().includes(q) ||
         (r.job_ref_no ?? "").toLowerCase().includes(q);
       const matchesSlip = matchesCode(search, "MI-", r.slip_number);
       const matchesCustomer = r.customer_name?.toLowerCase().includes(q) ?? false;
@@ -112,7 +112,7 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
     const csvRows = filtered.map((r) => [
       `MI-${String(r.slip_number).padStart(4, "0")}`,
       new Date(r.issue_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
-      r.vehicle_name,
+      r.vehicle_name ?? "",
       r.job_ref_no ?? "",
       r.material_name,
       r.qty,
@@ -333,7 +333,7 @@ export function MaterialIssuesClient({ initialRows, initialFY, companySetting }:
                         <span className="text-xs text-slate-400 mr-1">
                           {r.job_ref_no}
                         </span>
-                        {r.vehicle_name}
+                        {r.vehicle_name ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
                         {r.customer_name ?? "—"}

@@ -27,11 +27,8 @@ export async function createMaterial(data: {
   hsn_code?: string;
   tax_rate_id?: string;
   purchase_unit_id?: string;
-  sales_unit_id?: string;
-  conversion_value?: string;
   opening_stock?: string;
   min_level?: string;
-  max_level?: string;
 }) {
   if (!data.name.trim()) throw new Error("Material name is required");
   if (!data.purchase_unit_id) throw new Error("Purchase unit is required.");
@@ -40,12 +37,9 @@ export async function createMaterial(data: {
     hsn_code: data.hsn_code?.trim() || null,
     tax_rate_id: data.tax_rate_id || null,
     purchase_unit_id: data.purchase_unit_id || null,
-    sales_unit_id: data.sales_unit_id || null,
-    conversion_value: data.conversion_value || "1",
     opening_stock: data.opening_stock || "0",
     current_stock: data.opening_stock || "0",
     min_level: data.min_level || "0",
-    max_level: data.max_level || null,
   });
   revalidateTag(CACHE_TAGS.materials);
 }
@@ -55,10 +49,7 @@ export async function updateMaterial(id: string, data: {
   hsn_code?: string;
   tax_rate_id?: string;
   purchase_unit_id?: string;
-  sales_unit_id?: string;
-  conversion_value?: string;
   min_level?: string;
-  max_level?: string;
 }) {
   if (!data.name.trim()) throw new Error("Material name is required");
   if (!data.purchase_unit_id) throw new Error("Purchase unit is required.");
@@ -67,10 +58,7 @@ export async function updateMaterial(id: string, data: {
     hsn_code: data.hsn_code?.trim() || null,
     tax_rate_id: data.tax_rate_id || null,
     purchase_unit_id: data.purchase_unit_id || null,
-    sales_unit_id: data.sales_unit_id || null,
-    conversion_value: data.conversion_value || "1",
     min_level: data.min_level || "0",
-    max_level: data.max_level || null,
   }).where(eq(materials.id, id));
   revalidateTag(CACHE_TAGS.materials);
 }
@@ -113,11 +101,8 @@ export async function bulkImportMaterials(
     hsn_code?: string | null;
     tax_rate_id?: string | null;
     purchase_unit_id: string;
-    sales_unit_id?: string | null;
-    conversion_value?: string;
     opening_stock?: string;
     min_level?: string;
-    max_level?: string | null;
   }>
 ): Promise<{ imported: number; skipped: number }> {
   if (rows.length === 0) return { imported: 0, skipped: 0 };
@@ -137,12 +122,9 @@ export async function bulkImportMaterials(
         hsn_code: r.hsn_code || null,
         tax_rate_id: r.tax_rate_id || null,
         purchase_unit_id: r.purchase_unit_id,
-        sales_unit_id: r.sales_unit_id || null,
-        conversion_value: r.conversion_value || "1",
         opening_stock: r.opening_stock || "0",
         current_stock: r.opening_stock || "0",
         min_level: r.min_level || "0",
-        max_level: r.max_level || null,
       }))
     );
   });

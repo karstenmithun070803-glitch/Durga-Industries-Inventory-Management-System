@@ -13,14 +13,15 @@ import { toast } from "sonner";
 
 export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
   const [search, setSearch] = useState("");
+  const [focusedIdx, setFocusedIdx] = useState(-1);
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<TaxRate | null>(null);
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ tax_percentage: "", description: "" });
+  const [form, setForm] = useState({ tax_percentage: "" });
   const [isPending, startTransition] = useTransition();
 
   const inactive = taxRates.filter((t) => !t.is_active);
-  const visible = (showInactive ? taxRates : taxRates.filter((t) => t.is_active)).filter((t) => {
+  const visible = taxRates.filter((t) => showInactive ? !t.is_active : t.is_active).filter((t) => {
     const q = search.toLowerCase();
     return (
       t.description.toLowerCase().includes(q) ||
@@ -31,10 +32,11 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
 
   function startEdit(t: TaxRate) {
     setEditing(t);
-    setForm({ tax_percentage: t.tax_percentage, description: t.description });
+    setFocusedIdx(-1);
+    setForm({ tax_percentage: t.tax_percentage });
   }
 
-  function resetForm() { setEditing(null); setForm({ tax_percentage: "", description: "" }); }
+  function resetForm() { setEditing(null); setForm({ tax_percentage: "" }); }
 
   function handleSubmit() {
     startTransition(async () => {
@@ -50,8 +52,12 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
 
   function handleReactivate(id: string) {
     startTransition(async () => {
-      await reactivateTaxRate(id);
-      toast.success("Tax rate reactivated");
+      try {
+        await reactivateTaxRate(id);
+        toast.success("Tax rate reactivated");
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+      }
     });
   }
 
@@ -62,15 +68,19 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
         formPanel={
           <div className="space-y-4">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Tax Rate" : "Add Tax Rate"}</p>
-            {[
-              { label: "Tax Percentage *", key: "tax_percentage", placeholder: "e.g. 18" },
-              { label: "Description *", key: "description", placeholder: "e.g. GST 18%" },
-            ].map(({ label, key, placeholder }) => (
-              <div key={key} className="space-y-1.5">
-                <label className="text-xs text-slate-500">{label}</label>
-                <Input placeholder={placeholder} value={form[key as keyof typeof form]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
-              </div>
-            ))}
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Tax Percentage *</label>
+              <Input
+                placeholder="e.g. 18"
+                value={form.tax_percentage}
+                onChange={(e) => setForm({ tax_percentage: e.target.value })}
+                type="number"
+                min="0"
+                max="100"
+                step="any"
+              />
+              <p className="text-xs text-slate-400">Description auto-generated (e.g. GST 18%)</p>
+            </div>
             <div className="flex gap-2">
               <Button onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}
@@ -93,10 +103,21 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
         tablePanel={
           <div className="flex flex-col h-full">
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
-              <Input placeholder="Search by description, T01 or just 1, tax %..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+              <Input
+                placeholder="Search by description, T01 or just 1, tax %..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }
+                  else if (e.key === "Enter" && focusedIdx >= 0) { startEdit(visible[focusedIdx]); }
+                  else if (e.key === "Escape") { setFocusedIdx(-1); }
+                }}
+                className="max-w-xs"
+              />
               {inactive.length > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
-                  {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
+                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
                 </Button>
               )}
             </div>
@@ -104,25 +125,24 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 sticky top-0">
                   <tr>
-                    {["S.No", "Tax Code", "Tax %", "Description"].map((h) => (
+                    {["S.No", "Tax Code", "Tax %"].map((h) => (
                       <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No tax rates found</td></tr>
+                    <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400">No tax rates found</td></tr>
                   )}
                   {visible.map((t, i) => (
                     <tr
                       key={t.id}
-                      className={`border-t border-slate-100 cursor-pointer ${!t.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !t.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(t)}
                     >
                       <td className="px-4 py-2.5 text-slate-500">{i + 1}</td>
                       <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("T", t.vat_code, 2)}</td>
-                      <td className="px-4 py-2.5 font-medium">{parseFloat(t.tax_percentage)}</td>
-                      <td className="px-4 py-2.5">{t.description}</td>
+                      <td className="px-4 py-2.5 font-medium">{parseFloat(t.tax_percentage)}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -140,9 +160,15 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
         onConfirm={() => {
           if (!deactivatingId) return;
           startTransition(async () => {
-            await deleteTaxRate(deactivatingId);
-            toast.success("Tax rate deactivated");
-            setDeactivatingId(null);
+            try {
+              await deleteTaxRate(deactivatingId);
+              toast.success("Tax rate deactivated");
+              resetForm();
+            } catch (e: unknown) {
+              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+            } finally {
+              setDeactivatingId(null);
+            }
           });
         }}
         isPending={isPending}

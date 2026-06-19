@@ -13,12 +13,13 @@ import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { BulkImportDialog } from "@/components/masters/bulk-import-dialog";
 
-const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", sales_unit_id: "", conversion_value: "1", opening_stock: "0", min_level: "0", max_level: "" };
+const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", opening_stock: "0", min_level: "0" };
 
 interface Props { materials: Material[]; taxRates: TaxRate[]; units: Unit[]; }
 
 export function MaterialsClient({ materials, taxRates, units }: Props) {
   const [search, setSearch] = useState("");
+  const [focusedIdx, setFocusedIdx] = useState(-1);
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Material | null>(null);
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
   const activeUnits = units.filter((u) => u.is_active);
   const activeTaxRates = taxRates.filter((t) => t.is_active);
 
-  const visible = (showInactive ? materials : materials.filter((m) => m.is_active)).filter((m) => {
+  const visible = materials.filter((m) => showInactive ? !m.is_active : m.is_active).filter((m) => {
     const q = search.toLowerCase();
     return (
       m.name.toLowerCase().includes(q) ||
@@ -41,7 +42,8 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
 
   function startEdit(m: Material) {
     setEditing(m);
-    setForm({ name: m.name, hsn_code: m.hsn_code ?? "", tax_rate_id: m.tax_rate_id ?? "", purchase_unit_id: m.purchase_unit_id ?? "", sales_unit_id: m.sales_unit_id ?? "", conversion_value: m.conversion_value ?? "1", opening_stock: m.opening_stock, min_level: m.min_level ?? "0", max_level: m.max_level ?? "" });
+    setFocusedIdx(-1);
+    setForm({ name: m.name, hsn_code: m.hsn_code ?? "", tax_rate_id: m.tax_rate_id ?? "", purchase_unit_id: m.purchase_unit_id ?? "", opening_stock: m.opening_stock, min_level: m.min_level ?? "0" });
   }
 
   function resetForm() { setEditing(null); setForm(EMPTY); }
@@ -61,8 +63,12 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
 
   function handleReactivate(id: string) {
     startTransition(async () => {
-      await reactivateMaterial(id);
-      toast.success("Material reactivated");
+      try {
+        await reactivateMaterial(id);
+        toast.success("Material reactivated");
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+      }
     });
   }
 
@@ -101,36 +107,16 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                 searchPlaceholder="Search units..."
               />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Sales Unit</label>
-              <Combobox
-                options={activeUnits.map((u) => ({ value: u.id, label: `${formatCode("U", u.unit_code, 2)} — ${u.unit_name}` }))}
-                value={form.sales_unit_id}
-                onChange={(v) => set("sales_unit_id", v)}
-                placeholder="Select unit..."
-                searchPlaceholder="Search units..."
-              />
-            </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-500">Conv. Value</label>
-                <Input type="number" value={form.conversion_value} onChange={(e) => set("conversion_value", e.target.value)} />
-              </div>
               {!editing && (
                 <div className="space-y-1.5">
                   <label className="text-xs text-slate-500">Opening Stock</label>
                   <Input type="number" value={form.opening_stock} onChange={(e) => set("opening_stock", e.target.value)} />
                 </div>
               )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-500">Min Level</label>
                 <Input type="number" value={form.min_level} onChange={(e) => set("min_level", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-500">Max Level</label>
-                <Input type="number" value={form.max_level} onChange={(e) => set("max_level", e.target.value)} />
               </div>
             </div>
             <div className="flex gap-2 pt-1">
@@ -155,10 +141,21 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
         tablePanel={
           <div className="flex flex-col h-full">
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
-              <Input placeholder="Search by name, M001 or just 1, HSN..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+              <Input
+                placeholder="Search by name, M001 or just 1, HSN..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }
+                  else if (e.key === "Enter" && focusedIdx >= 0) { startEdit(visible[focusedIdx]); }
+                  else if (e.key === "Escape") { setFocusedIdx(-1); }
+                }}
+                className="max-w-sm"
+              />
               {inactive.length > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
-                  {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
+                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
@@ -172,25 +169,24 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-0 z-20 bg-slate-50 w-12">S.No</th>
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-12 z-20 bg-slate-50 w-28">Material Code</th>
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap sticky left-40 z-20 bg-slate-50 w-44 border-r border-slate-200">Material Name</th>
-                    {["HSN", "Tax Rate", "Pur. Unit", "Sal. Unit", "Conv.", "Min", "Max", "Stock"].map((h) => (
+                    {["HSN", "Tax Rate", "Unit", "Min", "Stock"].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-400">No materials found</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">No materials found</td></tr>
                   )}
                   {visible.map((m, i) => {
                     const purUnit = units.find((u) => u.id === m.purchase_unit_id);
-                    const salUnit = units.find((u) => u.id === m.sales_unit_id);
                     const taxRate = taxRates.find((t) => t.id === m.tax_rate_id);
                     const stockLow = m.min_level && parseFloat(m.current_stock) < parseFloat(m.min_level);
                     const stickyBg = !m.is_active ? "bg-slate-50" : stockLow ? "bg-red-50" : "bg-white";
                     return (
                       <tr
                         key={m.id}
-                        className={`border-t border-slate-100 cursor-pointer ${!m.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : stockLow ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-blue-50/40"}`}
+                        className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !m.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : stockLow ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-blue-50/40"}`}
                         onClick={() => startEdit(m)}
                       >
                         <td className={`px-3 py-2.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
@@ -199,10 +195,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                         <td className="px-3 py-2.5 text-slate-500 font-mono text-xs">{m.hsn_code ?? "—"}</td>
                         <td className="px-3 py-2.5 text-slate-500 text-xs">{taxRate ? taxRate.description : "—"}</td>
                         <td className="px-3 py-2.5 text-slate-500">{purUnit?.unit_name ?? "—"}</td>
-                        <td className="px-3 py-2.5 text-slate-500">{salUnit?.unit_name ?? "—"}</td>
-                        <td className="px-3 py-2.5 text-slate-500">{m.conversion_value}</td>
                         <td className="px-3 py-2.5 text-slate-500">{m.min_level ?? "—"}</td>
-                        <td className="px-3 py-2.5 text-slate-500">{m.max_level ?? "—"}</td>
                         <td className={`px-3 py-2.5 font-semibold ${stockLow ? "text-red-600" : "text-slate-800"}`}>{m.current_stock}</td>
                       </tr>
                     );
@@ -229,9 +222,15 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
         onConfirm={() => {
           if (!deactivatingId) return;
           startTransition(async () => {
-            await deleteMaterial(deactivatingId);
-            toast.success("Material deactivated");
-            setDeactivatingId(null);
+            try {
+              await deleteMaterial(deactivatingId);
+              toast.success("Material deactivated");
+              resetForm();
+            } catch (e: unknown) {
+              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+            } finally {
+              setDeactivatingId(null);
+            }
           });
         }}
         isPending={isPending}

@@ -148,7 +148,7 @@ export interface MaterialIssueRow {
   margin_percentage: string;
   total_amount: string;
   vehicle_id: string;
-  vehicle_name: string;
+  vehicle_name: string | null;
   job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;
@@ -209,7 +209,7 @@ export interface MaterialIssueWithDetails {
   margin_percentage: string;
   total_amount: string;
   vehicle_id: string;
-  vehicle_name: string;
+  vehicle_name: string | null;
   job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;
@@ -244,7 +244,7 @@ export interface InvoiceRow {
   cancelled_at: string | null;
   // vehicle + customer (via JOIN)
   vehicle_id: string;
-  vehicle_name: string;
+  vehicle_name: string | null;
   job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;
@@ -308,7 +308,7 @@ export interface InvoiceWithDetails {
   cancelled_by: string | null;
   cancelled_at: string | null;
   vehicle_id: string;
-  vehicle_name: string;
+  vehicle_name: string | null;
   job_ref_no: string;
   customer_id: string | null;
   customer_name: string | null;

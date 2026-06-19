@@ -39,15 +39,17 @@ async function checkInvPrefixUnique(prefix: string, excludeId?: string) {
 
 export async function createTaxRate(data: {
   tax_percentage: string;
-  description: string;
   inv_prefix?: string;
 }) {
-  if (!data.tax_percentage || !data.description.trim()) throw new Error("Tax % and description are required");
+  if (!data.tax_percentage) throw new Error("Tax percentage is required");
+  const pct = parseFloat(data.tax_percentage);
+  if (isNaN(pct) || pct < 0) throw new Error("Enter a valid tax percentage");
+  const description = pct === 0 ? "Exempt (0%)" : `GST ${pct}%`;
   const prefix = data.inv_prefix?.trim() || null;
   if (prefix) await checkInvPrefixUnique(prefix);
   await db.insert(taxRates).values({
     tax_percentage: data.tax_percentage,
-    description: data.description.trim(),
+    description,
     inv_prefix: prefix,
   });
   revalidateTag(CACHE_TAGS.taxRates);
@@ -55,13 +57,15 @@ export async function createTaxRate(data: {
 
 export async function updateTaxRate(
   id: string,
-  data: { tax_percentage: string; description: string; inv_prefix?: string }
+  data: { tax_percentage: string; inv_prefix?: string }
 ) {
+  const pct = parseFloat(data.tax_percentage || "0");
+  const description = pct === 0 ? "Exempt (0%)" : `GST ${pct}%`;
   const prefix = data.inv_prefix?.trim() || null;
   if (prefix) await checkInvPrefixUnique(prefix, id);
   await db.update(taxRates).set({
     tax_percentage: data.tax_percentage,
-    description: data.description.trim(),
+    description,
     inv_prefix: prefix,
   }).where(eq(taxRates.id, id));
   revalidateTag(CACHE_TAGS.taxRates);

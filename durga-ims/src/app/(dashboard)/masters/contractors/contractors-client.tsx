@@ -14,6 +14,7 @@ import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-impor
 
 export function ContractorsClient({ contractors }: { contractors: Contractor[] }) {
   const [search, setSearch] = useState("");
+  const [focusedIdx, setFocusedIdx] = useState(-1);
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Contractor | null>(null);
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
   const [importOpen, setImportOpen] = useState(false);
 
   const inactive = contractors.filter((c) => !c.is_active);
-  const visible = (showInactive ? contractors : contractors.filter((c) => c.is_active)).filter((c) => {
+  const visible = contractors.filter((c) => showInactive ? !c.is_active : c.is_active).filter((c) => {
     const q = search.toLowerCase();
     return (
       c.name.toLowerCase().includes(q) ||
@@ -31,7 +32,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
     );
   });
 
-  function startEdit(c: Contractor) { setEditing(c); setForm({ name: c.name, role: c.role ?? "", contact: c.contact ?? "" }); }
+  function startEdit(c: Contractor) { setEditing(c); setFocusedIdx(-1); setForm({ name: c.name, role: c.role ?? "", contact: c.contact ?? "" }); }
   function resetForm() { setEditing(null); setForm({ name: "", role: "", contact: "" }); }
 
   function handleSubmit() {
@@ -48,8 +49,12 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
 
   function handleReactivate(id: string) {
     startTransition(async () => {
-      await reactivateContractor(id);
-      toast.success("Contractor reactivated");
+      try {
+        await reactivateContractor(id);
+        toast.success("Contractor reactivated");
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+      }
     });
   }
 
@@ -92,10 +97,21 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
         tablePanel={
           <div className="flex flex-col h-full">
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
-              <Input placeholder="Search by name, CON01 or just 1, role..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+              <Input
+                placeholder="Search by name, CON01 or just 1, role..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }
+                  else if (e.key === "Enter" && focusedIdx >= 0) { startEdit(visible[focusedIdx]); }
+                  else if (e.key === "Escape") { setFocusedIdx(-1); }
+                }}
+                className="max-w-xs"
+              />
               {inactive.length > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
-                  {showInactive ? "Hide Inactive" : `Show Inactive (${inactive.length})`}
+                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
@@ -118,7 +134,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
                   {visible.map((c, i) => (
                     <tr
                       key={c.id}
-                      className={`border-t border-slate-100 cursor-pointer ${!c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(c)}
                     >
                       <td className="px-4 py-2.5 text-slate-500">{i + 1}</td>
@@ -172,9 +188,15 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
         onConfirm={() => {
           if (!deactivatingId) return;
           startTransition(async () => {
-            await deleteContractor(deactivatingId);
-            toast.success("Contractor deactivated");
-            setDeactivatingId(null);
+            try {
+              await deleteContractor(deactivatingId);
+              toast.success("Contractor deactivated");
+              resetForm();
+            } catch (e: unknown) {
+              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+            } finally {
+              setDeactivatingId(null);
+            }
           });
         }}
         isPending={isPending}

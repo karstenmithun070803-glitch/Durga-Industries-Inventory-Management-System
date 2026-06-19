@@ -23,11 +23,8 @@ interface ParsedRow {
   hsn_code?: string | null;
   tax_rate_id?: string | null;
   purchase_unit_id?: string;
-  sales_unit_id?: string | null;
-  conversion_value?: string;
   opening_stock?: string;
   min_level?: string;
-  max_level?: string | null;
 }
 
 interface Props {
@@ -80,21 +77,18 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
         "HSN Code",
         "Tax Rate %",
         "Purchase Unit",
-        "Sales Unit",
-        "Conversion Value",
         "Opening Stock",
         "Min Stock Level",
-        "Max Stock Level",
       ],
-      ["(Example) ENGINE OIL 20W40", "27101990", "18", "LTR", "", "1", "50", "10", ""],
+      ["(Example) ENGINE OIL 20W40", "27101990", "18", "LTR", "50", "10"],
     ];
     const ws = xlsx.utils.aoa_to_sheet(mainData);
-    ws["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 16 }];
+    ws["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
 
     const refData: (string | number)[][] = [
       ["REFERENCE — do not edit this sheet"],
       [],
-      ["Available Units (use exact name in Purchase Unit / Sales Unit column)"],
+      ["Available Units (use exact name in Purchase Unit column)"],
       ["Unit Name", "Code"],
       ...activeUnits.map((u) => [u.unit_name, `U-${String(u.unit_code).padStart(2, "0")}`]),
       [],
@@ -178,19 +172,6 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
           else purchaseUnitId = unit.id;
         }
 
-        const salesUnitRaw = String(row["Sales Unit"] ?? "").trim();
-        const salesUnitUpper = salesUnitRaw.toUpperCase();
-        let salesUnitId: string | null = null;
-        if (salesUnitUpper) {
-          const unit = activeUnits.find((u) => u.unit_name.toUpperCase() === salesUnitUpper);
-          if (!unit) errors.push(`Sales Unit "${salesUnitRaw}" not found — check Reference sheet`);
-          else salesUnitId = unit.id;
-        }
-
-        const convStr = String(row["Conversion Value"] ?? "").trim() || "1";
-        const convVal = parseFloat(convStr);
-        if (isNaN(convVal) || convVal <= 0) errors.push("Conversion Value must be a positive number");
-
         const openingStr = String(row["Opening Stock"] ?? "").trim() || "0";
         const openingVal = parseFloat(openingStr);
         if (isNaN(openingVal) || openingVal < 0) errors.push("Opening Stock must be ≥ 0");
@@ -198,12 +179,6 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
         const minStr = String(row["Min Stock Level"] ?? "").trim() || "0";
         const minVal = parseFloat(minStr);
         if (isNaN(minVal) || minVal < 0) errors.push("Min Stock Level must be ≥ 0");
-
-        const maxStr = String(row["Max Stock Level"] ?? "").trim();
-        if (maxStr) {
-          const maxVal = parseFloat(maxStr);
-          if (isNaN(maxVal) || maxVal < 0) errors.push("Max Stock Level must be ≥ 0");
-        }
 
         if (errors.length > 0) {
           return { rowNum, displayName: rawName || `Row ${rowNum}`, status: "error" as const, errors };
@@ -222,11 +197,8 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
           hsn_code: hsn || null,
           tax_rate_id: taxRateId,
           purchase_unit_id: purchaseUnitId,
-          sales_unit_id: salesUnitId,
-          conversion_value: convStr,
           opening_stock: openingStr,
           min_level: minStr,
-          max_level: maxStr || null,
         };
       });
 
@@ -243,11 +215,8 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
       hsn_code: r.hsn_code,
       tax_rate_id: r.tax_rate_id,
       purchase_unit_id: r.purchase_unit_id!,
-      sales_unit_id: r.sales_unit_id,
-      conversion_value: r.conversion_value,
       opening_stock: r.opening_stock,
       min_level: r.min_level,
-      max_level: r.max_level,
     }));
 
     setImportError(null);

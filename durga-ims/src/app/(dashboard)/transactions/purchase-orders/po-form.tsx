@@ -120,8 +120,6 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
 
   const [poDate, setPoDate] = useState(po ? toISODate(po.po_date) : toISODate(new Date()));
   const [affectsStock, setAffectsStock] = useState(po?.affects_stock ?? true);
-  const [supplierBillNo, setSupplierBillNo] = useState(po?.supplier_bill_no ?? "");
-  const [supplierBillDate, setSupplierBillDate] = useState(po?.supplier_bill_date ?? "");
   const [rows, setRows] = useState<LineItemDraft[]>(() => {
     if (po) return poItemsToRows(po);
     if (prefillMaterialId) {
@@ -158,29 +156,43 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
     return null;
   }
 
+  function buildItemsPayload(rowSet: LineItemDraft[]) {
+    return rowSet.map((r) => ({
+      material_id: r.material_id,
+      supplier_id: r.supplier_id || null,
+      qty: r.qty,
+      unit_id: r.unit_id,
+      rate: r.rate || "0",
+      rate_blank: r.rateBlank,
+      zero_rate_confirmed: r.zeroRateConfirmed,
+      tax_percentage: r.tax_percentage || "0",
+      cgst_amount: r.cgst_amount,
+      sgst_amount: r.sgst_amount,
+      igst_amount: r.igst_amount,
+      amount: r.amount,
+      gst_type: r.gst_type || null,
+    }));
+  }
+
+  function groupBySupplier(rowSet: LineItemDraft[]): Map<string, LineItemDraft[]> {
+    const map = new Map<string, LineItemDraft[]>();
+    for (const row of rowSet) {
+      const key = row.supplier_id || "__none__";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    }
+    return map;
+  }
+
   function buildSubmitData() {
     const filledRows = rows.filter((r) => r.material_id);
     return {
       po_date: poDate,
       total_amount: grand.toFixed(2),
       affects_stock: affectsStock,
-      supplier_bill_no: supplierBillNo,
-      supplier_bill_date: supplierBillDate,
-      items: filledRows.map((r) => ({
-        material_id: r.material_id,
-        supplier_id: r.supplier_id || null,
-        qty: r.qty,
-        unit_id: r.unit_id,
-        rate: r.rate || "0",
-        rate_blank: r.rateBlank,
-        zero_rate_confirmed: r.zeroRateConfirmed,
-        tax_percentage: r.tax_percentage || "0",
-        cgst_amount: r.cgst_amount,
-        sgst_amount: r.sgst_amount,
-        igst_amount: r.igst_amount,
-        amount: r.amount,
-        gst_type: r.gst_type || null,
-      })),
+      supplier_bill_no: po?.supplier_bill_no ?? "",
+      supplier_bill_date: po?.supplier_bill_date ?? "",
+      items: buildItemsPayload(filledRows),
     };
   }
 
@@ -190,13 +202,32 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
 
     startTransition(async () => {
       try {
-        const data = buildSubmitData();
         if (mode === "new") {
-          const newId = await createPurchaseOrder({ ...data, financial_year: activeFY });
-          toast.success("Draft saved");
-          router.push(`/transactions/purchase-orders/${newId}/edit`);
+          const filledRows = rows.filter((r) => r.material_id);
+          const bySupplier = groupBySupplier(filledRows);
+          let firstId: string | undefined;
+          for (const [, supplierRows] of Array.from(bySupplier)) {
+            const { grand: g } = calcAllTotals(supplierRows);
+            const newId = await createPurchaseOrder({
+              po_date: poDate,
+              financial_year: activeFY,
+              total_amount: g.toFixed(2),
+              affects_stock: affectsStock,
+              supplier_bill_no: "",
+              supplier_bill_date: "",
+              items: buildItemsPayload(supplierRows),
+            });
+            if (!firstId) firstId = newId;
+          }
+          const count = bySupplier.size;
+          toast.success(`${count} draft PO${count > 1 ? "s" : ""} created`);
+          if (count === 1 && firstId) {
+            router.push(`/transactions/purchase-orders/${firstId}/edit`);
+          } else {
+            router.push("/transactions/purchase-orders");
+          }
         } else {
-          await updatePurchaseOrder(po!.id, data);
+          await updatePurchaseOrder(po!.id, buildSubmitData());
           toast.success("Draft saved");
         }
       } catch (e: unknown) {
@@ -214,19 +245,36 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
   function confirmReceive() {
     startTransition(async () => {
       try {
-        const data = buildSubmitData();
-        let poId = po?.id;
-
         if (mode === "new") {
-          poId = await createPurchaseOrder({ ...data, financial_year: activeFY });
-        } else if (mode === "edit-draft") {
-          await updatePurchaseOrder(po!.id, data);
+          const filledRows = rows.filter((r) => r.material_id);
+          const bySupplier = groupBySupplier(filledRows);
+          for (const [, supplierRows] of Array.from(bySupplier)) {
+            const { grand: g } = calcAllTotals(supplierRows);
+            const newId = await createPurchaseOrder({
+              po_date: poDate,
+              financial_year: activeFY,
+              total_amount: g.toFixed(2),
+              affects_stock: affectsStock,
+              supplier_bill_no: "",
+              supplier_bill_date: "",
+              items: buildItemsPayload(supplierRows),
+            });
+            await receivePurchaseOrder(newId);
+          }
+          const count = bySupplier.size;
+          const matCount = filledRows.length;
+          toast.success(`${count} PO${count > 1 ? "s" : ""} created and received. Stock updated for ${matCount} material${matCount !== 1 ? "s" : ""}.`);
+        } else {
+          const data = buildSubmitData();
+          let poId = po?.id;
+          if (mode === "edit-draft") {
+            await updatePurchaseOrder(po!.id, data);
+          }
+          await receivePurchaseOrder(poId!);
+          const poNum = po?.po_number ?? nextPoNumber ?? 0;
+          const matCount = rows.filter((r) => r.material_id).length;
+          toast.success(`PO-${String(poNum).padStart(4, "0")} received. Stock updated for ${matCount} material${matCount !== 1 ? "s" : ""}.`);
         }
-
-        await receivePurchaseOrder(poId!);
-        const poNum = po?.po_number ?? nextPoNumber ?? 0;
-        const filledRows = rows.filter((r) => r.material_id);
-        toast.success(`PO-${String(poNum).padStart(4, "0")} received. Stock updated for ${filledRows.length} material${filledRows.length !== 1 ? "s" : ""}.`);
         setShowReceiveDialog(false);
         router.push("/transactions/purchase-orders");
       } catch (e: unknown) {
@@ -300,22 +348,6 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
               <label className="text-xs text-slate-500">Financial Year</label>
               <p className="text-sm text-slate-700 py-1">{po?.financial_year ?? activeFY}</p>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Supplier Bill No. <span className="text-slate-400">(Optional)</span></label>
-              {isReadOnly ? (
-                <p className="text-sm text-slate-800 py-1">{supplierBillNo || "—"}</p>
-              ) : (
-                <Input value={supplierBillNo} onChange={(e) => setSupplierBillNo(e.target.value)} placeholder="e.g. INV-2024-001" className="h-8 text-sm" />
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Supplier Bill Date <span className="text-slate-400">(Optional)</span></label>
-              {isReadOnly ? (
-                <p className="text-sm text-slate-800 py-1">{supplierBillDate ? new Date(supplierBillDate).toLocaleDateString("en-IN") : "—"}</p>
-              ) : (
-                <Input type="date" value={supplierBillDate} onChange={(e) => setSupplierBillDate(e.target.value)} className="h-8 text-sm" />
-              )}
-            </div>
           </div>
 
           {/* Update Stock checkbox */}
@@ -354,6 +386,25 @@ export function POForm({ mode, po, nextPoNumber, suppliers, materials, taxRates,
             readOnly={isReadOnly}
           />
         </div>
+
+        {/* Per-supplier split preview — only for new POs with multiple suppliers */}
+        {mode === "new" && (() => {
+          const filled = rows.filter((r) => r.material_id && r.supplier_id);
+          const groups = new Map<string, { name: string; count: number }>();
+          for (const r of filled) {
+            if (!groups.has(r.supplier_id)) groups.set(r.supplier_id, { name: r.supplier_name || r.supplier_id, count: 0 });
+            groups.get(r.supplier_id)!.count++;
+          }
+          if (groups.size < 2) return null;
+          return (
+            <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+              <span className="font-medium">Will create {groups.size} POs on save: </span>
+              {Array.from(groups.values()).map((g, i) => (
+                <span key={i}>{i > 0 ? " · " : ""}{g.name} ({g.count} item{g.count !== 1 ? "s" : ""})</span>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Sticky totals + action bar */}

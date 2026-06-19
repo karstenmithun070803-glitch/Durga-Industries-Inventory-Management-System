@@ -2,20 +2,23 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { FileText, ShoppingCart, BarChart2 } from "lucide-react";
+import { FileText, ShoppingCart, BarChart2, Search } from "lucide-react";
 import { InvoiceSummaryReport } from "./invoice-summary";
 import { PurchaseReport } from "./purchase-report";
 import { MonthlyStockReport } from "./monthly-stock";
+import { JobCostPanel } from "@/components/job-cost-panel";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
+import type { VehicleSearchRow } from "@/lib/actions/stock.actions";
 import { useFY } from "@/lib/financial-year";
 
-type ReportTab = "invoice-summary" | "purchase" | "monthly-stock";
+type ReportTab = "invoice-summary" | "purchase" | "monthly-stock" | "job-cost";
 
 interface Props {
-  vehicles: { id: string; vehicle_name: string; job_ref_no: string }[];
+  vehicles: { id: string; vehicle_name: string | null; job_ref_no: string }[];
   suppliers: { id: string; name: string }[];
   materials: { id: string; name: string; material_no: number }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];
+  jobCostVehicles: VehicleSearchRow[];
   companySetting?: CompanySetting;
 }
 
@@ -23,9 +26,10 @@ const NAV_ITEMS: { id: ReportTab; label: string; icon: React.ElementType }[] = [
   { id: "invoice-summary", label: "Invoice Summary", icon: FileText },
   { id: "purchase", label: "Purchase Report", icon: ShoppingCart },
   { id: "monthly-stock", label: "Monthly Stock Report", icon: BarChart2 },
+  { id: "job-cost", label: "Job Cost", icon: Search },
 ];
 
-export function ReportsClient({ vehicles, suppliers, materials, customers, companySetting }: Props) {
+export function ReportsClient({ vehicles, suppliers, materials, customers, jobCostVehicles, companySetting }: Props) {
   const { activeFY } = useFY();
   const [activeTab, setActiveTab] = useState<ReportTab>("invoice-summary");
 
@@ -78,6 +82,11 @@ export function ReportsClient({ vehicles, suppliers, materials, customers, compa
             defaultFY={activeFY}
             companySetting={companySetting}
           />
+        )}
+        {activeTab === "job-cost" && (
+          <div className="p-6">
+            <JobCostPanel vehicles={jobCostVehicles} companySetting={companySetting} />
+          </div>
         )}
       </div>
     </div>

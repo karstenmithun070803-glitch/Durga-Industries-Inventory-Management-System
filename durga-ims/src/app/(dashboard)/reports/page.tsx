@@ -6,15 +6,17 @@ import {
   getActiveMaterialsForReports,
   getActiveCustomersForReports,
 } from "@/lib/actions/reports.queries";
+import { getVehiclesForJobSearch } from "@/lib/actions/stock.actions";
 import { getCompanySettings } from "@/lib/actions/settings.actions";
 import { ReportsClient } from "./reports-client";
 
 export default async function ReportsPage() {
-  const [vehicles, suppliers, materials, customers, companySetting] = await Promise.all([
+  const [vehicles, suppliers, materials, customers, jobCostVehicles, companySetting] = await Promise.all([
     getActiveVehiclesForReports(),
     getActiveSuppliersForReports(),
     getActiveMaterialsForReports(),
     getActiveCustomersForReports(),
+    getVehiclesForJobSearch(),
     getCompanySettings(),
   ]);
 
@@ -24,6 +26,7 @@ export default async function ReportsPage() {
       suppliers={suppliers}
       materials={materials}
       customers={customers}
+      jobCostVehicles={jobCostVehicles}
       companySetting={companySetting}
     />
   );

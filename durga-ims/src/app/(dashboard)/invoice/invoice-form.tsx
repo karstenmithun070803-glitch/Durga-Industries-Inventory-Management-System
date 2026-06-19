@@ -48,7 +48,7 @@ type Mode = "new" | "edit" | "view";
 interface VehicleOption {
   id: string;
   job_ref_no: string;
-  vehicle_name: string;
+  vehicle_name: string | null;
   customer_id: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
@@ -149,7 +149,8 @@ function itemsFromMISlips(slips: MISlipWithItems[], gstType: string): LineItemDr
   return mergeSlipRows(raw);
 }
 
-function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[]): LineItemDraft[] {
+function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[], storedMargin: string): LineItemDraft[] {
+  const factor = 1 + parseFloat(storedMargin || "0") / 100;
   return invoiceItems.map((item) => ({
     _key: crypto.randomUUID(),
     material_id: item.material_id,
@@ -163,7 +164,7 @@ function itemsFromInvoice(invoiceItems: InvoiceItemWithDetails[]): LineItemDraft
     unit_id: item.unit_id ?? "",
     unit_name: item.unit_name ?? "",
     rate: item.rate,
-    baseRate: item.rate,
+    baseRate: factor > 1 ? (parseFloat(item.rate) / factor).toFixed(4) : item.rate,
     tax_percentage: item.tax_percentage,
     cgst_amount: item.cgst_amount,
     sgst_amount: item.sgst_amount,
@@ -260,7 +261,7 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
 
   // ── Line items state ──────────────────────────────────────────────────────
   const [rows, setRows] = useState<LineItemDraft[]>(
-    invoice?.items.length ? itemsFromInvoice(invoice.items) : [newRow()]
+    invoice?.items.length ? itemsFromInvoice(invoice.items, invoice.material_margin ?? "0") : [newRow()]
   );
 
   // ── Dialog state ──────────────────────────────────────────────────────────
@@ -535,7 +536,7 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
+    label: `${v.job_ref_no}${v.vehicle_name ? ` — ${v.vehicle_name}` : ""}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
   }));
 
   return (
@@ -607,7 +608,7 @@ export function InvoiceForm({ mode, invoice, vehicles, materials, units, company
               <label className="text-xs text-slate-500 block mb-1">Vehicle / Job</label>
               {isReadOnly ? (
                 <div className="h-9 px-3 flex items-center text-sm text-slate-700">
-                  {invoice?.job_ref_no ?? ""} — {invoice?.vehicle_name}
+                  {invoice?.job_ref_no ?? ""}{invoice?.vehicle_name ? ` — ${invoice.vehicle_name}` : ""}
                 </div>
               ) : (
                 <Combobox

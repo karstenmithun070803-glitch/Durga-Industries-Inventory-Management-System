@@ -6,7 +6,6 @@ import {
   units,
   stockLedger,
   purchaseOrders,
-  purchaseOrderItems,
   materialIssues,
   materialIssueItems,
   contractors,
@@ -56,7 +55,7 @@ export interface StockLedgerEntry {
 export interface VehicleSearchRow {
   id: string;
   job_ref_no: string;
-  vehicle_name: string;
+  vehicle_name: string | null;
   customer_name: string | null;
   is_active: boolean;
 }
@@ -74,7 +73,7 @@ export interface JobCostRow {
 export interface JobCostResult {
   vehicle: {
     job_ref_no: string;
-    vehicle_name: string;
+    vehicle_name: string | null;
     vehicle_type: string;
     customer_name: string | null;
   };
@@ -102,7 +101,7 @@ export async function getStockDashboardMaterials(): Promise<{
       min_level: materials.min_level,
       max_level: materials.max_level,
       is_active: materials.is_active,
-      unit_id: materials.sales_unit_id,
+      unit_id: materials.purchase_unit_id,
     })
     .from(materials)
     .where(eq(materials.is_active, true))

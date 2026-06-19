@@ -36,7 +36,7 @@ type Mode = "new" | "edit-draft" | "edit-issued" | "view";
 interface VehicleOption {
   id: string;
   job_ref_no: string;
-  vehicle_name: string;
+  vehicle_name: string | null;
   type: string;
   customer_id: string | null;
   customer_name: string | null;
@@ -92,6 +92,7 @@ function toISODate(d: Date | string): string {
 
 function issueItemsToRows(issue: MaterialIssueWithDetails): LineItemDraft[] {
   if (issue.items.length === 0) return [newRow()];
+  const factor = 1 + parseFloat(issue.margin_percentage || "0") / 100;
   return issue.items.map((item) => ({
     _key: crypto.randomUUID(),
     material_id: item.material_id,
@@ -105,7 +106,7 @@ function issueItemsToRows(issue: MaterialIssueWithDetails): LineItemDraft[] {
     unit_id: item.unit_id ?? "",
     unit_name: item.unit_name ?? "",
     rate: item.rate,
-    baseRate: item.rate,
+    baseRate: factor > 1 ? (parseFloat(item.rate) / factor).toFixed(4) : item.rate,
     tax_percentage: item.tax_percentage,
     cgst_amount: item.cgst_amount,
     sgst_amount: item.sgst_amount,
@@ -343,7 +344,7 @@ export function MaterialIssueForm({
 
   const vehicleOptions = filteredVehicles.map((v) => ({
     value: v.id,
-    label: `${v.job_ref_no} — ${v.vehicle_name}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
+    label: `${v.job_ref_no}${v.vehicle_name ? ` — ${v.vehicle_name}` : ""}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
   }));
 
   return (
@@ -417,7 +418,7 @@ export function MaterialIssueForm({
               {isReadOnly ? (
                 <div className="h-9 px-3 flex items-center rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-700">
                   {selectedVehicle
-                    ? `${selectedVehicle.job_ref_no} — ${selectedVehicle.vehicle_name}`
+                    ? `${selectedVehicle.job_ref_no}${selectedVehicle.vehicle_name ? ` — ${selectedVehicle.vehicle_name}` : ""}`
                     : issue?.vehicle_name ?? "—"}
                 </div>
               ) : (

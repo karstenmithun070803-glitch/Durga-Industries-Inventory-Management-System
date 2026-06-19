@@ -47,16 +47,15 @@ export const getAllVehicles = unstable_cache(
 
 export async function createVehicle(data: {
   job_ref_no: string;
-  vehicle_name: string;
+  vehicle_name?: string;
   type: string;
   customer_id?: string;
 }) {
   if (!data.job_ref_no.trim()) throw new Error("Job number is required.");
-  if (!data.vehicle_name.trim()) throw new Error("Vehicle name is required.");
   try {
     await db.insert(vehicles).values({
       job_ref_no: data.job_ref_no.trim(),
-      vehicle_name: data.vehicle_name.trim().toUpperCase(),
+      vehicle_name: data.vehicle_name?.trim().toUpperCase() || null,
       type: data.type || "New",
       customer_id: data.customer_id || null,
     });
@@ -71,7 +70,7 @@ export async function createVehicle(data: {
 
 export async function updateVehicle(id: string, data: {
   job_ref_no: string;
-  vehicle_name: string;
+  vehicle_name?: string;
   type: string;
   customer_id?: string;
 }) {
@@ -79,7 +78,7 @@ export async function updateVehicle(id: string, data: {
   try {
     await db.update(vehicles).set({
       job_ref_no: data.job_ref_no.trim(),
-      vehicle_name: data.vehicle_name.trim().toUpperCase(),
+      vehicle_name: data.vehicle_name?.trim().toUpperCase() || null,
       type: data.type,
       customer_id: data.customer_id || null,
     }).where(eq(vehicles.id, id));

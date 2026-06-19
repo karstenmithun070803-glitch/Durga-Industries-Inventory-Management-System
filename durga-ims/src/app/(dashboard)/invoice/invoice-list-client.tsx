@@ -288,7 +288,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                         <span className="font-mono text-slate-500">
                           {r.job_ref_no}
                         </span>{" "}
-                        <span className="text-slate-700">{r.vehicle_name}</span>
+                        <span className="text-slate-700">{r.vehicle_name ?? "—"}</span>
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 text-xs">
                         {r.customer_name ?? "—"}

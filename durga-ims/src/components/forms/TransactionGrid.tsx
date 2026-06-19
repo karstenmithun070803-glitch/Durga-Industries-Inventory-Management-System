@@ -183,9 +183,7 @@ export function TransactionGrid({
 
     // Issue / invoice mode: prefer sales unit → fallback purchase unit → amber warning
     // PO mode: always use purchase unit
-    const preferredUnitId = isHeaderGstMode
-      ? (mat.sales_unit_id ?? mat.purchase_unit_id)
-      : mat.purchase_unit_id;
+    const preferredUnitId = mat.purchase_unit_id;
 
     const unit = preferredUnitId ? units.find((u) => u.id === preferredUnitId) : null;
     // Prefer tax_percentage embedded on the material (issue mode, from DB JOIN)
@@ -475,7 +473,7 @@ export function TransactionGrid({
                         }`}
                         value={row.rate}
                         onChange={(e) =>
-                          update(row._key, { rate: e.target.value, rateBlank: false })
+                          update(row._key, { rate: e.target.value, baseRate: e.target.value, rateBlank: false })
                         }
                         min="0"
                         step="any"
