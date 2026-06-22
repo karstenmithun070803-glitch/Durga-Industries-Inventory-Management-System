@@ -50,6 +50,7 @@ export interface StockLedgerEntry {
   reason: string | null;
   adjusted_by: string | null;
   reference_label: string;
+  rate_at_time: string | null;
 }
 
 export interface VehicleSearchRow {
@@ -192,6 +193,7 @@ export async function getStockMovementHistory(
       adjusted_by: stockLedger.adjusted_by,
       reference_id: stockLedger.reference_id,
       reference_type: stockLedger.reference_type,
+      rate_at_time: stockLedger.rate_at_time,
     })
     .from(stockLedger)
     .where(eq(stockLedger.material_id, materialId))
@@ -234,6 +236,7 @@ export async function getStockMovementHistory(
       reason: e.reason,
       adjusted_by: e.adjusted_by,
       reference_label,
+      rate_at_time: e.rate_at_time,
     };
   });
 }
@@ -272,6 +275,18 @@ export async function adjustStock(
   const delta = newQty - currentQty;
   const fullReason = `${reason.trim()} — Adjusted from ${currentQty} to ${newQty} by ${username}`;
 
+  // Fetch the most recent received PO rate for this material — informational only (not critical).
+  // Queried before the update to minimise the timing gap; null if material has never been purchased.
+  const rateResult = await db.execute<{ rate: string }>(sql`
+    SELECT DISTINCT ON (poi.material_id) poi.rate
+    FROM purchase_order_items poi
+    INNER JOIN purchase_orders po ON poi.po_id = po.id
+    WHERE po.status = 'Received' AND poi.material_id = ${materialId}
+    ORDER BY poi.material_id, po.po_date DESC
+    LIMIT 1
+  `);
+  const rateAtTime = Array.from(rateResult)[0]?.rate ?? null;
+
   // Atomic update with optimistic concurrency check
   await db
     .update(materials)
@@ -298,6 +313,7 @@ export async function adjustStock(
     stock_after: String(newQty),
     reason: fullReason,
     adjusted_by: username,
+    rate_at_time: rateAtTime,
   });
 
   revalidatePath("/stock");

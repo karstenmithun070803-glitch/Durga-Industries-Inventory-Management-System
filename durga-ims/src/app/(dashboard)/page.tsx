@@ -97,11 +97,11 @@ export default async function HomePage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <StatCard
-          label="Out of Stock"
-          value={stats.outStockCount}
-          sub={`${stats.lowStockCount} below min`}
+          label="Total Stock Value"
+          value={fmtAmt(stats.totalStockValue)}
+          sub={`${stats.lowStockCount} below min · ${stats.materialsExcludedFromValue} excl. (no rate)`}
           href="/stock"
-          color={stats.outStockCount > 0 ? "red" : stats.lowStockCount > 0 ? "amber" : "slate"}
+          color={stats.lowStockCount > 0 ? "amber" : "slate"}
         />
         <StatCard
           label={`FY ${fy} Sales`}

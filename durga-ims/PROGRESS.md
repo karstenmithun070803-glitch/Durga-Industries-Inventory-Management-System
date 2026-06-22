@@ -10,8 +10,8 @@
 ---
 
 ## Current Status
-**Last session:** 2026-06-22 — Phase 6 fully complete. All code steps done; tsc: clean. One manual DB step still required (see Phase 6 notes below).
-**Next up:** Phase 7 — Reports
+**Last session:** 2026-06-22 — Phase 8 fully complete. All code steps done; tsc: clean. Two manual DB steps from Phase 5 + Phase 6 still pending in Supabase SQL editor (see those phases for SQL).
+**Next up:** Manual testing + deployment (see Phase 8 test checklist TC-8-01 through TC-8-09)
 
 ---
 
@@ -330,41 +330,42 @@ _Requires Phase 1 (stage tables), Phase 3 (Stage Master), Phase 5 (VMI issued da
 ### Part 8.1 — Stage Wise Costing UI
 | Task | Status | Notes |
 |------|--------|-------|
-| reports/stage-wise-costing.tsx | ⏳ Not Started | Vehicle selector; Stage Wise / Material Wise toggle |
-| Margin% input: applied in app layer, not SQL | ⏳ Not Started | amount × (1 + margin/100) per group |
-| Old VMI items (stage_id IS NULL) grouped under "Direct Issue / Unclassified" at bottom | ⏳ Not Started | COALESCE(stage_code, 'DIRECT') |
-| Empty state: "No issued slips found for this vehicle" | ⏳ Not Started | |
-| Print + Export buttons | ⏳ Not Started | Disabled until vehicle selected |
+| reports/stage-wise-costing.tsx | ✅ Done | FY + Vehicle + Stage Wise/Material Wise toggle + Margin% + Show button + CSV export |
+| Margin% input: applied in app layer, not SQL | ✅ Done | useMemo on rawRows — no re-fetch on margin change |
+| Old VMI items (stage_id IS NULL) grouped under "Direct Issue / Unclassified" at bottom | ✅ Done | COALESCE(stage_code, 'DIRECT'); amber/italic row styling |
+| Empty state: "No issued slips found for this vehicle" | ✅ Done | Specific messages for pre-run and no-data states |
+| Print + Export buttons | ✅ Done | Disabled until activeRows.length > 0 |
 
 ### Part 8.2 — Stage Wise / Material Wise Queries
 | Task | Status | Notes |
 |------|--------|-------|
-| getStageWiseCostingData(vehicleId) — GROUP BY stage | ⏳ Not Started | In reports.actions.ts |
-| getMaterialWiseCostingData(vehicleId) — GROUP BY material | ⏳ Not Started | Same materials across stages summed |
+| getStageWiseCostingData(vehicleId, fy) — GROUP BY stage | ✅ Done | Added fy param (audit finding L1-1); UUID + FY validation; no cache |
+| getMaterialWiseCostingData(vehicleId, fy) — GROUP BY material | ✅ Done | STRING_AGG stages column added (audit finding L1-6) |
 
 ### Part 8.3 — Stage Wise PDF
 | Task | Status | Notes |
 |------|--------|-------|
-| src/components/pdf/stage-wise-costing-pdf.tsx | ⏳ Not Started | |
+| src/components/pdf/stage-wise-costing-pdf.tsx | ✅ Done | Portrait; both Stage Wise + Material Wise modes; Direct Issue rows amber background |
 
 ### Part 9.1 — Vehicle Comparison UI
 | Task | Status | Notes |
 |------|--------|-------|
-| reports/vehicle-comparison.tsx | ⏳ Not Started | Two vehicle selectors + Stage filter (All / specific stage) |
-| Diff.Material toggle: client-side filter where diff != 0 | ⏳ Not Started | No re-fetch needed |
-| Without Amount toggle: hides Amt(1) and Amt(2) columns | ⏳ Not Started | No re-fetch needed |
-| Diff color coding: green if diff > 0; red if diff < 0 | ⏳ Not Started | |
-| Compare + Export disabled until results loaded | ⏳ Not Started | |
+| reports/vehicle-comparison.tsx | ✅ Done | FY + V1 + V2 + Stage filter + Compare button with loading spinner |
+| Diff.Material toggle: client-side filter where diff != 0 | ✅ Done | No re-fetch needed |
+| Without Amount toggle: hides Amt(1) and Amt(2) columns | ✅ Done | No re-fetch needed; passed to PDF too |
+| Diff color coding | ✅ Done | Amber (neutral) for nonzero diff — not green/red (audit finding L1-3) |
+| Compare + Export disabled until results loaded | ✅ Done | Compare disabled until v1Id + v2Id set; Export/Print disabled until rows exist |
+| Stage filter amber info banner | ✅ Done | Shows when stageId set: warns Old VMI slips excluded |
 
 ### Part 9.2 — Vehicle Comparison Query
 | Task | Status | Notes |
 |------|--------|-------|
-| getVehicleComparisonData(v1Id, v2Id, stageId?) | ⏳ Not Started | FULL OUTER JOIN on material_no + stage_name; in reports.actions.ts |
+| getVehicleComparisonData(v1Id, v2Id, fy, stageId?) | ✅ Done | FULL OUTER JOIN via db.execute(sql\`\`); fy param added; UUID validation; stageParam ?? null for SQL NULL safety |
 
 ### Part 9.3 — Vehicle Comparison PDF
 | Task | Status | Notes |
 |------|--------|-------|
-| src/components/pdf/vehicle-comparison-pdf.tsx | ⏳ Not Started | |
+| src/components/pdf/vehicle-comparison-pdf.tsx | ✅ Done | Landscape; respects hideAmounts + showDiffOnly props; amber diff color |
 
 ### Part 18.7 — Costing Reports Edge Cases
 | | Status |
@@ -384,22 +385,22 @@ _Requires Part 2.6 (rate_at_time column) from Phase 1._
 ### Part 10 — Home Tab
 | Task | Status | Notes |
 |------|--------|-------|
-| Remove Out of Stock KPI: delete from page.tsx line 100 + remove outStockCount from getDashboardStats() entirely | ⏳ Not Started | Only page.tsx line 100 references it — safe to remove |
-| Add Total Stock Value KPI: add totalStockValue to getDashboardStats() | ⏳ Not Started | DISTINCT ON rate query inline (same pattern as getStockDashboardMaterials()) |
-| Update recent activity links: [id]/view → ?id=<recordId> for PO, VMI, Invoice | ⏳ Not Started | Each single-screen reads ?id= on mount and auto-loads record |
+| Remove Out of Stock KPI: delete from page.tsx + remove outStockCount from getDashboardStats() entirely | ✅ Done | Replaced with Total Stock Value card; lowStockCount kept as sub-text |
+| Add Total Stock Value KPI: add totalStockValue + materialsExcludedFromValue to getDashboardStats() | ✅ Done | DISTINCT ON rate query (identical to getStockDashboardMaterials) + app-layer SUM |
+| Update recent activity links: ?id=<recordId> for PO, VMI, Invoice | ✅ Done | Already completed in Phases 4–6 |
 
 ### Part 11.1 — Stock refresh fix
 | Task | Status | Notes |
 |------|--------|-------|
-| stock-client.tsx: add useEffect(() => { setRows(initialRows) }, [initialRows]) | ⏳ Not Started | Variable is rows/setRows — NOT materials/setMaterials (that name does not exist) |
-| Verify stock/page.tsx fetch has no caching (cache: 'no-store' or revalidatePath called) | ⏳ Not Started | |
+| stock-client.tsx: useEffect rows/summary sync | ✅ Done | Already completed in Phase 2 |
+| stock/page.tsx: no caching (revalidatePath in adjustStock) | ✅ Done | revalidatePath("/stock") already in adjustStock |
 
 ### Part 11.2 — Stock value history transparency
 | Task | Status | Notes |
 |------|--------|-------|
-| adjustStock(): query last_po_rate before inserting ledger entry; store in rate_at_time | ⏳ Not Started | DISTINCT ON pattern same as getStockDashboardMaterials() |
-| History Drawer: add Value Impact column (qty_change × rate_at_time formatted as ₹) | ⏳ Not Started | |
-| If rate_at_time NULL: show "Rate data not available for this adjustment" | ⏳ Not Started | |
+| adjustStock(): query last_po_rate before inserting ledger entry; store in rate_at_time | ✅ Done | DISTINCT ON scoped to single materialId; placed before optimistic update |
+| getStockMovementHistory(): SELECT + return rate_at_time; StockLedgerEntry interface updated | ✅ Done | |
+| History Drawer: Value Δ column (ADJUSTMENT rows only); "—" with tooltip for null rate | ✅ Done | Note column max-w reduced to 120px to accommodate extra column |
 
 ### Part 18.9 — Stock Tab Edge Cases
 | | Status |
@@ -439,3 +440,5 @@ _No implementation tasks. Read these when working on the relevant phase._
 | 2026-06-22 | Phase 4 | getPOsForDropdown() + revertPOToDraft() (pre-flight + atomic tx + stock_after + rate_at_time + adjusted_by) added to purchase-orders.actions.ts; purchase-orders-client.tsx fully rewritten as single-screen (identifier combobox openOnArrowDown, inline header fields, status badge, TransactionGrid, receive/revert/delete/discard dialogs, multi-supplier split preview, batch print range panel, Ctrl+S/Alt+N/Escape hotkeys, ?id= deep link, FY-change refresh); page.tsx updated with searchParams + Promise.all fetch; home page PO link → ?id=; dead routes + po-form.tsx deleted; tsc: clean | Phase 5: Old VMI + New VMI single-screen |
 | 2026-06-22 | Phase 5 | IssueHeaderInput extended (issue_type + stage_id); material-issues.actions.ts: createMaterialIssue (advisory lock inside tx), updateMaterialIssue (stage_id), getSlipsForDropdown, cloneOldMaterialIssue, cloneNewMaterialIssue, deleteMaterialIssue (invoice-link guard), getDashboardStats (issue_type); material-issues-client.tsx fully rewritten as Old VMI single-screen (openOnArrowDown, cross-screen guard, FY dirty check, Save & Reapply, Clone, Print, Print Adv.); new-vmi-client.tsx created (Stage → grid pre-populate, stage-change guard, zero-rate dialog, amber no-rate banner, "NEW" badge, cross-screen guard); new/page.tsx rewritten; mi-slip-pdf.tsx created (regular + advance rate internal copy); sidebar: "Veh. Issue (New)" entry; home page deep link fix; dead routes deleted; tsc: clean. Manual DB step (backfill + CHECK constraints) still pending in Supabase SQL editor. | Phase 6: Invoice single-screen + Insurance Bill |
 | 2026-06-22 | Phase 6 | schema.ts: invoice_insurance.discount → numeric(14,2); InvoiceWithDetails + InvoiceHeaderInput: include_tax; getInvoiceById/createInvoice/updateInvoice: include_tax persisted; revertInvoiceToDraft + cancelInvoice: insurance guards (TOCTOU-safe tx); getInvoicesForDropdown(); all insurance CRUD actions (create/get/save/finalize/revert/delete) with auth guards; invoice/page.tsx rewritten (searchParams + parallel fetch); invoice-client.tsx: single-screen with identifier dropdown, MI checklist, include_tax toggle, insurance badge, activeView switcher; TransactionGrid: showTaxColumns prop + dynamic colConfig + Tax% editable col + Tax Amt display col; insurance-form.tsx: header + items table + material/free-text toggle + margin recalc + Finalize/Revert/Delete; insurance-pdf-adapter.ts; insurance-invoice-pdf.tsx: INSURANCE COPY label; dead routes → redirects; invoice-form.tsx deleted; tsc: clean. Manual DB step (ALTER TABLE invoice_insurance ALTER COLUMN discount TYPE numeric(14,2)) still pending in Supabase SQL editor. | Phase 7: Reports |
+| 2026-06-22 | Phase 7 | 8-lens audit of plan before coding (critical findings: missing FY filter, Show-button vs auto-fetch contradiction, diff color semantics, raw SQL type safety); reports.actions.ts: getStageWiseCostingData + getMaterialWiseCostingData (both with fy param + UUID validation + STRING_AGG stages col) + getVehicleComparisonData (FULL OUTER JOIN via db.execute sql tag, stageParam ?? null, Array.from cast); stage-wise-costing.tsx: FY+vehicle+toggle+margin+Show button+CSV export; vehicle-comparison.tsx: FY+V1+V2+stage filter+loading spinner+Diff.Material toggle+Without Amount toggle+amber diff coloring+stage-filter info banner+CSV export; stage-wise-costing-pdf.tsx (portrait, amber Direct Issue rows); vehicle-comparison-pdf.tsx (landscape, respects hideAmounts); reports-client.tsx: 2 new tabs (TrendingUp + GitCompare icons) + stages prop; page.tsx: getStagesForDropdown() added to Promise.all; tsc: clean | Phase 8: Home Tab + Stock Tab Fixes |
+| 2026-06-22 | Phase 8 | 8-lens audit surfaced 6 critical findings (stockRows missing id, rate_at_time absent from getStockMovementHistory SELECT + StockLedgerEntry interface, adjustStock INSERT missing rate_at_time, formula must match getStockDashboardMaterials exactly, lowStockCount orphaned → sub-text on new card, materialsExcludedFromValue missing from DashboardStats); dashboard.actions.ts: removed outStockCount, added totalStockValue + materialsExcludedFromValue via 7th Promise.all DISTINCT ON query + app-layer SUM (identical formula to getStockDashboardMaterials); page.tsx: Out of Stock card → Total Stock Value card with lowStockCount + materialsExcludedFromValue sub-text; stock.actions.ts: StockLedgerEntry interface + rate_at_time field in getStockMovementHistory SELECT + return mapping; adjustStock: DISTINCT ON rate query (scoped to single materialId) before optimistic update, rate_at_time in INSERT; stock-client.tsx: Value Δ column in History Drawer (ADJUSTMENT only, null → "—" with tooltip, Note column max-w 120px); tsc: clean | Manual testing via TC-8-01 through TC-8-09 |

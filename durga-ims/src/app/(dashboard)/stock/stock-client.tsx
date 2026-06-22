@@ -495,6 +495,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                         <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Reference</th>
                         <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Change</th>
                         <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Stock After</th>
+                        <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap" title="Value impact for manual adjustments (qty × last PO rate)">Value Δ</th>
                         <th className="px-2 py-2 text-left font-medium text-slate-600">Note</th>
                       </tr>
                     </thead>
@@ -502,6 +503,10 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                       {historyEntries.map((e) => {
                         const change = parseFloat(e.qty_change);
                         const isPos = change >= 0;
+                        const isAdjustment = e.transaction_type === "ADJUSTMENT";
+                        const valueImpact = isAdjustment && e.rate_at_time
+                          ? change * parseFloat(e.rate_at_time)
+                          : null;
                         return (
                           <tr key={e.id} className="border-t border-slate-100">
                             <td className="px-2 py-1.5 whitespace-nowrap text-slate-500">{fmtDateTime(e.created_at)}</td>
@@ -515,7 +520,19 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                               {isPos ? "+" : ""}{fmtQty(e.qty_change)}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-right text-slate-700">{fmtQty(e.stock_after)}</td>
-                            <td className="px-2 py-1.5 text-slate-400 max-w-[200px] truncate" title={e.reason ?? ""}>
+                            <td
+                              className="px-2 py-1.5 whitespace-nowrap text-right"
+                              title={isAdjustment && !e.rate_at_time ? "Rate data not available for this adjustment" : ""}
+                            >
+                              {valueImpact !== null ? (
+                                <span className={valueImpact >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                                  {valueImpact >= 0 ? "+" : ""}{"₹" + Math.abs(valueImpact).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
+                            <td className="px-2 py-1.5 text-slate-400 max-w-[120px] truncate" title={e.reason ?? ""}>
                               {e.reason ? (e.reason.length > 80 ? e.reason.slice(0, 80) + "…" : e.reason) : "—"}
                             </td>
                           </tr>

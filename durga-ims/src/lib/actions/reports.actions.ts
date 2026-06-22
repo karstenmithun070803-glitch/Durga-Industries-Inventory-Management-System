@@ -11,6 +11,9 @@ import {
   materials,
   units,
   stockLedger,
+  materialIssues,
+  materialIssueItems,
+  stages,
 } from "@/lib/db/schema";
 import { eq, and, gte, lte, sql, desc, asc } from "drizzle-orm";
 
@@ -371,5 +374,197 @@ export async function getMonthlyStockReport(params: {
       last_po_rate: rateMap.get(mat.id) ?? null,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Stage Wise Costing Report
+// ---------------------------------------------------------------------------
+
+export interface StageWiseCostingRow {
+  code: string;
+  name: string;
+  base_amount: number;
+  is_direct: boolean;
+}
+
+export interface MaterialWiseCostingRow {
+  code: string;
+  name: string;
+  stages: string;
+  base_amount: number;
+}
+
+export async function getStageWiseCostingData(vehicleId: string, fy: string): Promise<StageWiseCostingRow[]> {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(vehicleId)) throw new Error("Invalid vehicleId");
+  if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
+
+  // No cache — must reflect latest issued slips
+  const rows = await db
+    .select({
+      stage_id: materialIssues.stage_id,
+      code: sql<string>`COALESCE(${stages.stage_code}, 'DIRECT')`,
+      name: sql<string>`COALESCE(${stages.stage_name}, 'Direct Issue')`,
+      base_amount: sql<string>`SUM(${materialIssueItems.amount})`,
+    })
+    .from(materialIssueItems)
+    .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
+    .leftJoin(stages, eq(materialIssues.stage_id, stages.id))
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.status, "Issued"),
+        eq(materialIssues.financial_year, fy)
+      )
+    )
+    .groupBy(materialIssues.stage_id, stages.stage_code, stages.stage_name)
+    .orderBy(sql`${stages.stage_code} NULLS LAST`);
+
+  return rows.map((r) => ({
+    code: r.code,
+    name: r.name,
+    base_amount: parseFloat(r.base_amount ?? "0"),
+    is_direct: r.code === "DIRECT",
+  }));
+}
+
+export async function getMaterialWiseCostingData(vehicleId: string, fy: string): Promise<MaterialWiseCostingRow[]> {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(vehicleId)) throw new Error("Invalid vehicleId");
+  if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
+
+  // No cache — must reflect latest issued slips
+  const rows = await db
+    .select({
+      code: sql<string>`${materials.material_no}::text`,
+      name: materials.name,
+      stages: sql<string>`STRING_AGG(DISTINCT COALESCE(${stages.stage_name}, 'Direct Issue'), ', ' ORDER BY COALESCE(${stages.stage_name}, 'Direct Issue'))`,
+      base_amount: sql<string>`SUM(${materialIssueItems.amount})`,
+    })
+    .from(materialIssueItems)
+    .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
+    .innerJoin(materials, eq(materialIssueItems.material_id, materials.id))
+    .leftJoin(stages, eq(materialIssues.stage_id, stages.id))
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.status, "Issued"),
+        eq(materialIssues.financial_year, fy)
+      )
+    )
+    .groupBy(materials.id, materials.material_no, materials.name)
+    .orderBy(materials.name);
+
+  return rows.map((r) => ({
+    code: r.code,
+    name: r.name,
+    stages: r.stages ?? "",
+    base_amount: parseFloat(r.base_amount ?? "0"),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Vehicle Comparison Report
+// ---------------------------------------------------------------------------
+
+export interface VehicleComparisonRow {
+  code: string;
+  material_name: string;
+  stage_name: string;
+  qty1: number;
+  amt1: number;
+  qty2: number;
+  amt2: number;
+  diff: number;
+}
+
+interface VehicleComparisonRawRow {
+  code: string;
+  material_name: string;
+  stage_name: string;
+  qty1: string;
+  amt1: string;
+  qty2: string;
+  amt2: string;
+  diff: string;
+}
+
+export async function getVehicleComparisonData(
+  v1Id: string,
+  v2Id: string,
+  fy: string,
+  stageId?: string | null
+): Promise<VehicleComparisonRow[]> {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(v1Id)) throw new Error("Invalid v1Id");
+  if (!UUID_REGEX.test(v2Id)) throw new Error("Invalid v2Id");
+  if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
+  if (stageId && !UUID_REGEX.test(stageId)) throw new Error("Invalid stageId");
+
+  // Normalize: undefined → null so Drizzle sends SQL NULL
+  const stageParam = stageId ?? null;
+
+  // No cache — must reflect latest issued slips
+  // FULL OUTER JOIN not supported by Drizzle query builder — uses Drizzle sql tag (safe parameterization)
+  const result = await db.execute(sql`
+    WITH v1 AS (
+      SELECT
+        m.material_no::text AS material_no,
+        m.name AS mat_name,
+        COALESCE(s.stage_name, 'Direct Issue') AS stage_name,
+        SUM(mii.qty) AS qty,
+        SUM(mii.amount) AS amt
+      FROM material_issue_items mii
+      JOIN material_issues mi ON mi.id = mii.material_issue_id
+      JOIN materials m ON m.id = mii.material_id
+      LEFT JOIN stages s ON s.id = mi.stage_id
+      WHERE mi.vehicle_id = ${v1Id}::uuid
+        AND mi.status = 'Issued'
+        AND mi.financial_year = ${fy}
+        AND (${stageParam}::uuid IS NULL OR mi.stage_id = ${stageParam}::uuid)
+      GROUP BY m.id, m.material_no, m.name, s.id, s.stage_name
+    ),
+    v2 AS (
+      SELECT
+        m.material_no::text AS material_no,
+        m.name AS mat_name,
+        COALESCE(s.stage_name, 'Direct Issue') AS stage_name,
+        SUM(mii.qty) AS qty,
+        SUM(mii.amount) AS amt
+      FROM material_issue_items mii
+      JOIN material_issues mi ON mi.id = mii.material_issue_id
+      JOIN materials m ON m.id = mii.material_id
+      LEFT JOIN stages s ON s.id = mi.stage_id
+      WHERE mi.vehicle_id = ${v2Id}::uuid
+        AND mi.status = 'Issued'
+        AND mi.financial_year = ${fy}
+        AND (${stageParam}::uuid IS NULL OR mi.stage_id = ${stageParam}::uuid)
+      GROUP BY m.id, m.material_no, m.name, s.id, s.stage_name
+    )
+    SELECT
+      COALESCE(v1.material_no, v2.material_no) AS code,
+      COALESCE(v1.mat_name, v2.mat_name)       AS material_name,
+      COALESCE(v1.stage_name, v2.stage_name)   AS stage_name,
+      COALESCE(v1.qty, 0)                      AS qty1,
+      COALESCE(v1.amt, 0)                      AS amt1,
+      COALESCE(v2.qty, 0)                      AS qty2,
+      COALESCE(v2.amt, 0)                      AS amt2,
+      COALESCE(v1.qty, 0) - COALESCE(v2.qty, 0) AS diff
+    FROM v1
+    FULL OUTER JOIN v2
+      ON v1.material_no = v2.material_no AND v1.stage_name = v2.stage_name
+    ORDER BY stage_name, material_name
+  `);
+
+  return (Array.from(result) as unknown as VehicleComparisonRawRow[]).map((r) => ({
+    code: r.code,
+    material_name: r.material_name,
+    stage_name: r.stage_name,
+    qty1: parseFloat(r.qty1 ?? "0"),
+    amt1: parseFloat(r.amt1 ?? "0"),
+    qty2: parseFloat(r.qty2 ?? "0"),
+    amt2: parseFloat(r.amt2 ?? "0"),
+    diff: parseFloat(r.diff ?? "0"),
+  }));
 }
 

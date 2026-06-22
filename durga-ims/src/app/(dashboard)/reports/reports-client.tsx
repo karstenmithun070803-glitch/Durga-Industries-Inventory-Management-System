@@ -2,34 +2,39 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { FileText, ShoppingCart, BarChart2, Search } from "lucide-react";
+import { FileText, ShoppingCart, BarChart2, Search, TrendingUp, GitCompare } from "lucide-react";
 import { InvoiceSummaryReport } from "./invoice-summary";
 import { PurchaseReport } from "./purchase-report";
 import { MonthlyStockReport } from "./monthly-stock";
+import { StageWiseCostingReport } from "./stage-wise-costing";
+import { VehicleComparisonReport } from "./vehicle-comparison";
 import { JobCostPanel } from "@/components/job-cost-panel";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import type { VehicleSearchRow } from "@/lib/actions/stock.actions";
 import { useFY } from "@/lib/financial-year";
 
-type ReportTab = "invoice-summary" | "purchase" | "monthly-stock" | "job-cost";
+type ReportTab = "invoice-summary" | "purchase" | "monthly-stock" | "job-cost" | "stage-costing" | "vehicle-comparison";
 
 interface Props {
   vehicles: { id: string; vehicle_name: string | null; job_ref_no: string }[];
   suppliers: { id: string; name: string }[];
   materials: { id: string; name: string; material_no: number }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];
+  stages: { id: string; stage_code: string; stage_name: string }[];
   jobCostVehicles: VehicleSearchRow[];
   companySetting?: CompanySetting;
 }
 
 const NAV_ITEMS: { id: ReportTab; label: string; icon: React.ElementType }[] = [
-  { id: "invoice-summary", label: "Invoice Summary", icon: FileText },
-  { id: "purchase", label: "Purchase Report", icon: ShoppingCart },
-  { id: "monthly-stock", label: "Monthly Stock Report", icon: BarChart2 },
-  { id: "job-cost", label: "Job Cost", icon: Search },
+  { id: "invoice-summary",     label: "Invoice Summary",     icon: FileText    },
+  { id: "purchase",            label: "Purchase Report",     icon: ShoppingCart },
+  { id: "monthly-stock",       label: "Monthly Stock Report", icon: BarChart2   },
+  { id: "job-cost",            label: "Job Cost",            icon: Search       },
+  { id: "stage-costing",       label: "Stage Costing",       icon: TrendingUp   },
+  { id: "vehicle-comparison",  label: "Vehicle Comparison",  icon: GitCompare   },
 ];
 
-export function ReportsClient({ vehicles, suppliers, materials, customers, jobCostVehicles, companySetting }: Props) {
+export function ReportsClient({ vehicles, suppliers, materials, customers, stages, jobCostVehicles, companySetting }: Props) {
   const { activeFY } = useFY();
   const [activeTab, setActiveTab] = useState<ReportTab>("invoice-summary");
 
@@ -87,6 +92,21 @@ export function ReportsClient({ vehicles, suppliers, materials, customers, jobCo
           <div className="p-6">
             <JobCostPanel vehicles={jobCostVehicles} companySetting={companySetting} />
           </div>
+        )}
+        {activeTab === "stage-costing" && (
+          <StageWiseCostingReport
+            vehicles={vehicles}
+            defaultFY={activeFY}
+            companySetting={companySetting}
+          />
+        )}
+        {activeTab === "vehicle-comparison" && (
+          <VehicleComparisonReport
+            vehicles={vehicles}
+            stages={stages}
+            defaultFY={activeFY}
+            companySetting={companySetting}
+          />
         )}
       </div>
     </div>

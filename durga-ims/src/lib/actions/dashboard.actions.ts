@@ -15,7 +15,8 @@ import { INVOICE_STATUS, PO_STATUS } from "@/lib/constants";
 
 export interface DashboardStats {
   lowStockCount: number;
-  outStockCount: number;
+  totalStockValue: number;
+  materialsExcludedFromValue: number;
   fyTotalSales: number;
   fyTotalPurchases: number;
   recentPOs: { id: string; po_number: number; po_date: string; status: string; supplier_name: string | null }[];
@@ -33,6 +34,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     recentPORows,
     recentMIRows,
     recentInvoiceRows,
+    latestRates,
   ] = await Promise.all([
     // This FY total sales
     db
@@ -52,9 +54,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         eq(purchaseOrders.status, PO_STATUS.RECEIVED),
       )),
 
-    // Active materials with current_stock and min_level
+    // Active materials — id needed for rate map join
     db
-      .select({ current_stock: materials.current_stock, min_level: materials.min_level })
+      .select({ id: materials.id, current_stock: materials.current_stock, min_level: materials.min_level })
       .from(materials)
       .where(eq(materials.is_active, true)),
 
@@ -98,18 +100,45 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .from(invoices)
       .orderBy(desc(invoices.bill_date), desc(invoices.bill_number))
       .limit(5),
+
+    // Most recent received PO rate per material — identical query to getStockDashboardMaterials()
+    // so Home tab totalStockValue matches Stock tab totalStockValue exactly.
+    db.execute<{ material_id: string; rate: string }>(sql`
+      SELECT DISTINCT ON (poi.material_id)
+        poi.material_id,
+        poi.rate
+      FROM purchase_order_items poi
+      INNER JOIN purchase_orders po ON poi.po_id = po.id
+      WHERE po.status = 'Received'
+      ORDER BY poi.material_id, po.po_date DESC
+    `),
   ]);
 
-  const outStockCount = stockRows.filter((r) => parseFloat(r.current_stock) <= 0).length;
   const lowStockCount = stockRows.filter((r) => {
     const stock = parseFloat(r.current_stock);
     const min = r.min_level ? parseFloat(r.min_level) : 0;
     return stock > 0 && min > 0 && stock < min;
   }).length;
 
+  // Compute totalStockValue using the same logic as getStockDashboardMaterials()
+  const rateMap = new Map<string, string>(
+    Array.from(latestRates).map((r) => [r.material_id, r.rate])
+  );
+  let totalStockValue = 0;
+  let materialsExcludedFromValue = 0;
+  for (const r of stockRows) {
+    const rate = rateMap.get(r.id);
+    if (rate) {
+      totalStockValue += parseFloat(r.current_stock) * parseFloat(rate);
+    } else {
+      materialsExcludedFromValue++;
+    }
+  }
+
   return {
     lowStockCount,
-    outStockCount,
+    totalStockValue,
+    materialsExcludedFromValue,
     fyTotalSales: parseFloat(salesRow[0]?.total ?? "0"),
     fyTotalPurchases: parseFloat(purchaseRow[0]?.total ?? "0"),
     recentPOs: recentPORows.map((r) => ({
