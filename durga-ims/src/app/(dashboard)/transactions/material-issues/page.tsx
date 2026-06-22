@@ -1,14 +1,47 @@
 export const dynamic = "force-dynamic";
+
 import { getCurrentFY } from "@/lib/fy";
-import { getMaterialIssues } from "@/lib/actions/material-issues.actions";
+import {
+  getSlipsForDropdown,
+  getActiveVehicles,
+  getActiveContractors,
+  getActiveIssueMaterials,
+  getActiveSalesUnits,
+} from "@/lib/actions/material-issues.actions";
+import { getAllTaxRates } from "@/lib/actions/tax.actions";
 import { getCompanySettings } from "@/lib/actions/settings.actions";
 import { MaterialIssuesClient } from "./material-issues-client";
 
-export default async function MaterialIssuesPage() {
+export default async function MaterialIssuesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
   const fy = getCurrentFY();
-  const [rows, companySetting] = await Promise.all([
-    getMaterialIssues(fy),
-    getCompanySettings(),
-  ]);
-  return <MaterialIssuesClient initialRows={rows} initialFY={fy} companySetting={companySetting} />;
+  const { id } = await searchParams;
+
+  const [slips, vehicles, contractors, materials, taxRates, units, companySetting] =
+    await Promise.all([
+      getSlipsForDropdown(fy, "OLD"),
+      getActiveVehicles(),
+      getActiveContractors(),
+      getActiveIssueMaterials(),
+      getAllTaxRates(),
+      getActiveSalesUnits(),
+      getCompanySettings(),
+    ]);
+
+  return (
+    <MaterialIssuesClient
+      initialSlips={slips}
+      vehicles={vehicles}
+      contractors={contractors}
+      materials={materials}
+      taxRates={taxRates as { id: string; tax_percentage: string }[]}
+      units={units}
+      companySetting={companySetting ?? undefined}
+      initialSelectedId={id}
+      initialFY={fy}
+    />
+  );
 }

@@ -14,7 +14,7 @@ import {
   invoiceSlipLinks,
   invoices,
 } from "@/lib/db/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, max } from "drizzle-orm";
 import { revalidatePath, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { fyDateRange } from "@/lib/fy";
@@ -48,6 +48,8 @@ interface IssueHeaderInput {
   financial_year: string;
   margin_percentage: string;
   total_amount: string;
+  issue_type?: "OLD" | "NEW";
+  stage_id?: string | null;
   items: IssueItemInput[];
 }
 
@@ -55,16 +57,20 @@ interface IssueHeaderInput {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-async function getNextSlipNumber(financialYear: string): Promise<number> {
-  const result = await db
-    .select({ maxSlip: sql<number>`COALESCE(MAX(${materialIssues.slip_number}), 0)` })
-    .from(materialIssues)
-    .where(eq(materialIssues.financial_year, financialYear));
-  return (result[0]?.maxSlip ?? 0) + 1;
+function clampDateToFY(financialYear: string): Date {
+  const { start, end } = fyDateRange(financialYear);
+  const today = new Date();
+  if (today < start) return start;
+  if (today > end) return end;
+  return today;
 }
 
 export async function peekNextSlipNumber(financialYear: string): Promise<number> {
-  return getNextSlipNumber(financialYear);
+  const [row] = await db
+    .select({ maxNum: max(materialIssues.slip_number) })
+    .from(materialIssues)
+    .where(eq(materialIssues.financial_year, financialYear));
+  return (row?.maxNum ?? 0) + 1;
 }
 
 function validateIssueItems(items: IssueItemInput[]) {
@@ -81,17 +87,20 @@ function validateIssueItems(items: IssueItemInput[]) {
     const rate = parseFloat(item.rate || "0").toFixed(2);
     const key = `${item.material_id}|${item.contractor_id ?? ""}|${rate}`;
     if (seen.has(key))
-      throw new Error("Duplicate entry detected: same material, same contractor, and same rate already exists. Combine into one row or adjust the rate.");
+      throw new Error(
+        "Duplicate entry detected: same material, same contractor, and same rate already exists. Combine into one row or adjust the rate."
+      );
     seen.add(key);
   }
 
-  // Zero rate confirmation (same pattern as Phase 3)
+  // Zero rate confirmation
   for (const item of items) {
     if (item.rate === "0" && !item.rate_blank && !item.zero_rate_confirmed)
-      throw new Error("One or more items have a zero rate without confirmation. Check 'Zero cost — confirm?' for each.");
+      throw new Error(
+        "One or more items have a zero rate without confirmation. Check 'Zero cost — confirm?' for each."
+      );
   }
 }
-
 
 function itemValues(issueId: string, item: IssueItemInput) {
   return {
@@ -113,7 +122,7 @@ function itemValues(issueId: string, item: IssueItemInput) {
 }
 
 // ---------------------------------------------------------------------------
-// Read — dropdown data
+// Read — dropdown / master data
 // ---------------------------------------------------------------------------
 
 export const getActiveVehicles = unstable_cache(
@@ -170,7 +179,6 @@ export const getActiveContractors = unstable_cache(
 export const getActiveIssueMaterials = unstable_cache(
   async () => {
     const pu = units;
-
     return db
       .select({
         id: materials.id,
@@ -224,10 +232,51 @@ export async function getLastMaterialRate(materialId: string): Promise<string | 
 }
 
 // ---------------------------------------------------------------------------
+// Read — slips dropdown (typed by issue_type)
+// ---------------------------------------------------------------------------
+
+export async function getSlipsForDropdown(
+  financialYear: string,
+  issueType: "OLD" | "NEW"
+): Promise<{ id: string; slipNumber: number; vehicleName: string | null; date: string; status: string }[]> {
+  const rows = await db
+    .select({
+      id: materialIssues.id,
+      slip_number: materialIssues.slip_number,
+      vehicle_name: vehicles.vehicle_name,
+      issue_date: materialIssues.issue_date,
+      status: materialIssues.status,
+    })
+    .from(materialIssues)
+    .innerJoin(vehicles, eq(materialIssues.vehicle_id, vehicles.id))
+    .where(
+      and(
+        eq(materialIssues.financial_year, financialYear),
+        eq(materialIssues.issue_type, issueType)
+      )
+    )
+    .orderBy(desc(materialIssues.slip_number));
+
+  return rows.map((r) => ({
+    id: r.id,
+    slipNumber: r.slip_number,
+    vehicleName: r.vehicle_name,
+    date:
+      r.issue_date instanceof Date
+        ? r.issue_date.toISOString().split("T")[0]
+        : String(r.issue_date),
+    status: r.status,
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Read — list + detail
 // ---------------------------------------------------------------------------
 
-export async function getMaterialIssues(financialYear: string): Promise<MaterialIssueRow[]> {
+export async function getMaterialIssues(
+  financialYear: string,
+  issueType: "OLD" | "NEW"
+): Promise<MaterialIssueRow[]> {
   const cu = customers;
   const co = contractors;
   const u = units;
@@ -236,12 +285,12 @@ export async function getMaterialIssues(financialYear: string): Promise<Material
 
   const rows = await db
     .select({
-      // header
       id: materialIssues.id,
       slip_number: materialIssues.slip_number,
       issue_date: materialIssues.issue_date,
       financial_year: materialIssues.financial_year,
       status: materialIssues.status,
+      issue_type: materialIssues.issue_type,
       margin_percentage: materialIssues.margin_percentage,
       total_amount: materialIssues.total_amount,
       vehicle_id: materialIssues.vehicle_id,
@@ -255,7 +304,6 @@ export async function getMaterialIssues(financialYear: string): Promise<Material
       customer_address_2: cu.address_2,
       customer_street: cu.street,
       customer_city: cu.city,
-      // item
       item_id: materialIssueItems.id,
       material_id: materialIssueItems.material_id,
       material_name: m.name,
@@ -282,7 +330,12 @@ export async function getMaterialIssues(financialYear: string): Promise<Material
     .leftJoin(cu, eq(v.customer_id, cu.id))
     .leftJoin(co, eq(materialIssueItems.contractor_id, co.id))
     .leftJoin(u, eq(materialIssueItems.unit_id, u.id))
-    .where(eq(materialIssues.financial_year, financialYear))
+    .where(
+      and(
+        eq(materialIssues.financial_year, financialYear),
+        eq(materialIssues.issue_type, issueType)
+      )
+    )
     .orderBy(desc(materialIssues.issue_date), desc(materialIssues.slip_number));
 
   return rows.map((r) => ({
@@ -293,7 +346,10 @@ export async function getMaterialIssues(financialYear: string): Promise<Material
     customer_name: r.customer_name ?? null,
     customer_gstin: r.customer_gstin ?? null,
     customer_state: r.customer_state ?? null,
-    customer_address: [r.customer_address_1, r.customer_address_2, r.customer_street, r.customer_city].filter(Boolean).join(", ") || null,
+    customer_address:
+      [r.customer_address_1, r.customer_address_2, r.customer_street, r.customer_city]
+        .filter(Boolean)
+        .join(", ") || null,
     customer_address_1: undefined,
     customer_address_2: undefined,
     customer_street: undefined,
@@ -314,6 +370,8 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
       issue_date: materialIssues.issue_date,
       financial_year: materialIssues.financial_year,
       status: materialIssues.status,
+      issue_type: materialIssues.issue_type,
+      stage_id: materialIssues.stage_id,
       margin_percentage: materialIssues.margin_percentage,
       total_amount: materialIssues.total_amount,
       vehicle_id: materialIssues.vehicle_id,
@@ -388,9 +446,12 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
   return {
     id: header.id,
     slip_number: header.slip_number,
-    issue_date: header.issue_date instanceof Date ? header.issue_date.toISOString() : String(header.issue_date),
+    issue_date:
+      header.issue_date instanceof Date ? header.issue_date.toISOString() : String(header.issue_date),
     financial_year: header.financial_year,
     status: header.status,
+    issue_type: header.issue_type,
+    stage_id: header.stage_id ?? null,
     margin_percentage: header.margin_percentage ?? "0",
     total_amount: header.total_amount,
     vehicle_id: header.vehicle_id,
@@ -400,17 +461,27 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
     customer_name: header.customer_name ?? null,
     customer_gstin: header.customer_gstin ?? null,
     customer_state: header.customer_state ?? null,
-    customer_address: [header.customer_address_1, header.customer_address_2, header.customer_street, header.customer_city].filter(Boolean).join(", ") || null,
+    customer_address:
+      [
+        header.customer_address_1,
+        header.customer_address_2,
+        header.customer_street,
+        header.customer_city,
+      ]
+        .filter(Boolean)
+        .join(", ") || null,
     items,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Write — create / update (Draft)
+// Write — create (advisory lock inside transaction)
 // ---------------------------------------------------------------------------
 
 export async function createMaterialIssue(data: IssueHeaderInput): Promise<string> {
   if (!data.vehicle_id) throw new Error("Vehicle is required.");
+  if (data.issue_type && !["OLD", "NEW"].includes(data.issue_type))
+    throw new Error("Invalid issue_type");
   validateIssueItems(data.items);
 
   const issueDate = new Date(data.issue_date);
@@ -418,28 +489,56 @@ export async function createMaterialIssue(data: IssueHeaderInput): Promise<strin
   if (issueDate < fyRange.start || issueDate > fyRange.end)
     throw new Error("Issue date must fall within the active financial year.");
 
-  const slipNumber = await getNextSlipNumber(data.financial_year);
+  let newId = "";
+  try {
+    newId = await db.transaction(async (tx) => {
+      const lockKey = `mi_slip:${data.financial_year}`;
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
 
-  const [issue] = await db
-    .insert(materialIssues)
-    .values({
-      slip_number: slipNumber,
-      issue_date: issueDate,
-      vehicle_id: data.vehicle_id,
-      margin_percentage: data.margin_percentage || "0",
-      total_amount: data.total_amount || "0",
-      financial_year: data.financial_year,
-      status: "Draft",
-    })
-    .returning({ id: materialIssues.id });
+      const [row] = await tx
+        .select({ maxNum: max(materialIssues.slip_number) })
+        .from(materialIssues)
+        .where(eq(materialIssues.financial_year, data.financial_year));
+      const slipNumber = (row?.maxNum ?? 0) + 1;
 
-  if (data.items.length > 0) {
-    await db.insert(materialIssueItems).values(data.items.map((item) => itemValues(issue.id, item)));
+      const [issue] = await tx
+        .insert(materialIssues)
+        .values({
+          slip_number: slipNumber,
+          issue_date: issueDate,
+          vehicle_id: data.vehicle_id,
+          issue_type: data.issue_type ?? "OLD",
+          stage_id: data.stage_id ?? null,
+          margin_percentage: data.margin_percentage || "0",
+          total_amount: data.total_amount || "0",
+          financial_year: data.financial_year,
+          status: "Draft",
+        })
+        .returning({ id: materialIssues.id });
+
+      if (data.items.length > 0) {
+        await tx
+          .insert(materialIssueItems)
+          .values(data.items.map((item) => itemValues(issue.id, item)));
+      }
+
+      return issue.id;
+    });
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes("slip_number_fy_unique")) {
+      throw new Error("Slip number conflict — please try saving again.");
+    }
+    throw e;
   }
 
   revalidatePath("/transactions/material-issues");
-  return issue.id;
+  revalidatePath("/transactions/material-issues/new");
+  return newId;
 }
+
+// ---------------------------------------------------------------------------
+// Write — update Draft
+// ---------------------------------------------------------------------------
 
 export async function updateMaterialIssue(id: string, data: IssueHeaderInput): Promise<void> {
   const [existing] = await db
@@ -448,7 +547,8 @@ export async function updateMaterialIssue(id: string, data: IssueHeaderInput): P
     .where(eq(materialIssues.id, id));
 
   if (!existing) throw new Error("Issue slip not found.");
-  if (existing.status !== "Draft") throw new Error("Cannot edit a confirmed issue slip. Use 'Save & Reapply' instead.");
+  if (existing.status !== "Draft")
+    throw new Error("Cannot edit a confirmed issue slip. Use 'Save & Reapply' instead.");
 
   if (!data.vehicle_id) throw new Error("Vehicle is required.");
   validateIssueItems(data.items);
@@ -460,16 +560,23 @@ export async function updateMaterialIssue(id: string, data: IssueHeaderInput): P
 
   await db.delete(materialIssueItems).where(eq(materialIssueItems.issue_id, id));
   if (data.items.length > 0) {
-    await db.insert(materialIssueItems).values(data.items.map((item) => itemValues(id, item)));
+    await db
+      .insert(materialIssueItems)
+      .values(data.items.map((item) => itemValues(id, item)));
   }
-  await db.update(materialIssues).set({
-    issue_date: issueDate,
-    vehicle_id: data.vehicle_id,
-    margin_percentage: data.margin_percentage || "0",
-    total_amount: data.total_amount || "0",
-  }).where(eq(materialIssues.id, id));
+  await db
+    .update(materialIssues)
+    .set({
+      issue_date: issueDate,
+      vehicle_id: data.vehicle_id,
+      stage_id: data.stage_id ?? null,
+      margin_percentage: data.margin_percentage || "0",
+      total_amount: data.total_amount || "0",
+    })
+    .where(eq(materialIssues.id, id));
 
   revalidatePath("/transactions/material-issues");
+  revalidatePath("/transactions/material-issues/new");
 }
 
 // ---------------------------------------------------------------------------
@@ -495,11 +602,13 @@ export async function issueMaterialIssue(id: string): Promise<number> {
     .where(eq(materialIssueItems.issue_id, id));
 
   await db.transaction(async (tx) => {
-    // Stock availability check inside the transaction — atomic with the deduction
     const qtyByMaterial = new Map<string, number>();
     for (const item of items) {
       if (!item.affects_inventory) continue;
-      qtyByMaterial.set(item.material_id, (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0"));
+      qtyByMaterial.set(
+        item.material_id,
+        (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
+      );
     }
     for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
       const [mat] = await tx
@@ -536,6 +645,7 @@ export async function issueMaterialIssue(id: string): Promise<number> {
   });
 
   revalidatePath("/transactions/material-issues");
+  revalidatePath("/transactions/material-issues/new");
   return issue.slip_number;
 }
 
@@ -561,7 +671,6 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
     throw new Error("Issue date must fall within the active financial year.");
 
   await db.transaction(async (tx) => {
-    // 1. Fetch old items
     const oldItems = await tx
       .select({
         material_id: materialIssueItems.material_id,
@@ -571,7 +680,6 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
       .from(materialIssueItems)
       .where(eq(materialIssueItems.issue_id, id));
 
-    // 2. Reverse old stock
     for (const item of oldItems) {
       if (!item.affects_inventory) continue;
       const [mat] = await tx
@@ -591,17 +699,18 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
       });
     }
 
-    // 3. Replace items
     await tx.delete(materialIssueItems).where(eq(materialIssueItems.issue_id, id));
     if (data.items.length > 0) {
       await tx.insert(materialIssueItems).values(data.items.map((item) => itemValues(id, item)));
     }
 
-    // 4. Check stock availability against post-reversal levels (inside transaction)
     const qtyByMaterial = new Map<string, number>();
     for (const item of data.items) {
       if (!item.affects_inventory) continue;
-      qtyByMaterial.set(item.material_id, (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0"));
+      qtyByMaterial.set(
+        item.material_id,
+        (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
+      );
     }
     for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
       const [mat] = await tx
@@ -616,7 +725,6 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
       }
     }
 
-    // 5. Apply new stock
     for (const item of data.items) {
       if (!item.affects_inventory) continue;
       const [mat] = await tx
@@ -636,16 +744,20 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
       });
     }
 
-    // 6. Update header
-    await tx.update(materialIssues).set({
-      issue_date: issueDate,
-      vehicle_id: data.vehicle_id,
-      margin_percentage: data.margin_percentage || "0",
-      total_amount: data.total_amount || "0",
-    }).where(eq(materialIssues.id, id));
+    // stage_id is immutable after issue — do not update it
+    await tx
+      .update(materialIssues)
+      .set({
+        issue_date: issueDate,
+        vehicle_id: data.vehicle_id,
+        margin_percentage: data.margin_percentage || "0",
+        total_amount: data.total_amount || "0",
+      })
+      .where(eq(materialIssues.id, id));
   });
 
   revalidatePath("/transactions/material-issues");
+  revalidatePath("/transactions/material-issues/new");
 }
 
 // ---------------------------------------------------------------------------
@@ -661,10 +773,8 @@ export async function deleteMaterialIssue(id: string): Promise<void> {
   if (!issue) throw new Error("Issue slip not found.");
 
   if (issue.status === "Draft") {
-    // Simple delete — CASCADE handles items
     await db.delete(materialIssues).where(eq(materialIssues.id, id));
   } else {
-    // Guard: block deletion if this slip is already billed in an invoice
     const linkedInvoice = await db
       .select({ bill_number: invoices.bill_number })
       .from(invoiceSlipLinks)
@@ -685,7 +795,6 @@ export async function deleteMaterialIssue(id: string): Promise<void> {
       .from(materialIssueItems)
       .where(eq(materialIssueItems.issue_id, id));
 
-    // Deleting an ISSUE always adds stock back — no negative stock risk
     await db.transaction(async (tx) => {
       for (const item of items) {
         if (!item.affects_inventory) continue;
@@ -710,4 +819,172 @@ export async function deleteMaterialIssue(id: string): Promise<void> {
   }
 
   revalidatePath("/transactions/material-issues");
+  revalidatePath("/transactions/material-issues/new");
+}
+
+// ---------------------------------------------------------------------------
+// Write — clone
+// ---------------------------------------------------------------------------
+
+export async function cloneOldMaterialIssue(
+  slipId: string
+): Promise<{ newSlipId: string; newSlipNumber: number }> {
+  const [src] = await db
+    .select({
+      status: materialIssues.status,
+      issue_type: materialIssues.issue_type,
+      vehicle_id: materialIssues.vehicle_id,
+      financial_year: materialIssues.financial_year,
+      margin_percentage: materialIssues.margin_percentage,
+    })
+    .from(materialIssues)
+    .where(eq(materialIssues.id, slipId));
+
+  if (!src) throw new Error("Slip not found");
+  if (src.status === "Cancelled") throw new Error("Cannot clone a cancelled slip");
+  if (src.issue_type !== "OLD") throw new Error("Use clone on the New VMI screen for NEW type slips");
+
+  const cloneDate = clampDateToFY(src.financial_year);
+  let newSlipId = "";
+  let newSlipNumber = 0;
+
+  await db.transaction(async (tx) => {
+    const lockKey = `mi_slip:${src.financial_year}`;
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
+
+    const [row] = await tx
+      .select({ maxNum: max(materialIssues.slip_number) })
+      .from(materialIssues)
+      .where(eq(materialIssues.financial_year, src.financial_year));
+    const slipNum = (row?.maxNum ?? 0) + 1;
+
+    const [{ newId }] = await tx
+      .insert(materialIssues)
+      .values({
+        slip_number: slipNum,
+        status: "Draft",
+        issue_type: "OLD",
+        stage_id: null,
+        vehicle_id: src.vehicle_id,
+        financial_year: src.financial_year,
+        issue_date: cloneDate,
+        margin_percentage: src.margin_percentage ?? "0",
+        total_amount: "0",
+      })
+      .returning({ newId: materialIssues.id });
+
+    const srcItems = await tx
+      .select({
+        material_id: materialIssueItems.material_id,
+        contractor_id: materialIssueItems.contractor_id,
+        hsn_code: materialIssueItems.hsn_code,
+        qty: materialIssueItems.qty,
+        unit_id: materialIssueItems.unit_id,
+        rate: materialIssueItems.rate,
+        tax_percentage: materialIssueItems.tax_percentage,
+        cgst_amount: materialIssueItems.cgst_amount,
+        sgst_amount: materialIssueItems.sgst_amount,
+        igst_amount: materialIssueItems.igst_amount,
+        amount: materialIssueItems.amount,
+        gst_type: materialIssueItems.gst_type,
+        affects_inventory: materialIssueItems.affects_inventory,
+      })
+      .from(materialIssueItems)
+      .where(eq(materialIssueItems.issue_id, slipId));
+
+    if (srcItems.length > 0) {
+      await tx
+        .insert(materialIssueItems)
+        .values(srcItems.map((item) => ({ ...item, issue_id: newId })));
+    }
+
+    newSlipId = newId;
+    newSlipNumber = slipNum;
+  });
+
+  revalidatePath("/transactions/material-issues");
+  revalidatePath("/transactions/material-issues/new");
+  return { newSlipId, newSlipNumber };
+}
+
+export async function cloneNewMaterialIssue(
+  slipId: string
+): Promise<{ newSlipId: string; newSlipNumber: number }> {
+  const [src] = await db
+    .select({
+      status: materialIssues.status,
+      issue_type: materialIssues.issue_type,
+      vehicle_id: materialIssues.vehicle_id,
+      financial_year: materialIssues.financial_year,
+      margin_percentage: materialIssues.margin_percentage,
+      stage_id: materialIssues.stage_id,
+    })
+    .from(materialIssues)
+    .where(eq(materialIssues.id, slipId));
+
+  if (!src) throw new Error("Slip not found");
+  if (src.status === "Cancelled") throw new Error("Cannot clone a cancelled slip");
+  if (src.issue_type !== "NEW") throw new Error("Use clone on the Old VMI screen for OLD type slips");
+
+  const cloneDate = clampDateToFY(src.financial_year);
+  let newSlipId = "";
+  let newSlipNumber = 0;
+
+  await db.transaction(async (tx) => {
+    const lockKey = `mi_slip:${src.financial_year}`;
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
+
+    const [row] = await tx
+      .select({ maxNum: max(materialIssues.slip_number) })
+      .from(materialIssues)
+      .where(eq(materialIssues.financial_year, src.financial_year));
+    const slipNum = (row?.maxNum ?? 0) + 1;
+
+    const [{ newId }] = await tx
+      .insert(materialIssues)
+      .values({
+        slip_number: slipNum,
+        status: "Draft",
+        issue_type: "NEW",
+        stage_id: src.stage_id,
+        vehicle_id: src.vehicle_id,
+        financial_year: src.financial_year,
+        issue_date: cloneDate,
+        margin_percentage: src.margin_percentage ?? "0",
+        total_amount: "0",
+      })
+      .returning({ newId: materialIssues.id });
+
+    const srcItems = await tx
+      .select({
+        material_id: materialIssueItems.material_id,
+        contractor_id: materialIssueItems.contractor_id,
+        hsn_code: materialIssueItems.hsn_code,
+        qty: materialIssueItems.qty,
+        unit_id: materialIssueItems.unit_id,
+        rate: materialIssueItems.rate,
+        tax_percentage: materialIssueItems.tax_percentage,
+        cgst_amount: materialIssueItems.cgst_amount,
+        sgst_amount: materialIssueItems.sgst_amount,
+        igst_amount: materialIssueItems.igst_amount,
+        amount: materialIssueItems.amount,
+        gst_type: materialIssueItems.gst_type,
+        affects_inventory: materialIssueItems.affects_inventory,
+      })
+      .from(materialIssueItems)
+      .where(eq(materialIssueItems.issue_id, slipId));
+
+    if (srcItems.length > 0) {
+      await tx
+        .insert(materialIssueItems)
+        .values(srcItems.map((item) => ({ ...item, issue_id: newId })));
+    }
+
+    newSlipId = newId;
+    newSlipNumber = slipNum;
+  });
+
+  revalidatePath("/transactions/material-issues");
+  revalidatePath("/transactions/material-issues/new");
+  return { newSlipId, newSlipNumber };
 }

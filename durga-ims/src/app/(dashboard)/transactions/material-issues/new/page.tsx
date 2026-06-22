@@ -1,35 +1,50 @@
 export const dynamic = "force-dynamic";
+
 import { getCurrentFY } from "@/lib/fy";
 import {
+  getSlipsForDropdown,
   getActiveVehicles,
   getActiveContractors,
   getActiveIssueMaterials,
   getActiveSalesUnits,
-  peekNextSlipNumber,
 } from "@/lib/actions/material-issues.actions";
+import { getStagesForDropdown } from "@/lib/actions/stages.actions";
 import { getAllTaxRates } from "@/lib/actions/tax.actions";
-import { MaterialIssueForm } from "../material-issue-form";
+import { getCompanySettings } from "@/lib/actions/settings.actions";
+import { NewVMIClient } from "./new-vmi-client";
 
-export default async function NewMaterialIssuePage() {
+export default async function NewVMIPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
   const fy = getCurrentFY();
-  const [vehicles, contractors, materials, units, taxRates, nextSlipNumber] = await Promise.all([
-    getActiveVehicles(),
-    getActiveContractors(),
-    getActiveIssueMaterials(),
-    getActiveSalesUnits(),
-    getAllTaxRates(),
-    peekNextSlipNumber(fy),
-  ]);
+  const { id } = await searchParams;
+
+  const [slips, vehicles, stages, contractors, materials, taxRates, units, companySetting] =
+    await Promise.all([
+      getSlipsForDropdown(fy, "NEW"),
+      getActiveVehicles(),
+      getStagesForDropdown(),
+      getActiveContractors(),
+      getActiveIssueMaterials(),
+      getAllTaxRates(),
+      getActiveSalesUnits(),
+      getCompanySettings(),
+    ]);
 
   return (
-    <MaterialIssueForm
-      mode="new"
-      nextSlipNumber={nextSlipNumber}
+    <NewVMIClient
+      initialSlips={slips}
       vehicles={vehicles}
+      stages={stages}
       contractors={contractors}
       materials={materials}
       taxRates={taxRates as { id: string; tax_percentage: string }[]}
       units={units}
+      companySetting={companySetting ?? undefined}
+      initialSelectedId={id}
+      initialFY={fy}
     />
   );
 }

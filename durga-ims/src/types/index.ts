@@ -145,6 +145,7 @@ export interface MaterialIssueRow {
   issue_date: string;
   financial_year: string;
   status: string;
+  issue_type: string;
   margin_percentage: string;
   total_amount: string;
   vehicle_id: string;
@@ -206,6 +207,8 @@ export interface MaterialIssueWithDetails {
   issue_date: string;
   financial_year: string;
   status: string;
+  issue_type: string;
+  stage_id: string | null;
   margin_percentage: string;
   total_amount: string;
   vehicle_id: string;

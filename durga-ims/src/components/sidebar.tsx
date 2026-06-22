@@ -12,6 +12,7 @@ import {
   HardHat,
   ShoppingCart,
   ClipboardList,
+  ClipboardCheck,
   FileText,
   BarChart2,
   Settings,
@@ -54,6 +55,7 @@ const nav = [
     children: [
       { label: "Purchase Orders", href: "/transactions/purchase-orders", icon: ShoppingCart },
       { label: "Vehicle Material Issue", href: "/transactions/material-issues", icon: ClipboardList },
+      { label: "Veh. Issue (New)", href: "/transactions/material-issues/new", icon: ClipboardCheck },
     ],
   },
   { label: "Invoice", href: "/invoice", icon: FileText },

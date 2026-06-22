@@ -19,7 +19,7 @@ export interface DashboardStats {
   fyTotalSales: number;
   fyTotalPurchases: number;
   recentPOs: { id: string; po_number: number; po_date: string; status: string; supplier_name: string | null }[];
-  recentMIs: { id: string; slip_number: number; vehicle_name: string | null; issue_date: string; status: string }[];
+  recentMIs: { id: string; slip_number: number; vehicle_name: string | null; issue_date: string; status: string; issue_type: string }[];
   recentInvoices: { id: string; bill_number: string; customer_name: string | null; bill_date: string }[];
 }
 
@@ -79,6 +79,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         slip_number: materialIssues.slip_number,
         issue_date: materialIssues.issue_date,
         status: materialIssues.status,
+        issue_type: materialIssues.issue_type,
         vehicle_name: vehicles.vehicle_name,
       })
       .from(materialIssues)
@@ -123,6 +124,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       slip_number: r.slip_number,
       issue_date: new Date(r.issue_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
       status: r.status,
+      issue_type: r.issue_type,
       vehicle_name: r.vehicle_name,
     })),
     recentInvoices: recentInvoiceRows.map((r) => ({

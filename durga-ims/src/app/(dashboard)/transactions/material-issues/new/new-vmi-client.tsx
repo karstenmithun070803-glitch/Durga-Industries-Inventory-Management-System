@@ -12,8 +12,9 @@ import {
   updateIssuedMaterialIssue,
   issueMaterialIssue,
   deleteMaterialIssue,
-  cloneOldMaterialIssue,
+  cloneNewMaterialIssue,
 } from "@/lib/actions/material-issues.actions";
+import { getStageMaterials } from "@/lib/actions/stages.actions";
 import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ import { toast } from "sonner";
 import { formatCode } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import { determineGstType } from "@/types";
-import type { MaterialIssueWithDetails, LineItemDraft } from "@/types";
+import type { MaterialIssueWithDetails, LineItemDraft, GstType } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { PrintButton } from "@/components/pdf/print-button";
 import { MISlipDocument } from "@/components/pdf/mi-slip-pdf";
@@ -56,6 +57,12 @@ interface VehicleOption {
   customer_gstin: string | null;
   customer_state: string | null;
   customer_address: string | null;
+}
+
+interface StageOption {
+  id: string;
+  stage_code: string;
+  stage_name: string;
 }
 
 interface ContractorOption {
@@ -89,6 +96,7 @@ interface UnitOption {
 interface Props {
   initialSlips: SlipOption[];
   vehicles: VehicleOption[];
+  stages: StageOption[];
   contractors: ContractorOption[];
   materials: MaterialOption[];
   taxRates: TaxRateOption[];
@@ -121,6 +129,33 @@ function calcTotals(rows: LineItemDraft[]) {
     igst += parseFloat(r.igst_amount) || 0;
   }
   return { subtotal, cgst, sgst, igst, grand: subtotal + cgst + sgst + igst };
+}
+
+function computeRowAmounts(
+  qty: string,
+  rate: string,
+  taxPct: string,
+  gstType: GstType
+): Pick<LineItemDraft, "cgst_amount" | "sgst_amount" | "igst_amount" | "amount"> {
+  const q = parseFloat(qty) || 0;
+  const r = parseFloat(rate) || 0;
+  const t = parseFloat(taxPct) || 0;
+  const base = q * r;
+  const taxAmt = base * (t / 100);
+  if (gstType === "CGST_SGST") {
+    return {
+      cgst_amount: (taxAmt / 2).toFixed(2),
+      sgst_amount: (taxAmt / 2).toFixed(2),
+      igst_amount: "0.00",
+      amount: (base + taxAmt).toFixed(2),
+    };
+  }
+  return {
+    cgst_amount: "0.00",
+    sgst_amount: "0.00",
+    igst_amount: taxAmt.toFixed(2),
+    amount: (base + taxAmt).toFixed(2),
+  };
 }
 
 function miItemsToRows(slip: MaterialIssueWithDetails): LineItemDraft[] {
@@ -177,9 +212,10 @@ function buildItemsPayload(rows: LineItemDraft[]) {
 // Component
 // ---------------------------------------------------------------------------
 
-export function MaterialIssuesClient({
+export function NewVMIClient({
   initialSlips,
   vehicles,
+  stages,
   contractors,
   materials,
   taxRates,
@@ -196,24 +232,30 @@ export function MaterialIssuesClient({
   const [loadedFY, setLoadedFY] = useState(initialFY);
   const [loadedSlip, setLoadedSlip] = useState<MaterialIssueWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [stageLoading, setStageLoading] = useState(false);
 
   const [vehicleId, setVehicleId] = useState("");
+  const [stageId, setStageId] = useState("");
   const [issueDate, setIssueDate] = useState("");
   const [marginPct, setMarginPct] = useState("0");
   const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
   const [isDirty, setIsDirty] = useState(false);
   const [pendingFY, setPendingFY] = useState<string | null>(null);
+  const [pendingStageName, setPendingStageName] = useState<string | null>(null);
 
   const [issueDialogOpen, setIssueDialogOpen] = useState(false);
+  const [zeroRateDialogOpen, setZeroRateDialogOpen] = useState(false);
   const [saveReapplyDialogOpen, setSaveReapplyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const [stageChangeDialogOpen, setStageChangeDialogOpen] = useState(false);
+  const [pendingStageId, setPendingStageId] = useState<string | null>(null);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [cloneResult, setCloneResult] = useState<{ newSlipId: string; newSlipNumber: number } | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId);
-  const gstType = selectedVehicle
+  const gstType: GstType = selectedVehicle
     ? determineGstType(selectedVehicle.customer_gstin, selectedVehicle.customer_state)
     : "CGST_SGST";
 
@@ -234,7 +276,7 @@ export function MaterialIssuesClient({
   }, [activeFY, loadedFY]);
 
   async function switchFY(fy: string) {
-    const data = await getSlipsForDropdown(fy, "OLD");
+    const data = await getSlipsForDropdown(fy, "NEW");
     setSlips(data);
     setLoadedFY(fy);
     clearForm();
@@ -243,6 +285,7 @@ export function MaterialIssuesClient({
   function clearForm() {
     setLoadedSlip(null);
     setVehicleId("");
+    setStageId("");
     setIssueDate("");
     setMarginPct("0");
     setRows([newRow()]);
@@ -252,6 +295,7 @@ export function MaterialIssuesClient({
   function populateForm(slip: MaterialIssueWithDetails) {
     setLoadedSlip(slip);
     setVehicleId(slip.vehicle_id);
+    setStageId(slip.stage_id ?? "");
     setIssueDate(toISODate(slip.issue_date));
     setMarginPct(slip.margin_percentage ?? "0");
     setRows(miItemsToRows(slip));
@@ -263,8 +307,8 @@ export function MaterialIssuesClient({
     try {
       const slip = await getMaterialIssueById(id);
       if (!slip) { toast.error("Slip not found"); return; }
-      if (slip.issue_type === "NEW") {
-        router.replace(`/transactions/material-issues/new?id=${id}`);
+      if (slip.issue_type === "OLD") {
+        router.replace(`/transactions/material-issues?id=${id}`);
         return;
       }
       populateForm(slip);
@@ -276,8 +320,66 @@ export function MaterialIssuesClient({
   }
 
   async function refreshSlips() {
-    const data = await getSlipsForDropdown(loadedFY, "OLD");
+    const data = await getSlipsForDropdown(loadedFY, "NEW");
     setSlips(data);
+  }
+
+  async function loadStageRows(newStageId: string, currentGstType: GstType) {
+    setStageLoading(true);
+    try {
+      const stageMats = await getStageMaterials(newStageId);
+      const newRows: LineItemDraft[] = stageMats.map((m) => {
+        const rate = m.last_po_rate ?? "0";
+        const taxPct = m.tax_percentage ?? "0";
+        const amounts = computeRowAmounts(m.default_qty, rate, taxPct, currentGstType);
+        return {
+          _key: crypto.randomUUID(),
+          material_id: m.material_id,
+          material_name: m.material_name,
+          material_no: m.material_no,
+          hsn_code: m.hsn_code ?? "",
+          supplier_id: "",
+          supplier_name: "",
+          gst_type: currentGstType,
+          qty: m.default_qty,
+          unit_id: m.unit_id,
+          unit_name: m.unit_name,
+          rate,
+          tax_percentage: taxPct,
+          rateBlank: m.last_po_rate === null,
+          zeroRateConfirmed: false,
+          contractor_id: "",
+          contractor_name: "",
+          affects_inventory: true,
+          ...amounts,
+        };
+      });
+      setRows(newRows.length > 0 ? newRows : [newRow()]);
+      setStageId(newStageId);
+      setIsDirty(true);
+    } catch {
+      toast.error("Failed to load stage materials");
+    } finally {
+      setStageLoading(false);
+    }
+  }
+
+  function handleStageChange(newStageId: string) {
+    if (!newStageId) {
+      setStageId("");
+      setRows([newRow()]);
+      setIsDirty(true);
+      return;
+    }
+    const hasGridData = rows.some((r) => r.material_id || parseFloat(r.qty) > 0);
+    if (hasGridData) {
+      const stage = stages.find((s) => s.id === newStageId);
+      setPendingStageName(stage?.stage_name ?? null);
+      setPendingStageId(newStageId);
+      setStageChangeDialogOpen(true);
+      return;
+    }
+    void loadStageRows(newStageId, gstType);
   }
 
   function validate(): string | null {
@@ -297,8 +399,8 @@ export function MaterialIssuesClient({
       financial_year: loadedFY,
       margin_percentage: marginPct || "0",
       total_amount: grand.toFixed(2),
-      issue_type: "OLD" as const,
-      stage_id: null,
+      issue_type: "NEW" as const,
+      stage_id: stageId || null,
       items: buildItemsPayload(filled),
     };
   }
@@ -375,6 +477,27 @@ export function MaterialIssuesClient({
   function handleIssue() {
     const err = validate();
     if (err) { toast.error(err); return; }
+    // Check for unconfirmed zero-rate items
+    const zeroRows = rows.filter(
+      (r) => r.material_id && parseFloat(r.rate || "0") === 0 && !r.rateBlank && !r.zeroRateConfirmed
+    );
+    if (zeroRows.length > 0) {
+      setZeroRateDialogOpen(true);
+      return;
+    }
+    setIssueDialogOpen(true);
+  }
+
+  function confirmZeroRate() {
+    setZeroRateDialogOpen(false);
+    // Mark zero-rate rows as confirmed and proceed to issue dialog
+    setRows((prev) =>
+      prev.map((r) =>
+        r.material_id && parseFloat(r.rate || "0") === 0 && !r.rateBlank
+          ? { ...r, zeroRateConfirmed: true }
+          : r
+      )
+    );
     setIssueDialogOpen(true);
   }
 
@@ -420,7 +543,7 @@ export function MaterialIssuesClient({
     if (!loadedSlip) return;
     startTransition(async () => {
       try {
-        const result = await cloneOldMaterialIssue(loadedSlip.id);
+        const result = await cloneNewMaterialIssue(loadedSlip.id);
         setCloneResult(result);
         setCloneDialogOpen(true);
         await refreshSlips();
@@ -470,11 +593,16 @@ export function MaterialIssuesClient({
     value: s.id,
     label: `${formatCode("MI-", s.slipNumber, 4)} | ${s.vehicleName ?? "—"} | ${s.date} [${s.status}]`,
   }));
-
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
     label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}`,
   }));
+  const stageOptions = stages.map((s) => ({
+    value: s.id,
+    label: `${s.stage_code} — ${s.stage_name}`,
+  }));
+
+  const hasNoRate = rows.some((r) => r.rateBlank && r.material_id);
 
   return (
     <div className="flex h-full flex-col">
@@ -499,6 +627,7 @@ export function MaterialIssuesClient({
                 {miStatus}
               </span>
             )}
+            <span className="px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">NEW</span>
             {hasFormContent && (
               <span className="ml-auto text-sm font-semibold text-slate-700">
                 Total: {formatAmount(grand)}
@@ -507,7 +636,7 @@ export function MaterialIssuesClient({
           </div>
 
           {hasFormContent && (
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Vehicle</label>
                 <Combobox
@@ -515,6 +644,15 @@ export function MaterialIssuesClient({
                   value={vehicleId}
                   onChange={(v) => { setVehicleId(v); setIsDirty(true); }}
                   placeholder="Select vehicle…"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-500">Stage</label>
+                <Combobox
+                  options={stageOptions}
+                  value={stageId}
+                  onChange={handleStageChange}
+                  placeholder="Select stage…"
                 />
               </div>
               <div className="space-y-1">
@@ -564,20 +702,31 @@ export function MaterialIssuesClient({
             <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-800">
-                <span className="font-medium">This slip has been issued.</span> Saving will reverse the current stock deductions and reapply them with the new values (atomic operation).
+                <span className="font-medium">This slip has been issued.</span> Saving will reverse the current stock deductions and reapply them atomically.
+              </p>
+            </div>
+          )}
+
+          {hasNoRate && (
+            <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700">
+                Some materials have no purchase history — rate is ₹0. Enter rates before issuing.
               </p>
             </div>
           )}
         </div>
 
         {/* Grid */}
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16 text-slate-400 text-sm">Loading…</div>
+        {isLoading || stageLoading ? (
+          <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
+            {stageLoading ? "Loading stage materials…" : "Loading…"}
+          </div>
         ) : (
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
             {!hasFormContent && (
               <div className="px-5 py-3 border-b border-slate-100 text-xs text-slate-400">
-                Select a slip from the dropdown above, or fill in the Vehicle and DC Date to create a new slip.
+                Select a vehicle and stage to pre-populate materials, or pick an existing slip from above.
               </div>
             )}
             <TransactionGrid
@@ -612,8 +761,8 @@ export function MaterialIssuesClient({
 
           {hasFormContent && (
             <>
-              <Button variant="outline" onClick={handleSave} disabled={isPending || isLoading}>
-                {isPending ? "Saving…" : miStatus === "Issued" ? "Save & Reapply" : "Save"}
+              <Button variant="outline" onClick={handleSave} disabled={isPending || isLoading || stageLoading}>
+                {isPending ? "Saving…" : miStatus === "Issued" ? "Save & Reapply" : "Save Draft"}
               </Button>
 
               {loadedSlip && miStatus === "Draft" && (
@@ -652,16 +801,71 @@ export function MaterialIssuesClient({
         </div>
       </div>
 
+      {/* Zero-rate warning before issue */}
+      <Dialog open={zeroRateDialogOpen} onOpenChange={setZeroRateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Zero-Rate Items Detected</DialogTitle>
+            <DialogDescription>
+              One or more materials have a rate of ₹0. Confirm these are intentional zero-cost items before issuing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-32 overflow-y-auto space-y-1 py-2">
+            {rows
+              .filter((r) => r.material_id && parseFloat(r.rate || "0") === 0 && !r.rateBlank && !r.zeroRateConfirmed)
+              .map((r) => (
+                <div key={r._key} className="text-sm text-slate-700 py-0.5">• {r.material_name}</div>
+              ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setZeroRateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={confirmZeroRate} className="bg-amber-600 hover:bg-amber-700">
+              Confirm & Issue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Issue confirm */}
       <ConfirmDialog
         open={issueDialogOpen}
         onOpenChange={setIssueDialogOpen}
         title={`Issue ${loadedSlip ? formatCode("MI-", loadedSlip.slip_number, 4) : "this slip"}?`}
-        description="Stock will be deducted for all items with Affects Inventory enabled. This cannot be undone without Save & Reapply."
+        description="Stock will be deducted for all items with Affects Inventory enabled."
         confirmLabel="Issue"
         onConfirm={confirmIssue}
         isPending={isPending}
       />
+
+      {/* Stage change confirm */}
+      <Dialog open={stageChangeDialogOpen} onOpenChange={setStageChangeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Replace Grid Items?</DialogTitle>
+            <DialogDescription>
+              Changing to {pendingStageName ? `"${pendingStageName}"` : "this stage"} will replace all current grid items with the stage&apos;s materials. Unsaved changes will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setStageChangeDialogOpen(false); setPendingStageId(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setStageChangeDialogOpen(false);
+                if (pendingStageId) void loadStageRows(pendingStageId, gstType);
+                setPendingStageId(null);
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              Replace
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Save & Reapply confirm */}
       <Dialog open={saveReapplyDialogOpen} onOpenChange={setSaveReapplyDialogOpen}>
@@ -669,7 +873,7 @@ export function MaterialIssuesClient({
           <DialogHeader>
             <DialogTitle>Save & Reapply Stock?</DialogTitle>
             <DialogDescription>
-              This will reverse the current stock deductions and reapply them with the new values. All changes are atomic.
+              This will reverse the current stock deductions and reapply them with the new values atomically.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

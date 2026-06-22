@@ -140,7 +140,7 @@ export default async function HomePage() {
           <RecentTable
             headers={["Slip #", "Date", "Vehicle", "Status"]}
             rows={stats.recentMIs.map((r) => [
-              <Link key={r.id} href={`/transactions/material-issues/${r.id}/view`} className="font-mono text-blue-600 hover:underline">
+              <Link key={r.id} href={r.issue_type === "NEW" ? `/transactions/material-issues/new?id=${r.id}` : `/transactions/material-issues?id=${r.id}`} className="font-mono text-blue-600 hover:underline">
                 MI-{String(r.slip_number).padStart(4, "0")}
               </Link>,
               r.issue_date,
