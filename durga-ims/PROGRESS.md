@@ -10,8 +10,8 @@
 ---
 
 ## Current Status
-**Last session:** 2026-06-22 — Phase 2 fully complete. useKeyboardGrid hook, combobox fix, TransactionGrid wiring, all 7 master keyboards, stock useEffect refresh fix, tailwind fontSize scale, globals.css alternating rows.
-**Next up:** Phase 3 — Stage Master
+**Last session:** 2026-06-22 — Phase 3 fully complete. stages.actions.ts (saveStage atomic tx, deleteStage with issued-MI guard, reactivateStage, getStagesForDropdown, getStageMaterials), stages-client.tsx (2-col sub-grid keyboard nav, dirty-check Escape, Ctrl+S, deactivate/reactivate dialogs), sidebar Stages entry.
+**Next up:** Phase 4 — Purchase Orders single-screen rewrite
 
 ---
 
@@ -130,28 +130,28 @@ _Requires Part 2.1 (stages + stage_materials tables) from Phase 1, and Phase 2 (
 ### Part 7.1 — Stage Master UI Layout
 | Task | Status | Notes |
 |------|--------|-------|
-| stages-client.tsx: search list left; form right (matches existing masters pattern) | ⏳ Not Started | |
-| Materials sub-grid: Sl# \| Material (combobox) \| Default Qty \| Unit (auto-fill) | ⏳ Not Started | Full useKeyboardGrid arrow nav |
-| No Edit/Modify button — all fields inline-editable | ⏳ Not Started | |
-| Add Stage Master to Masters sidebar nav | ⏳ Not Started | |
+| stages-client.tsx: search list left; form right (matches existing masters pattern) | ✅ Done | Custom 2-panel layout (w-[480px] left) — skipped MasterLayout (hardcoded w-80 too narrow for sub-grid) |
+| Materials sub-grid: Sl# \| Material (combobox) \| Default Qty \| Unit (auto-fill) | ✅ Done | Inline 2-col keyboard handler (↑↓←→ + append on Enter); Combobox onOpenChange wired |
+| No Edit/Modify button — all fields inline-editable | ✅ Done | |
+| Add Stage Master to Masters sidebar nav | ✅ Done | Added after Tax Rates with Layers icon |
 
 ### Part 7.2 — Deletion Rules
 | Task | Status | Notes |
 |------|--------|-------|
-| deleteStage(): check Issued MIs → block if count > 0 | ⏳ Not Started | Error: "Stage used in {n} issued slips — cannot delete" |
-| deleteStage(): soft-delete (is_active=false) if no Issued MIs | ⏳ Not Started | |
-| Warn if Draft MIs reference the stage (don't block, just warn) | ⏳ Not Started | |
+| deleteStage(): check Issued MIs → block if count > 0 | ✅ Done | Error: "Stage used in {n} issued slip(s) — cannot delete" |
+| deleteStage(): soft-delete (is_active=false) if no Issued MIs | ✅ Done | |
+| Warn if Draft MIs reference the stage (don't block, just warn) | ✅ Done | Returns draftCount; client shows warning toast after deactivation |
 
 ### Part 7.3 — Server Actions (stages.actions.ts)
 | Task | Status | Notes |
 |------|--------|-------|
-| createStage(name) — auto stage_code: S001, S002... | ⏳ Not Started | |
-| updateStage(id, name) | ⏳ Not Started | |
-| deleteStage(id) — soft delete | ⏳ Not Started | |
-| upsertStageMaterials(stageId, items[]) — atomic DELETE + INSERT in transaction | ⏳ Not Started | |
-| getStagesWithMaterials() — for stage master list | ⏳ Not Started | |
-| getStagesForDropdown() — active only; for New VMI dropdown | ⏳ Not Started | |
-| getStageMaterials(stageId) — with last PO rate; for New VMI grid pre-fill | ⏳ Not Started | |
+| saveStage({ id, name, materials[] }) — atomic create/update + material upsert | ✅ Done | Single db.transaction(); duplicate name check inside tx |
+| stage_code auto-gen: S001, S002... S999, S1000 | ✅ Done | Uses CAST(SUBSTRING(stage_code,2) AS INTEGER) MAX — avoids text-sort bug at S999→S1000 |
+| deleteStage(id) — soft delete with Issued MI guard | ✅ Done | |
+| reactivateStage(id) | ✅ Done | |
+| getStagesWithMaterials() — for stage master list | ✅ Done | cached; joins stage_materials → materials + units |
+| getStagesForDropdown() — active only; for New VMI dropdown | ✅ Done | cached |
+| getStageMaterials(stageId) — with last PO rate; for New VMI grid pre-fill | ✅ Done | non-cached; attaches last PO rate per material |
 
 ### Part 18.2 — Stage Master Edge Cases
 | | Status |
@@ -456,3 +456,4 @@ _No implementation tasks. Read these when working on the relevant phase._
 | 2026-06-21 | Planning | PLAN.md + PROGRESS.md created; all 7 decisions resolved; no code written | Phase 1: DB Migrations + Library Install |
 | 2026-06-22 | Phase 1 | schema.ts: added stages, stage_materials, invoice_insurance, invoice_insurance_items tables; added issue_type+stage_id to material_issues, include_tax to invoices, reverted_at+reverted_by to purchase_orders, rate_at_time to stock_ledger; Drizzle migration 0002_unknown_hydra.sql generated; react-hotkeys-hook installed; DB push needs manual run (TTY required) | Phase 2: Keyboard Navigation + CSS |
 | 2026-06-22 | Phase 2 | useKeyboardGrid hook created; combobox.tsx: onOpenChange+gridRow/Col+onGridKeyDown+openOnArrowDown props; TransactionGrid: full arrow-key nav with COL_CONFIG per mode, auto-focus Qty after material select; all 7 master files: focus-move-after-Enter + Escape dirty-check + ConfirmDialog + dark headers + tighter row padding; stock-client.tsx: useEffect refresh fix; tailwind fontSize scale (14px base); alternating row CSS | Phase 3: Stage Master |
+| 2026-06-22 | Phase 3 | stages.actions.ts: saveStage (atomic tx, duplicate name check, numeric stage_code MAX), deleteStage (Issued MI guard + draftCount warning), reactivateStage, getStagesWithMaterials, getStagesForDropdown, getStageMaterials (with last PO rate); stages-client.tsx: 2-col sub-grid keyboard nav (inline handler), material auto-fill unit, dirty-check Escape, Ctrl+S, deactivate/reactivate ConfirmDialogs, inline 2-panel layout (w-[480px]); sidebar: Stages + Layers icon; cache.ts: stages tag; tsc: clean | Phase 4: Purchase Orders single-screen |

@@ -20,6 +20,7 @@ import {
   Building2,
   LogOut,
   Warehouse,
+  Layers,
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth.actions";
 import { getFYOptions } from "@/lib/fy";
@@ -43,6 +44,7 @@ const nav = [
       { label: "Materials", href: "/masters/materials", icon: Package },
       { label: "Units", href: "/masters/units", icon: Ruler },
       { label: "Tax Rates", href: "/masters/tax", icon: Percent },
+      { label: "Stages", href: "/masters/stages", icon: Layers },
       { label: "Contractors", href: "/masters/contractors", icon: HardHat },
     ],
   },

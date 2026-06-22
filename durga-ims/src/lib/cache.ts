@@ -12,4 +12,5 @@ export const CACHE_TAGS = {
   units:       "units",
   taxRates:    "tax-rates",
   settings:    "settings",
+  stages:      "stages",
 } as const;
