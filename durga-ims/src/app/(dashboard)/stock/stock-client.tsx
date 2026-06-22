@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -116,6 +116,9 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
   const [rows, setRows] = useState(initialRows);
   const [summary, setSummary] = useState(initialSummary);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+
+  useEffect(() => { setRows(initialRows); }, [initialRows]);
+  useEffect(() => { setSummary(initialSummary); }, [initialSummary]);
 
   // Table filters
   const [tab, setTab] = useState<TabFilter>("all");

@@ -31,6 +31,16 @@ interface ComboboxProps {
   searchPlaceholder?: string;
   emptyText?: string;
   className?: string;
+  /** Called when the popover opens or closes — used by TransactionGrid to track open combobox cell */
+  onOpenChange?: (open: boolean) => void;
+  /** data-grid-row attr forwarded to the trigger button (for grid keyboard nav) */
+  gridRow?: number;
+  /** data-grid-col attr forwarded to the trigger button (for grid keyboard nav) */
+  gridCol?: number;
+  /** Called on keydown when combobox is closed — used by TransactionGrid for grid arrow navigation */
+  onGridKeyDown?: (e: React.KeyboardEvent) => void;
+  /** When true, pressing ↓ on a closed combobox opens it (use for identifier dropdowns at top of screens) */
+  openOnArrowDown?: boolean;
 }
 
 export function Combobox({
@@ -41,18 +51,44 @@ export function Combobox({
   searchPlaceholder = "Search...",
   emptyText = "No results found.",
   className,
+  onOpenChange: onOpenChangeProp,
+  gridRow,
+  gridCol,
+  onGridKeyDown,
+  openOnArrowDown = false,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    onOpenChangeProp?.(next);
+  }
+
+  function handleTriggerKeyDown(e: React.KeyboardEvent) {
+    if (!open) {
+      // ↓ opens dropdown (identifier dropdowns only)
+      if (e.key === "ArrowDown" && openOnArrowDown) {
+        e.preventDefault();
+        handleOpenChange(true);
+        return;
+      }
+      // Delegate grid arrow keys to the parent grid hook when combobox is closed
+      onGridKeyDown?.(e);
+    }
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         className={cn(
           buttonVariants({ variant: "outline" }),
           "w-full justify-between h-9 font-normal",
           className
         )}
+        onKeyDown={handleTriggerKeyDown}
+        data-grid-row={gridRow}
+        data-grid-col={gridCol}
       >
         <span className={cn("truncate", !selected && "text-muted-foreground")}>
           {selected ? selected.label : placeholder}
@@ -68,7 +104,7 @@ export function Combobox({
               {value && (
                 <CommandItem
                   value="__clear__"
-                  onSelect={() => { onChange(""); setOpen(false); }}
+                  onSelect={() => { onChange(""); handleOpenChange(false); }}
                   className="text-muted-foreground text-xs"
                 >
                   Clear selection
@@ -78,7 +114,7 @@ export function Combobox({
                 <CommandItem
                   key={option.value}
                   value={option.label}
-                  onSelect={() => { onChange(option.value); setOpen(false); }}
+                  onSelect={() => { onChange(option.value); handleOpenChange(false); }}
                 >
                   <Check
                     className={cn(

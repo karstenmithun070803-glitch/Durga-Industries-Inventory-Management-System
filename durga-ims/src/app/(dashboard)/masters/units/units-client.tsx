@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,12 @@ export function UnitsClient({ units }: { units: Unit[] }) {
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [escapeDiscardOpen, setEscapeDiscardOpen] = useState(false);
+
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const originalNameRef = useRef("");
 
   const inactive = units.filter((u) => !u.is_active);
   const visible = units.filter((u) => showInactive ? !u.is_active : u.is_active).filter((u) =>
@@ -26,8 +33,19 @@ export function UnitsClient({ units }: { units: Unit[] }) {
     matchesCode(search, "U", u.unit_code, 2)
   );
 
-  function startEdit(unit: Unit) { setEditing(unit); setFocusedIdx(-1); setName(unit.unit_name); }
+  function startEdit(unit: Unit) { setEditing(unit); setFocusedIdx(-1); setName(unit.unit_name); originalNameRef.current = unit.unit_name; }
   function resetForm() { setEditing(null); setName(""); }
+
+  function handleEscape() {
+    if (!editing) return;
+    if (name !== originalNameRef.current) {
+      setEscapeDiscardOpen(true);
+    } else {
+      resetForm();
+      setTimeout(() => searchRef.current?.focus(), 50);
+    }
+  }
+  useHotkeys("escape", handleEscape, { enableOnFormTags: ["INPUT", "SELECT", "TEXTAREA"] });
 
   function handleSubmit() {
     if (!name.trim()) return;
@@ -64,10 +82,10 @@ export function UnitsClient({ units }: { units: Unit[] }) {
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Unit" : "Add New Unit"}</p>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Unit Name *</label>
-              <Input placeholder="e.g. KG, PCS, ROLL" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+              <Input ref={firstFieldRef} placeholder="e.g. KG, PCS, ROLL" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add Unit"}</Button>
+              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add Unit"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}
             </div>
             {editing && (
@@ -89,13 +107,14 @@ export function UnitsClient({ units }: { units: Unit[] }) {
           <div className="flex flex-col h-full">
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
               <Input
+                ref={searchRef}
                 placeholder="Search by name, U01 or just 1..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
                   else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }
-                  else if (e.key === "Enter" && focusedIdx >= 0) { startEdit(visible[focusedIdx]); }
+                  else if (e.key === "Enter" && focusedIdx >= 0) { startEdit(visible[focusedIdx]); setTimeout(() => firstFieldRef.current?.focus(), 50); }
                   else if (e.key === "Escape") { setFocusedIdx(-1); }
                 }}
                 className="max-w-xs"
@@ -108,12 +127,12 @@ export function UnitsClient({ units }: { units: Unit[] }) {
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0">
+                <thead className="bg-slate-700 text-white sticky top-0">
                   <tr>
-                    <th className="px-4 py-2.5 text-left font-medium text-slate-600 w-16">S.No</th>
-                    <th className="px-4 py-2.5 text-left font-medium text-slate-600 w-28">Unit Code</th>
-                    <th className="px-4 py-2.5 text-left font-medium text-slate-600">Unit Name</th>
-                    <th className="px-4 py-2.5 text-left font-medium text-slate-600 w-28"></th>
+                    <th className="px-4 py-1.5 text-left font-medium w-16">S.No</th>
+                    <th className="px-4 py-1.5 text-left font-medium w-28">Unit Code</th>
+                    <th className="px-4 py-1.5 text-left font-medium">Unit Name</th>
+                    <th className="px-4 py-1.5 text-left font-medium w-28"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -126,9 +145,9 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                       className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !unit.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(unit)}
                     >
-                      <td className="px-4 py-2.5 text-slate-500">{i + 1}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{formatCode("U", unit.unit_code, 2)}</td>
-                      <td className="px-4 py-2.5 font-medium text-slate-800">{unit.unit_name}</td>
+                      <td className="px-4 py-1.5 text-slate-500">{i + 1}</td>
+                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{formatCode("U", unit.unit_code, 2)}</td>
+                      <td className="px-4 py-1.5 font-medium text-slate-800">{unit.unit_name}</td>
                       <td></td>
                     </tr>
                   ))}
@@ -137,6 +156,15 @@ export function UnitsClient({ units }: { units: Unit[] }) {
             </div>
           </div>
         }
+      />
+      <ConfirmDialog
+        open={escapeDiscardOpen}
+        onOpenChange={(open) => { if (!open) setEscapeDiscardOpen(false); }}
+        title="Discard changes?"
+        description="You have unsaved changes. Discard them and close the form?"
+        confirmLabel="Discard"
+        onConfirm={() => { setEscapeDiscardOpen(false); resetForm(); setTimeout(() => searchRef.current?.focus(), 50); }}
+        isPending={false}
       />
       <ConfirmDialog
         open={deactivatingId !== null}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,12 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
+  const [escapeDiscardOpen, setEscapeDiscardOpen] = useState(false);
+
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const originalFormRef = useRef<typeof EMPTY>(EMPTY);
 
   const inactive = vehicles.filter((v) => !v.is_active);
   const visible = vehicles.filter((v) => showInactive ? !v.is_active : v.is_active).filter((v) => {
@@ -42,10 +49,23 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   function startEdit(v: VehicleRow) {
     setEditing(v);
     setFocusedIdx(-1);
-    setForm({ job_ref_no: v.job_ref_no, vehicle_name: v.vehicle_name ?? "", type: v.type, customer_id: v.customer_id ?? "" });
+    const next = { job_ref_no: v.job_ref_no, vehicle_name: v.vehicle_name ?? "", type: v.type, customer_id: v.customer_id ?? "" };
+    setForm(next);
+    originalFormRef.current = next;
   }
   function resetForm() { setEditing(null); setForm(EMPTY); }
   function set(key: string, val: string) { setForm((f) => ({ ...f, [key]: val })); }
+
+  function handleEscape() {
+    if (!editing) return;
+    if (JSON.stringify(form) !== JSON.stringify(originalFormRef.current)) {
+      setEscapeDiscardOpen(true);
+    } else {
+      resetForm();
+      setTimeout(() => searchRef.current?.focus(), 50);
+    }
+  }
+  useHotkeys("escape", handleEscape, { enableOnFormTags: ["INPUT", "SELECT", "TEXTAREA"] });
 
   function handleSubmit() {
     startTransition(async () => {
@@ -86,6 +106,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Job No. *</label>
               <Input
+                ref={firstFieldRef}
                 placeholder="e.g. 2026/001"
                 value={form.job_ref_no}
                 onChange={(e) => set("job_ref_no", e.target.value)}
@@ -118,7 +139,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               />
             </div>
             <div className="flex gap-2 pt-1">
-              <Button onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
+              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}
             </div>
             {editing && (
@@ -140,13 +161,14 @@ export function VehiclesClient({ vehicles, customers }: Props) {
           <div className="flex flex-col h-full">
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
               <Input
+                ref={searchRef}
                 placeholder="Search by vehicle name, job number, or customer..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
                   else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }
-                  else if (e.key === "Enter" && focusedIdx >= 0) { startEdit(visible[focusedIdx]); }
+                  else if (e.key === "Enter" && focusedIdx >= 0) { startEdit(visible[focusedIdx]); setTimeout(() => firstFieldRef.current?.focus(), 50); }
                   else if (e.key === "Escape") { setFocusedIdx(-1); }
                 }}
                 className="max-w-sm"
@@ -162,10 +184,10 @@ export function VehiclesClient({ vehicles, customers }: Props) {
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0">
+                <thead className="bg-slate-700 text-white sticky top-0">
                   <tr>
                     {["S.No", "Job No.", "Vehicle Name", "Type", "Customer"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -179,13 +201,13 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                       className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !v.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(v)}
                     >
-                      <td className="px-4 py-2.5 text-slate-500">{i + 1}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{v.job_ref_no}</td>
-                      <td className="px-4 py-2.5 font-medium">{v.vehicle_name ?? "—"}</td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-1.5 text-slate-500">{i + 1}</td>
+                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{v.job_ref_no}</td>
+                      <td className="px-4 py-1.5 font-medium">{v.vehicle_name ?? "—"}</td>
+                      <td className="px-4 py-1.5">
                         <Badge variant={v.type === "New" ? "default" : "secondary"}>{v.type}</Badge>
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500">{v.customer_name ?? "—"}</td>
+                      <td className="px-4 py-1.5 text-slate-500">{v.customer_name ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -257,6 +279,15 @@ export function VehiclesClient({ vehicles, customers }: Props) {
           type: r.type as string,
           customer_id: r.customer_id as string | null,
         })))}
+      />
+      <ConfirmDialog
+        open={escapeDiscardOpen}
+        onOpenChange={(open) => { if (!open) setEscapeDiscardOpen(false); }}
+        title="Discard changes?"
+        description="You have unsaved changes. Discard them and close the form?"
+        confirmLabel="Discard"
+        onConfirm={() => { setEscapeDiscardOpen(false); resetForm(); setTimeout(() => searchRef.current?.focus(), 50); }}
+        isPending={false}
       />
       <ConfirmDialog
         open={deactivatingId !== null}

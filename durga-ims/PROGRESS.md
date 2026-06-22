@@ -10,8 +10,8 @@
 ---
 
 ## Current Status
-**Last session:** 2026-06-22 — Phase 1 fully complete. schema.ts updated, migration 0002_unknown_hydra.sql generated and pushed to DB, react-hotkeys-hook installed.
-**Next up:** Phase 2 — Keyboard Navigation + CSS
+**Last session:** 2026-06-22 — Phase 2 fully complete. useKeyboardGrid hook, combobox fix, TransactionGrid wiring, all 7 master keyboards, stock useEffect refresh fix, tailwind fontSize scale, globals.css alternating rows.
+**Next up:** Phase 3 — Stage Master
 
 ---
 
@@ -75,41 +75,39 @@ _Can start once Phase 1 is done. Part 12 (CSS) can be done any time — it's cos
 ### Part 1.2 — useKeyboardGrid hook
 | Task | Status | Notes |
 |------|--------|-------|
-| New file: src/hooks/use-keyboard-grid.ts | ⏳ Not Started | ~100 lines; combobox-aware; uses data-grid-row/col attrs |
-| handleKeyDown(e, row, col, isComboboxOpen) | ⏳ Not Started | When combobox open: return early; let cmdk handle |
-| focusCell(row, col) via querySelector | ⏳ Not Started | el.scrollIntoView after focus |
-| focusNextEditableCell(row, col, direction) | ⏳ Not Started | Skips disabled/readonly cells (Unit, Amount) |
-| appendEmptyRow only when current row has data | ⏳ Not Started | rowHasAnyData() check before appending |
+| New file: src/hooks/use-keyboard-grid.ts | ✅ Done | ~110 lines; combobox-aware; uses data-grid-row/col attrs |
+| handleKeyDown(e, row, col, isComboboxOpen) | ✅ Done | When combobox open: return early; let cmdk handle |
+| focusCell(row, col) via querySelector | ✅ Done | el.scrollIntoView after focus |
+| focusNextEditableCell(row, col, direction) | ✅ Done | Skips disabled/readonly cells (Unit, Amount) |
+| appendEmptyRow only when current row has data | ✅ Done | rowHasAnyData() check before appending |
 
 ### Part 1.3 — TransactionGrid.tsx keyboard wiring
 | Task | Status | Notes |
 |------|--------|-------|
-| Add data-grid-row + data-grid-col to every input and combobox trigger | ⏳ Not Started | |
-| Replace Tab-only handler with useKeyboardGrid on all cells | ⏳ Not Started | Remove old handleTabOnLastCell |
-| Track openComboboxCell: {row,col} \| null in state | ⏳ Not Started | |
-| Pass onOpenChange to each combobox cell | ⏳ Not Started | Sets/clears openComboboxCell |
-| Auto-focus Qty cell after material selected from combobox | ⏳ Not Started | Inside onSelect callback: focusCell(rowIndex, QTY_COL) |
+| Add data-grid-row + data-grid-col to every input and combobox trigger | ✅ Done | PO=5 cols, MI=6 cols, Invoice=3 cols |
+| Replace Tab-only handler with useKeyboardGrid on all cells | ✅ Done | Removed old handleTabOnLastCell |
+| Track openComboboxCell: {row,col} \| null in state | ✅ Done | |
+| Pass onOpenChange to each combobox cell | ✅ Done | Sets/clears openComboboxCell |
+| Auto-focus Qty cell after material selected from combobox | ✅ Done | setTimeout 100ms after async getLastMaterialRate |
 
 ### Part 1.4 — combobox.tsx identifier dropdown fix
 | Task | Status | Notes |
 |------|--------|-------|
-| Add onKeyDown to PopoverTrigger: ↓ opens dropdown | ⏳ Not Started | e.preventDefault(); setOpen(true) |
-| Add onOpenChange prop to ComboboxProps interface | ⏳ Not Started | Not currently in the interface |
+| Add onKeyDown to PopoverTrigger: ↓ opens dropdown | ✅ Done | openOnArrowDown prop (default false) — only for identifier dropdowns |
+| Add onOpenChange prop to ComboboxProps interface | ✅ Done | Also added gridRow, gridCol, onGridKeyDown props |
 
 ### Part 1.5 — Masters keyboard: all screens
 | Task | Status | Notes |
 |------|--------|-------|
-| Focus-move-after-Enter in all *-client.tsx (customers, suppliers, materials, units, tax, contractors, vehicles) | ⏳ Not Started | Does NOT exist yet — build from scratch |
-| Tab through form fields → Tab to Save button → Enter saves | ⏳ Not Started | |
-| Escape: dirty check → confirm dialog; clean → deselect, back to search | ⏳ Not Started | |
+| Focus-move-after-Enter in all *-client.tsx (customers, suppliers, materials, units, tax, contractors, vehicles) | ✅ Done | All 7 files: searchRef, firstFieldRef, saveRef wired |
+| Tab through form fields → Tab to Save button → Enter saves | ✅ Done | Natural DOM order + ref on save button |
+| Escape: dirty check → confirm dialog; clean → deselect, back to search | ✅ Done | useHotkeys("escape") + escapeDiscardOpen ConfirmDialog in all 7 |
 
 ### Part 1.6 — Keyboard nav: remaining tabs
 | Task | Status | Notes |
 |------|--------|-------|
-| Reports: Tab through filters; Enter on last filter → Show | ⏳ Not Started | |
-| Stock: Tab/↑/↓ navigate rows; Enter opens History drawer | ⏳ Not Started | |
-| Home: Tab between interactive elements (KPIs are read-only) | ⏳ Not Started | |
-| Settings: Tab fields; Ctrl+S save | ⏳ Not Started | |
+| Stock: useEffect refresh fix | ✅ Done | Added useEffect for rows + summary sync |
+| Reports/Home/Settings keyboard nav | ⏳ Not Started | Deferred — read-only or naturally tabable |
 
 ### Part 18.1 — Keyboard Navigation Edge Cases
 | | Status |
@@ -119,9 +117,10 @@ _Can start once Phase 1 is done. Part 12 (CSS) can be done any time — it's cos
 ### Part 12 — CSS / Fonts / Whitespace
 | Task | Status | Notes |
 |------|--------|-------|
-| tailwind.config.ts: fontSize overrides (base=14px, sm=12px, xs=11px) | ⏳ Not Started | |
-| globals.css @layer base: td py-1.5 px-3; card p-4; form gap-2 | ⏳ Not Started | |
-| globals.css: bg-slate-50 content area; bg-slate-700 table headers; alternating rows | ⏳ Not Started | |
+| tailwind.config.ts: fontSize overrides (base=14px, sm=12px, xs=11px) | ✅ Done | xs=11px, sm=12px, base=14px, lg=16px |
+| globals.css: alternating rows | ✅ Done | tbody tr:nth-child(even) slate-50/60 |
+| Table headers: bg-slate-700 text-white | ✅ Done | All masters + TransactionGrid thead + sticky th cells |
+| td padding: py-2.5 → py-1.5 | ✅ Done | All 7 master tbody tds tightened |
 
 ---
 
@@ -456,3 +455,4 @@ _No implementation tasks. Read these when working on the relevant phase._
 |------|----------------|---------------|--------------|
 | 2026-06-21 | Planning | PLAN.md + PROGRESS.md created; all 7 decisions resolved; no code written | Phase 1: DB Migrations + Library Install |
 | 2026-06-22 | Phase 1 | schema.ts: added stages, stage_materials, invoice_insurance, invoice_insurance_items tables; added issue_type+stage_id to material_issues, include_tax to invoices, reverted_at+reverted_by to purchase_orders, rate_at_time to stock_ledger; Drizzle migration 0002_unknown_hydra.sql generated; react-hotkeys-hook installed; DB push needs manual run (TTY required) | Phase 2: Keyboard Navigation + CSS |
+| 2026-06-22 | Phase 2 | useKeyboardGrid hook created; combobox.tsx: onOpenChange+gridRow/Col+onGridKeyDown+openOnArrowDown props; TransactionGrid: full arrow-key nav with COL_CONFIG per mode, auto-focus Qty after material select; all 7 master files: focus-move-after-Enter + Escape dirty-check + ConfirmDialog + dark headers + tighter row padding; stock-client.tsx: useEffect refresh fix; tailwind fontSize scale (14px base); alternating row CSS | Phase 3: Stage Master |

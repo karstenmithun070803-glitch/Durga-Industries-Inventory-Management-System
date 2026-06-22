@@ -52,6 +52,9 @@
   body {
     @apply bg-background text-foreground;
   }
+  tbody tr:nth-child(even) {
+    background-color: rgb(248 250 252 / 0.6);
+  }
 }
 
 @layer utilities {

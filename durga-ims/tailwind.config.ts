@@ -28,6 +28,12 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontSize: {
+        xs:   ["0.6875rem", { lineHeight: "1rem" }],
+        sm:   ["0.75rem",   { lineHeight: "1.125rem" }],
+        base: ["0.875rem",  { lineHeight: "1.25rem" }],
+        lg:   ["1rem",      { lineHeight: "1.5rem" }],
+      },
     },
   },
   plugins: [],

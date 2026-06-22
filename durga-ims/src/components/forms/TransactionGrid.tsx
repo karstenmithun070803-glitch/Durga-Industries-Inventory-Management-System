@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useEffect, useMemo } from "react";
+import { useRef, useCallback, useEffect, useMemo, useState } from "react";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { determineGstType } from "@/types";
 import type { LineItemDraft } from "@/types";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useKeyboardGrid } from "@/hooks/use-keyboard-grid";
 
 interface SupplierOption {
   id: string;
@@ -62,6 +63,16 @@ interface Props {
   contractors?: ContractorOption[];
   gstType?: string; // header-level GST type (all rows share it in material-issue / invoice mode)
 }
+
+// Column indices per mode (only interactive elements counted)
+// PO:      Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4
+// MI:      Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5
+// Invoice: Material=0, Qty=1, Rate=2
+const COL_CONFIG = {
+  "purchase-order": { columnCount: 5, qtyCol: 2 },
+  "material-issue": { columnCount: 6, qtyCol: 3 },
+  invoice:          { columnCount: 3, qtyCol: 1 },
+} as const;
 
 export function newRow(): LineItemDraft {
   return {
@@ -142,6 +153,22 @@ export function TransactionGrid({
   // In material-issue / invoice mode, gstType is header-level (same for all rows)
   const effectiveGstType = isHeaderGstMode ? (gstType ?? "CGST_SGST") : undefined;
 
+  const { columnCount, qtyCol } = COL_CONFIG[mode];
+
+  // Track which combobox cell is open so the keyboard hook can yield to cmdk
+  const [openComboboxCell, setOpenComboboxCell] = useState<{ row: number; col: number } | null>(null);
+
+  const appendEmptyRow = useCallback(() => {
+    onChange([...rows, newRow()]);
+  }, [rows, onChange]);
+
+  const { handleKeyDown, focusCell } = useKeyboardGrid({
+    gridRef,
+    rows,
+    columnCount,
+    appendEmptyRow,
+  });
+
   // Recalculate all rows when header-level gstType changes (issue / invoice mode only)
   const prevGstTypeRef = useRef(effectiveGstType);
   useEffect(() => {
@@ -171,7 +198,7 @@ export function TransactionGrid({
     [rows, onChange, effectiveGstType]
   );
 
-  async function handleMaterialSelect(key: string, materialId: string) {
+  async function handleMaterialSelect(key: string, materialId: string, rowIndex: number) {
     const mat = materials.find((m) => m.id === materialId);
     if (!mat) return;
 
@@ -211,6 +238,9 @@ export function TransactionGrid({
       // In issue/invoice mode, apply header gstType; in PO mode gst_type set by supplier select
       ...(isHeaderGstMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
     });
+
+    // Auto-focus Qty cell after async material load completes
+    setTimeout(() => focusCell(rowIndex, qtyCol), 100);
   }
 
   function handleSupplierSelect(key: string, supplierId: string) {
@@ -235,18 +265,6 @@ export function TransactionGrid({
       contractor_id: contractorId,
       contractor_name: con.name,
     });
-  }
-
-  function handleTabOnLastCell(e: React.KeyboardEvent, isLastRow: boolean) {
-    if (e.key === "Tab" && !e.shiftKey && isLastRow) {
-      e.preventDefault();
-      const newRows = [...rows, newRow()];
-      onChange(newRows);
-      setTimeout(() => {
-        const tds = gridRef.current?.querySelectorAll("tbody tr:last-child input");
-        (tds?.[0] as HTMLInputElement)?.focus();
-      }, 50);
-    }
   }
 
   function deleteRow(key: string) {
@@ -290,45 +308,58 @@ export function TransactionGrid({
   return (
     <div className="overflow-auto">
       <table ref={gridRef} className="min-w-max text-sm w-full">
-        <thead className="bg-slate-50 sticky top-0 z-10">
+        <thead className="bg-slate-700 text-white sticky top-0 z-10">
           <tr>
-            <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-10">S.No</th>
-            <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Mat. Code</th>
-            <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-56">Material Name</th>
+            <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-10">S.No</th>
+            <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Mat. Code</th>
+            <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-56">Material Name</th>
 
             {/* Supplier column — PO mode only */}
             {!isIssueMode && !isInvoiceMode && (
-              <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-48">Supplier</th>
+              <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-48">Supplier</th>
             )}
 
             {/* HSN column — issue mode and invoice mode */}
             {(isIssueMode || isInvoiceMode) && (
-              <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">HSN</th>
+              <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-28">HSN</th>
             )}
 
             {/* Contractor column — issue mode only (not invoice mode) */}
             {isIssueMode && (
-              <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-44">Contractor</th>
+              <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-44">Contractor</th>
             )}
 
             {/* Affects Stock column — issue mode only (not invoice mode) */}
             {isIssueMode && (
-              <th className="px-3 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap w-24">Affects Stock</th>
+              <th className="px-3 py-2 text-center font-medium whitespace-nowrap w-24">Affects Stock</th>
             )}
 
-            <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-24">Qty</th>
-            <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Unit</th>
-            <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">Rate</th>
-            {!isInvoiceMode && <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Tax %</th>}
-            {isInvoiceMode && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-24">Tax</th>}
-            <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap w-28">Amount</th>
-            {!readOnly && <th className="px-3 py-2.5 w-10" />}
+            <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-24">Qty</th>
+            <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Unit</th>
+            <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-28">Rate</th>
+            {!isInvoiceMode && <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Tax %</th>}
+            {isInvoiceMode && <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-24">Tax</th>}
+            <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-28">Amount</th>
+            {!readOnly && <th className="px-3 py-2 w-10" />}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => {
-            const isLastRow = i === rows.length - 1;
+            const isOpen = (col: number) =>
+              openComboboxCell?.row === i && openComboboxCell?.col === col;
+
             const showZeroWarning = !row.rateBlank && row.rate === "0" && !row.zeroRateConfirmed;
+
+            // Column indices depend on mode (see COL_CONFIG at top of file)
+            // PO:      Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4
+            // MI:      Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5
+            // Invoice: Material=0, Qty=1, Rate=2
+            const colMaterial = 0;
+            const colSupplierOrContractor = 1;
+            const colAffectsStock = isIssueMode ? 2 : -1;
+            const colQty = qtyCol;
+            const colRate = isInvoiceMode ? 2 : isIssueMode ? 4 : 3;
+            const colTax = isIssueMode ? 5 : mode === "purchase-order" ? 4 : -1;
 
             return (
               <tr key={row._key} className="border-t border-slate-100">
@@ -347,9 +378,15 @@ export function TransactionGrid({
                     <Combobox
                       options={materialOptions}
                       value={row.material_id}
-                      onChange={(v) => handleMaterialSelect(row._key, v)}
+                      onChange={(v) => handleMaterialSelect(row._key, v, i)}
                       placeholder="Select material..."
                       searchPlaceholder="Search materials..."
+                      onOpenChange={(open) =>
+                        setOpenComboboxCell(open ? { row: i, col: colMaterial } : null)
+                      }
+                      gridRow={i}
+                      gridCol={colMaterial}
+                      onGridKeyDown={(e) => handleKeyDown(e, i, colMaterial, false)}
                     />
                   )}
                 </td>
@@ -373,6 +410,12 @@ export function TransactionGrid({
                         onChange={(v) => handleSupplierSelect(row._key, v)}
                         placeholder="Select supplier..."
                         searchPlaceholder="Search suppliers..."
+                        onOpenChange={(open) =>
+                          setOpenComboboxCell(open ? { row: i, col: colSupplierOrContractor } : null)
+                        }
+                        gridRow={i}
+                        gridCol={colSupplierOrContractor}
+                        onGridKeyDown={(e) => handleKeyDown(e, i, colSupplierOrContractor, false)}
                       />
                     )}
                   </td>
@@ -390,6 +433,12 @@ export function TransactionGrid({
                         onChange={(v) => handleContractorSelect(row._key, v)}
                         placeholder="None"
                         searchPlaceholder="Search contractors..."
+                        onOpenChange={(open) =>
+                          setOpenComboboxCell(open ? { row: i, col: colSupplierOrContractor } : null)
+                        }
+                        gridRow={i}
+                        gridCol={colSupplierOrContractor}
+                        onGridKeyDown={(e) => handleKeyDown(e, i, colSupplierOrContractor, false)}
                       />
                     )}
                   </td>
@@ -414,6 +463,9 @@ export function TransactionGrid({
                         onChange={(e) =>
                           update(row._key, { affects_inventory: e.target.checked })
                         }
+                        onKeyDown={(e) => handleKeyDown(e, i, colAffectsStock, isOpen(colAffectsStock))}
+                        data-grid-row={i}
+                        data-grid-col={colAffectsStock}
                         className="w-4 h-4 accent-emerald-600 cursor-pointer"
                         title="Uncheck if this item should not reduce warehouse stock"
                       />
@@ -435,7 +487,9 @@ export function TransactionGrid({
                       }`}
                       value={row.qty}
                       onChange={(e) => update(row._key, { qty: e.target.value })}
-                      onKeyDown={(e) => handleTabOnLastCell(e, isLastRow)}
+                      onKeyDown={(e) => handleKeyDown(e, i, colQty, isOpen(colQty))}
+                      data-grid-row={i}
+                      data-grid-col={colQty}
                       min="0"
                       step="any"
                     />
@@ -475,6 +529,9 @@ export function TransactionGrid({
                         onChange={(e) =>
                           update(row._key, { rate: e.target.value, baseRate: e.target.value, rateBlank: false })
                         }
+                        onKeyDown={(e) => handleKeyDown(e, i, colRate, isOpen(colRate))}
+                        data-grid-row={i}
+                        data-grid-col={colRate}
                         min="0"
                         step="any"
                         placeholder={row.rateBlank ? "No history" : ""}
@@ -511,6 +568,9 @@ export function TransactionGrid({
                         className="w-16 h-8 text-sm"
                         value={row.tax_percentage}
                         onChange={(e) => update(row._key, { tax_percentage: e.target.value })}
+                        onKeyDown={(e) => handleKeyDown(e, i, colTax, isOpen(colTax))}
+                        data-grid-row={i}
+                        data-grid-col={colTax}
                         min="0"
                         max="100"
                         step="any"
@@ -519,7 +579,7 @@ export function TransactionGrid({
                   </td>
                 )}
 
-                {/* Tax — invoice mode only; shows combined tax amount per line */}
+                {/* Tax — invoice mode only; shows combined tax amount per line (read-only) */}
                 {isInvoiceMode && (
                   <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
                     {fmt2(
