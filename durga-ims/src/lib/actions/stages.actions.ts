@@ -126,7 +126,7 @@ export async function getStageMaterials(stageId: string) {
     .innerJoin(materials, eq(stageMaterials.material_id, materials.id))
     .innerJoin(units, eq(stageMaterials.unit_id, units.id))
     .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
-    .where(eq(stageMaterials.stage_id, stageId));
+    .where(and(eq(stageMaterials.stage_id, stageId), eq(materials.is_active, true)));
 
   // Attach last PO rate for each material
   const withRates = await Promise.all(
