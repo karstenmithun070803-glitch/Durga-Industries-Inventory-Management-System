@@ -10,8 +10,8 @@
 ---
 
 ## Current Status
-**Last session:** 2026-06-22 — Phase 4 fully complete. getPOsForDropdown() + revertPOToDraft() added to actions; purchase-orders-client.tsx fully rewritten as single-screen (identifier dropdown, inline header fields, grid, receive/revert/delete dialogs, batch print panel, Ctrl+S/Alt+N/Escape hotkeys); page.tsx updated with searchParams + new data fetching; home page PO links updated to ?id= pattern; dead routes (new/, [id]/edit/, [id]/view/, po-form.tsx) deleted. tsc: clean.
-**Next up:** Phase 5 — Vehicle Material Issue (Old VMI single-screen rewrite + New VMI)
+**Last session:** 2026-06-22 — Phase 6 fully complete. All code steps done; tsc: clean. One manual DB step still required (see Phase 6 notes below).
+**Next up:** Phase 7 — Reports
 
 ---
 
@@ -218,125 +218,104 @@ _Requires Part 2.5 (reverted_at/by columns) from Phase 1, and Phase 2 (Transacti
 ## Phase 5 — Vehicle Material Issue (Old VMI + New VMI)
 _Requires Part 2.2 (issue_type, stage_id) from Phase 1, Phase 2 (TransactionGrid keyboard wiring needed for VMI grids), and Phase 3 (Stage Master — New VMI needs stage dropdown and getStageMaterials())._
 
-### Part 4.1 — Navigation split
+> ⚠️ **Manual DB step still required** — run in Supabase SQL editor before testing:
+> ```sql
+> UPDATE material_issues SET issue_type = 'OLD' WHERE issue_type IS NULL;
+> ALTER TABLE material_issues ADD CONSTRAINT mi_issue_type_valid CHECK (issue_type IN ('OLD', 'NEW'));
+> ALTER TABLE material_issues ADD CONSTRAINT mi_stage_by_type CHECK (issue_type = 'NEW' OR (issue_type = 'OLD' AND stage_id IS NULL));
+> ```
+
+### Part 4.1 — Actions layer
 | Task | Status | Notes |
 |------|--------|-------|
-| getMaterialIssues() accepts issueType: 'OLD' \| 'NEW' param | ⏳ Not Started | Old VMI screen passes 'OLD'; New VMI passes 'NEW' |
+| IssueHeaderInput extended: issue_type + stage_id fields | ✅ Done | |
+| createMaterialIssue(): advisory lock + issue_type + stage_id + dual revalidatePath | ✅ Done | slip_number allocated inside db.transaction() with pg_advisory_xact_lock |
+| updateMaterialIssue(): stage_id added to SET clause | ✅ Done | issue_type immutable after create |
+| getMaterialIssues() accepts issueType: 'OLD' \| 'NEW' param | ✅ Done | |
+| getSlipsForDropdown(fy, issueType) — identifier dropdown query | ✅ Done | |
+| cloneOldMaterialIssue() — advisory lock + vehicle_id copy + today date clamped to FY | ✅ Done | |
+| cloneNewMaterialIssue() — copies stage_id too | ✅ Done | |
+| getDashboardStats() recent MIs: issue_type added to SELECT + type | ✅ Done | |
+| deleteMaterialIssue(): invoice-link guard before deleting Issued slips | ✅ Done | |
 
 ### Part 4.2 — Old VMI single-screen
 | Task | Status | Notes |
 |------|--------|-------|
-| Rewrite material-issues-client.tsx as single screen | ⏳ Not Started | Page opens blank; Slip No dropdown auto-focused |
-| Save branches by status: Draft → updateMaterialIssue(); Issued → updateIssuedMaterialIssue() | ⏳ Not Started | updateMaterialIssue() throws hard error for Issued slips — must branch |
-| Clone Old VMI button + cloneOldMaterialIssue() server action | ⏳ Not Started | MUST copy vehicle_id (NOT NULL column) — clone fails at DB if omitted |
-| Clone: form loads with same vehicle pre-filled; user can change | ⏳ Not Started | |
-| Add getSlipsForDropdown(fy, issueType) query | ⏳ Not Started | |
+| Rewrite material-issues-client.tsx as single screen | ✅ Done | openOnArrowDown combobox; FY-switch dirty check; cross-screen guard (NEW slip → redirect to /new) |
+| Save branches: Draft → updateMaterialIssue(); Issued → "Save & Reapply" confirm → updateIssuedMaterialIssue() | ✅ Done | |
+| Clone + Delete + Issue + Cancel + Ctrl+S/Alt+N/Escape | ✅ Done | |
+| Print + Print Adv. buttons (visible Draft + Issued) | ✅ Done | |
+| Rewrite material-issues/page.tsx with searchParams + Promise.all | ✅ Done | |
+| Dead routes deleted: [id]/view/, [id]/edit/, material-issue-form.tsx | ✅ Done | |
 
 ### Part 4.3 — New VMI single-screen
 | Task | Status | Notes |
 |------|--------|-------|
-| New: src/app/(dashboard)/transactions/material-issues/new/page.tsx | ⏳ Not Started | |
-| New: new-vmi-client.tsx | ⏳ Not Started | Page opens blank; Vehicle dropdown auto-focused |
-| Vehicle selected → auto-fill customer address | ⏳ Not Started | |
-| Stage selected → getStageMaterials(stageId) → grid pre-populates with default qty + last PO rate | ⏳ Not Started | |
-| Stage change after grid populated → confirmation dialog | ⏳ Not Started | "Changing stage will replace current grid items. Proceed?" |
-| Empty state when no vehicle/stage selected: "Select a vehicle and stage to load materials" | ⏳ Not Started | |
-| Clone New VMI + cloneNewMaterialIssue() | ⏳ Not Started | Copies vehicle_id + stage_id; both remain editable after clone |
-| Slip number auto-generated on Save/Issue | ⏳ Not Started | |
+| new/page.tsx: getSlipsForDropdown('NEW') + getStagesForDropdown() + searchParams | ✅ Done | |
+| new-vmi-client.tsx: Vehicle → Stage → DC Date → grid flow | ✅ Done | "NEW" badge; cross-screen guard (OLD slip → redirect to /?id=X) |
+| Stage selected → getStageMaterials() → grid pre-populates with last PO rate | ✅ Done | |
+| Stage change after grid populated → confirmation dialog | ✅ Done | |
+| Amber warning banner when any row has no PO rate history | ✅ Done | |
+| Zero-rate pre-Issue check dialog | ✅ Done | |
+| Clone + Delete + Issue + Save & Reapply + Ctrl+S/Alt+N/Escape | ✅ Done | |
+| Print + Print Adv. buttons | ✅ Done | |
 
-### Part 4.4 — Files summary
-| | Status |
-|-|--------|
-| material-issues-client.tsx (rewrite); new-vmi-client.tsx (new); material-issues.actions.ts (clone actions + issueType param) | 📋 Reference |
+### Part 4.4 — PDF + Nav + Home
+| Task | Status | Notes |
+|------|--------|-------|
+| mi-slip-pdf.tsx: single-slip DC note (regular + advance rate internal copy) | ✅ Done | margin factor applied to amounts; INTERNAL COPY label on adv. print |
+| Sidebar: "Veh. Issue (New)" nav entry (ClipboardCheck icon) | ✅ Done | |
+| Home page: recent MIs deep link → /new?id=X or /?id=X by issue_type | ✅ Done | |
 
 ### Part 18.3 — New VMI Edge Cases
 | | Status |
 |-|--------|
-| Vehicle with no customer (block); stage with no materials (allow + prompt); zero rate warning; stock check all-or-nothing; stage change confirmation; same material twice (aggregate); slip_number collision retry | 📋 Reference — verify during Phase 5 testing |
+| Stage change guard; zero-rate confirm before Issue; amber banner for missing PO rate; cross-screen redirect; slip_number advisory lock; FY-switch dirty check | 📋 Reference — verify during Phase 5 testing |
 
 ### Part 18.4 — Clone VMI Edge Cases
 | | Status |
 |-|--------|
-| Clone cancelled slip (block); double-click clone (disable during flight); inactive materials in clone (warn); stale rates warning toast; vehicle NOT NULL guard before Issue | 📋 Reference — verify during Phase 5 testing |
+| Clone cancelled slip (blocked); stale rates toast; vehicle_id NOT NULL guard; zero_rate_confirmed reset on clone | 📋 Reference — verify during Phase 5 testing |
 
 ---
 
 ## Phase 6 — Invoice (single-screen) + Insurance Bill
-_Requires Part 2.3 (include_tax) and Part 2.4 (insurance tables) from Phase 1, and Phase 5 (VMI — for complete testing of the MI checklist on the invoice screen). Within this phase: build Parts 5.x (Invoice) fully before starting Parts 6.x (Insurance Bill depends on the invoice UI being in place)._
+_Requires Part 2.3 (include_tax) and Part 2.4 (insurance tables) from Phase 1, and Phase 5 (VMI — for complete testing of the MI checklist on the invoice screen)._
 
-### Part 5.1 — Screen Layout
-| | Status |
-|-|--------|
-| Layout: Bill No, GST, Vehicle, Date, Tax%, Margin%, Discount, Job No, include_tax checkbox, status badges, Net Amount | 📋 Reference |
+> ⚠️ **Manual DB step still required** — run in Supabase SQL editor before testing:
+> ```sql
+> ALTER TABLE invoice_insurance ALTER COLUMN discount TYPE numeric(14,2);
+> ```
 
-### Part 5.2 — Invoice Status Badges
+### Part 5.1–5.7 — Invoice single-screen
 | Task | Status | Notes |
 |------|--------|-------|
-| Draft / Finalized badge in header | ⏳ Not Started | |
-| Insurance badge via EXISTS subquery: green "Insurance ✓" or amber "Insurance: Not Created" | ⏳ Not Started | No has_insurance_bill flag — use EXISTS at query time |
+| schema.ts: invoice_insurance.discount → numeric(14,2) | ✅ Done | Prevents overflow for discounts > ₹999 |
+| InvoiceWithDetails + InvoiceHeaderInput: include_tax added | ✅ Done | |
+| getInvoiceById(): include_tax in SELECT + return | ✅ Done | |
+| createInvoice() + updateInvoice(): include_tax persisted | ✅ Done | |
+| revertInvoiceToDraft(): insurance Finalized guard | ✅ Done | Throws if Finalized insurance bill exists |
+| cancelInvoice(): insurance guard INSIDE db.transaction() (TOCTOU-safe) | ✅ Done | |
+| getInvoicesForDropdown(fy): non-cached, LEFT JOIN vehicles | ✅ Done | |
+| invoice/page.tsx rewritten: searchParams + Promise.all parallel fetch | ✅ Done | |
+| invoice-client.tsx: single-screen (identifier dropdown, MI checklist, include_tax, status badges, insurance badge) | ✅ Done | Replaces invoice-form.tsx; invoice-list-client.tsx preserved for Phase 7 |
+| Home page Recent Invoice links: /invoice/\[id\]/view → /invoice?id=\[id\] | ✅ Done | |
+| Dead routes: edit + view → redirect; new → redirect; invoice-form.tsx deleted | ✅ Done | |
+| TransactionGrid: showTaxColumns prop + dynamic COL_CONFIG for invoice mode | ✅ Done | colTax = 3 when showTaxColumns; columnCount 3→4 |
 
-### Part 5.3 — Tax Columns Toggle
+### Part 6.1–6.4 — Insurance Bill
 | Task | Status | Notes |
 |------|--------|-------|
-| include_tax checkbox in header | ⏳ Not Started | |
-| Checked: add Tax Rate% + Tax Amount columns to grid | ⏳ Not Started | |
-| Save include_tax per invoice in invoices.include_tax | ⏳ Not Started | |
-
-### Part 5.4 — Finalize + Revert
-| Task | Status | Notes |
-|------|--------|-------|
-| Finalize button: confirm dialog → status=Finalized → bill_number assigned | ⏳ Not Started | |
-| Revert to Draft: reuse existing revertInvoiceToDraft() at invoices.actions.ts line 730 | ⏳ Not Started | Already exists — no new action needed |
-| After Finalize: "Create Insurance Bill" button appears | ⏳ Not Started | |
-
-### Part 5.5 — Cancellation Guard
-| Task | Status | Notes |
-|------|--------|-------|
-| cancelInvoice(): pre-check BEFORE db.transaction() | ⏳ Not Started | Finalized insurance → block with error |
-| Draft insurance bill: delete insurance items + header inside same transaction, then cancel invoice | ⏳ Not Started | |
-
-### Part 5.6 — Dead routes to delete
-| Task | Status | Notes |
-|------|--------|-------|
-| Delete /invoice/[id]/edit/ | ⏳ Not Started | |
-| Delete /invoice/[id]/view/ | ⏳ Not Started | |
-
-### Part 5.7 — Files
-| Task | Status | Notes |
-|------|--------|-------|
-| Rewrite invoice-client.tsx (merges invoice-list-client.tsx + invoice-form.tsx) | ⏳ Not Started | Remove Rev.Chrg.Status and Rate Date fields from UI |
-| Add getInvoicesForDropdown() | ⏳ Not Started | |
-
-### Part 6.1 — Insurance Bill: in-place rendering
-| Task | Status | Notes |
-|------|--------|-------|
-| State variable activeView: 'invoice' \| 'insurance' in invoice-client.tsx | ⏳ Not Started | |
-| "Create Insurance Bill" / "View Insurance Bill" → swaps content area to insurance form | ⏳ Not Started | |
-| Back button or Escape → returns to customer invoice view | ⏳ Not Started | |
-
-### Part 6.2 — Insurance Bill UI
-| Task | Status | Notes |
-|------|--------|-------|
-| New insurance-form.tsx component | ⏳ Not Started | |
-| Header: Insurance Bill Date, Tax%, Margin%, Discount, Net Amount, include_tax, status badge | ⏳ Not Started | Vehicle/Customer/GSTIN/State from parent — display only |
-| Grid: fully editable; starts as copy of customer items; independent after creation | ⏳ Not Started | |
-| Save Draft / Finalize / Delete / Print Insurance buttons | ⏳ Not Started | |
-
-### Part 6.3 — Business Rules
-| Task | Status | Notes |
-|------|--------|-------|
-| Create only from Finalized customer invoice | ⏳ Not Started | |
-| Draft: editable + deletable; Finalized: read-only | ⏳ Not Started | |
-| Finalized insurance bill blocks parent invoice cancellation | ⏳ Not Started | |
-
-### Part 6.4 — Server Actions
-| Task | Status | Notes |
-|------|--------|-------|
-| createInsuranceBill(): verify parent Finalized; read gst_type from invoice_items[0]; INSERT insurance + items | ⏳ Not Started | invoices table has NO gst_type — must read from invoice_items[0] |
-| saveInsuranceBill() | ⏳ Not Started | |
-| finalizeInsuranceBill() | ⏳ Not Started | |
-| deleteInsuranceBill() | ⏳ Not Started | |
-| Insurance PDF adapter: map invoice_insurance_items → PDF data shape | ⏳ Not Started | Existing insurance-invoice-pdf.tsx uses InvoiceRow[][] — needs adapter or new PDF component |
+| createInsuranceBill(): Finalized-parent guard + gst_type from invoice_items[0] + atomic INSERT | ✅ Done | Catches unique constraint violation |
+| getInsuranceBillByInvoiceId(): explicit SELECT+JOIN (not db.query.*) | ✅ Done | Returns InsuranceBillWithItems \| null |
+| saveInsuranceBill(): Draft guard + atomic header UPDATE + items DELETE+INSERT | ✅ Done | |
+| finalizeInsuranceBill(): Draft guard + status flip | ✅ Done | |
+| revertInsuranceBillToDraft(): Finalized guard + status flip (no preconditions) | ✅ Done | |
+| deleteInsuranceBill(): Draft guard (Finalized must revert first) | ✅ Done | |
+| insurance-form.tsx: header fields, items table, material combobox + free-text toggle, margin recalc | ✅ Done | |
+| insurance-pdf-adapter.ts: InsuranceBillWithItems → InvoiceRow[] for PDF | ✅ Done | |
+| insurance-invoice-pdf.tsx: "INSURANCE COPY" label added to printed page body | ✅ Done | |
+| All insurance actions: auth guard (if (!user) throw "Unauthorized") | ✅ Done | |
 
 ### Part 18.6 — Insurance Bill Edge Cases
 | | Status |
@@ -458,3 +437,5 @@ _No implementation tasks. Read these when working on the relevant phase._
 | 2026-06-22 | Phase 2 | useKeyboardGrid hook created; combobox.tsx: onOpenChange+gridRow/Col+onGridKeyDown+openOnArrowDown props; TransactionGrid: full arrow-key nav with COL_CONFIG per mode, auto-focus Qty after material select; all 7 master files: focus-move-after-Enter + Escape dirty-check + ConfirmDialog + dark headers + tighter row padding; stock-client.tsx: useEffect refresh fix; tailwind fontSize scale (14px base); alternating row CSS | Phase 3: Stage Master |
 | 2026-06-22 | Phase 3 | stages.actions.ts: saveStage (atomic tx, duplicate name check, numeric stage_code MAX), deleteStage (Issued MI guard + draftCount warning), reactivateStage, getStagesWithMaterials, getStagesForDropdown, getStageMaterials (with last PO rate); stages-client.tsx: 2-col sub-grid keyboard nav (inline handler), material auto-fill unit, dirty-check Escape, Ctrl+S, deactivate/reactivate ConfirmDialogs, inline 2-panel layout (w-[480px]); sidebar: Stages + Layers icon; cache.ts: stages tag; tsc: clean | Phase 4: Purchase Orders single-screen |
 | 2026-06-22 | Phase 4 | getPOsForDropdown() + revertPOToDraft() (pre-flight + atomic tx + stock_after + rate_at_time + adjusted_by) added to purchase-orders.actions.ts; purchase-orders-client.tsx fully rewritten as single-screen (identifier combobox openOnArrowDown, inline header fields, status badge, TransactionGrid, receive/revert/delete/discard dialogs, multi-supplier split preview, batch print range panel, Ctrl+S/Alt+N/Escape hotkeys, ?id= deep link, FY-change refresh); page.tsx updated with searchParams + Promise.all fetch; home page PO link → ?id=; dead routes + po-form.tsx deleted; tsc: clean | Phase 5: Old VMI + New VMI single-screen |
+| 2026-06-22 | Phase 5 | IssueHeaderInput extended (issue_type + stage_id); material-issues.actions.ts: createMaterialIssue (advisory lock inside tx), updateMaterialIssue (stage_id), getSlipsForDropdown, cloneOldMaterialIssue, cloneNewMaterialIssue, deleteMaterialIssue (invoice-link guard), getDashboardStats (issue_type); material-issues-client.tsx fully rewritten as Old VMI single-screen (openOnArrowDown, cross-screen guard, FY dirty check, Save & Reapply, Clone, Print, Print Adv.); new-vmi-client.tsx created (Stage → grid pre-populate, stage-change guard, zero-rate dialog, amber no-rate banner, "NEW" badge, cross-screen guard); new/page.tsx rewritten; mi-slip-pdf.tsx created (regular + advance rate internal copy); sidebar: "Veh. Issue (New)" entry; home page deep link fix; dead routes deleted; tsc: clean. Manual DB step (backfill + CHECK constraints) still pending in Supabase SQL editor. | Phase 6: Invoice single-screen + Insurance Bill |
+| 2026-06-22 | Phase 6 | schema.ts: invoice_insurance.discount → numeric(14,2); InvoiceWithDetails + InvoiceHeaderInput: include_tax; getInvoiceById/createInvoice/updateInvoice: include_tax persisted; revertInvoiceToDraft + cancelInvoice: insurance guards (TOCTOU-safe tx); getInvoicesForDropdown(); all insurance CRUD actions (create/get/save/finalize/revert/delete) with auth guards; invoice/page.tsx rewritten (searchParams + parallel fetch); invoice-client.tsx: single-screen with identifier dropdown, MI checklist, include_tax toggle, insurance badge, activeView switcher; TransactionGrid: showTaxColumns prop + dynamic colConfig + Tax% editable col + Tax Amt display col; insurance-form.tsx: header + items table + material/free-text toggle + margin recalc + Finalize/Revert/Delete; insurance-pdf-adapter.ts; insurance-invoice-pdf.tsx: INSURANCE COPY label; dead routes → redirects; invoice-form.tsx deleted; tsc: clean. Manual DB step (ALTER TABLE invoice_insurance ALTER COLUMN discount TYPE numeric(14,2)) still pending in Supabase SQL editor. | Phase 7: Reports |

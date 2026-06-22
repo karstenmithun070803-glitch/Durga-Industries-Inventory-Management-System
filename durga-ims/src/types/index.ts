@@ -304,6 +304,7 @@ export interface InvoiceWithDetails {
   material_margin: string | null;
   discount: string | null;
   net_amount: string;
+  include_tax: boolean;
   rev_charge_status: boolean;
   payment_status: string;
   payment_date: string | null;
@@ -319,6 +320,62 @@ export interface InvoiceWithDetails {
   customer_state: string | null;
   customer_address: string | null;
   items: InvoiceItemWithDetails[];
+}
+
+// ---------------------------------------------------------------------------
+// Insurance Bill Types
+// ---------------------------------------------------------------------------
+
+export interface InvoiceInsuranceHeader {
+  id: string;
+  invoice_id: string;
+  bill_date: string;
+  tax_percentage: string;
+  material_margin: string;
+  discount: string;
+  net_amount: string;
+  gst_type: string;
+  include_tax: boolean;
+  status: string; // 'Draft' | 'Finalized'
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface InvoiceInsuranceItem {
+  id: string;
+  insurance_id: string;
+  material_id: string | null;
+  material_name_override: string | null;
+  hsn_code: string | null;
+  qty: string;
+  unit_id: string | null;
+  unit_name: string | null;
+  rate: string;
+  amount: string;
+  tax_percentage: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  gst_type: string;
+  sort_order: number;
+  // for display — resolved from material_id or override
+  material_name: string | null;
+  material_no: number | null;
+}
+
+export interface InsuranceBillWithItems {
+  header: InvoiceInsuranceHeader;
+  items: InvoiceInsuranceItem[];
+}
+
+// Lightweight dropdown item for identifier combobox
+export interface InvoiceDropdownItem {
+  id: string;
+  billNumber: string;
+  date: string;
+  status: string;
+  vehicleName: string | null;
+  netAmount: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,8 @@ import {
   invoices,
   invoiceItems,
   invoiceSlipLinks,
+  invoiceInsurance,
+  invoiceInsuranceItems,
   materials,
   vehicles,
   customers,
@@ -13,12 +15,19 @@ import {
   materialIssues,
   materialIssueItems,
 } from "@/lib/db/schema";
-import { eq, and, sql, desc, like, notExists, ne, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, asc, like, notExists, ne, inArray } from "drizzle-orm";
 import { revalidatePath, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { fyDateRange } from "@/lib/fy";
 import { createClient } from "@/lib/supabase/server";
-import type { InvoiceWithDetails, InvoiceItemWithDetails, InvoiceRow } from "@/types";
+import type {
+  InvoiceWithDetails,
+  InvoiceItemWithDetails,
+  InvoiceRow,
+  InsuranceBillWithItems,
+  InvoiceInsuranceItem,
+  InvoiceDropdownItem,
+} from "@/types";
 import { INVOICE_STATUS, PAYMENT_STATUS } from "@/lib/constants";
 
 // ---------------------------------------------------------------------------
@@ -50,6 +59,7 @@ interface InvoiceHeaderInput {
   tax_percentage: string;
   material_margin: string;
   net_amount: string;
+  include_tax: boolean;
   items: InvoiceItemInput[];
 }
 
@@ -458,6 +468,7 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
       payment_notes: invoices.payment_notes,
       cancelled_by: invoices.cancelled_by,
       cancelled_at: invoices.cancelled_at,
+      include_tax: invoices.include_tax,
       vehicle_id: vehicles.id,
       vehicle_name: vehicles.vehicle_name,
       job_ref_no: vehicles.job_ref_no,
@@ -512,6 +523,7 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
     material_margin: h.material_margin,
     discount: h.discount,
     net_amount: h.net_amount,
+    include_tax: h.include_tax ?? false,
     rev_charge_status: h.rev_charge_status,
     payment_status: h.payment_status ?? PAYMENT_STATUS.UNPAID,
     payment_date: h.payment_date ? (h.payment_date as unknown as Date).toISOString().split("T")[0] : null,
@@ -600,6 +612,7 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
           net_amount: data.net_amount,
           financial_year: data.financial_year,
           status: INVOICE_STATUS.DRAFT,
+          include_tax: data.include_tax ?? false,
           customer_name: vData?.customer_name ?? null,
           customer_gstin: vData?.customer_gstin ?? null,
           customer_state: vData?.customer_state ?? null,
@@ -686,6 +699,7 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
         material_margin: data.material_margin || null,
         vehicle_id: data.vehicle_id,
         net_amount: data.net_amount,
+        include_tax: data.include_tax ?? false,
         customer_name: vData?.customer_name ?? null,
         customer_gstin: vData?.customer_gstin ?? null,
         customer_state: vData?.customer_state ?? null,
@@ -731,6 +745,17 @@ export async function revertInvoiceToDraft(id: string): Promise<void> {
   const [inv] = await db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, id));
   if (!inv) throw new Error("Invoice not found.");
   if (inv.status === INVOICE_STATUS.CANCELLED) throw new Error("Cancelled invoices cannot be reverted to Draft.");
+
+  const [finInsurance] = await db
+    .select({ id: invoiceInsurance.id })
+    .from(invoiceInsurance)
+    .where(and(eq(invoiceInsurance.invoice_id, id), eq(invoiceInsurance.status, "Finalized")));
+  if (finInsurance) {
+    throw new Error(
+      "Cannot revert — this invoice has a finalized insurance bill. Revert the insurance bill to Draft first."
+    );
+  }
+
   await db.update(invoices).set({ status: INVOICE_STATUS.DRAFT }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
 }
@@ -769,8 +794,24 @@ export async function cancelInvoice(id: string): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Free MI slips and record cancellation audit atomically
+  // Guard + free MI slips + cancel — all inside one transaction (TOCTOU-safe)
   await db.transaction(async (tx) => {
+    // Check insurance bill status inside the transaction to prevent race conditions
+    const [insurance] = await tx
+      .select({ id: invoiceInsurance.id, status: invoiceInsurance.status })
+      .from(invoiceInsurance)
+      .where(eq(invoiceInsurance.invoice_id, id));
+
+    if (insurance?.status === "Finalized") {
+      throw new Error(
+        "Cannot cancel — this invoice has a finalized insurance bill. Revert the insurance bill to Draft first."
+      );
+    }
+    if (insurance?.status === "Draft") {
+      // Delete draft insurance bill (CASCADE removes invoice_insurance_items)
+      await tx.delete(invoiceInsurance).where(eq(invoiceInsurance.id, insurance.id));
+    }
+
     await tx.delete(invoiceSlipLinks).where(eq(invoiceSlipLinks.invoice_id, id));
     await tx.update(invoices).set({
       status: INVOICE_STATUS.CANCELLED,
@@ -803,6 +844,332 @@ export async function markInvoicePayment(
   }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
   revalidatePath("/");
+}
+
+// ---------------------------------------------------------------------------
+// Dropdown query for identifier combobox (single-screen)
+// ---------------------------------------------------------------------------
+
+export async function getInvoicesForDropdown(fy: string): Promise<InvoiceDropdownItem[]> {
+  const rows = await db
+    .select({
+      id: invoices.id,
+      bill_number: invoices.bill_number,
+      bill_date: invoices.bill_date,
+      status: invoices.status,
+      net_amount: invoices.net_amount,
+      vehicle_name: vehicles.vehicle_name,
+    })
+    .from(invoices)
+    .leftJoin(vehicles, eq(invoices.vehicle_id, vehicles.id))
+    .where(and(eq(invoices.financial_year, fy), ne(invoices.status, INVOICE_STATUS.CANCELLED)))
+    .orderBy(desc(invoices.bill_date), desc(invoices.bill_number));
+
+  return rows.map((r) => ({
+    id: r.id,
+    billNumber: r.bill_number,
+    date: (r.bill_date as unknown as Date).toISOString().split("T")[0],
+    status: r.status,
+    vehicleName: r.vehicle_name,
+    netAmount: r.net_amount,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Insurance Bill CRUD
+// ---------------------------------------------------------------------------
+
+export async function createInsuranceBill(invoiceId: string): Promise<{ insuranceBillId: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // Verify parent invoice is Finalized
+  const [inv] = await db
+    .select({ status: invoices.status, bill_number: invoices.bill_number })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  if (!inv) throw new Error("Invoice not found.");
+  if (inv.status !== INVOICE_STATUS.FINALIZED)
+    throw new Error("Insurance bill can only be created for a Finalized invoice.");
+
+  // Fetch invoice items to copy
+  const items = await db
+    .select({
+      material_id: invoiceItems.material_id,
+      hsn_code: invoiceItems.hsn_code,
+      qty: invoiceItems.qty,
+      unit_id: invoiceItems.unit_id,
+      rate: invoiceItems.rate,
+      amount: invoiceItems.amount,
+      tax_percentage: invoiceItems.tax_percentage,
+      cgst_amount: invoiceItems.cgst_amount,
+      sgst_amount: invoiceItems.sgst_amount,
+      igst_amount: invoiceItems.igst_amount,
+      gst_type: invoiceItems.gst_type,
+    })
+    .from(invoiceItems)
+    .where(eq(invoiceItems.invoice_id, invoiceId))
+    .orderBy(asc(invoiceItems.id));
+
+  if (items.length === 0) throw new Error("Invoice has no items to copy to the insurance bill.");
+
+  // Validate all items share the same gst_type
+  const gstTypes = new Set(items.map((i) => i.gst_type).filter(Boolean));
+  if (gstTypes.size > 1)
+    throw new Error("Invoice has mixed GST types — cannot create insurance bill. Contact support.");
+
+  const gstType = items[0].gst_type ?? "CGST_SGST";
+  const today = new Date().toISOString().split("T")[0];
+
+  let insuranceBillId: string;
+  try {
+    insuranceBillId = await db.transaction(async (tx) => {
+      const [newBill] = await tx
+        .insert(invoiceInsurance)
+        .values({
+          invoice_id: invoiceId,
+          bill_date: today,
+          gst_type: gstType,
+          status: "Draft",
+          tax_percentage: "18",
+          material_margin: "0",
+          discount: "0",
+          net_amount: "0",
+          include_tax: false,
+        })
+        .returning({ id: invoiceInsurance.id });
+
+      await tx.insert(invoiceInsuranceItems).values(
+        items.map((item, idx) => ({
+          insurance_id: newBill.id,
+          material_id: item.material_id,
+          material_name_override: null,
+          hsn_code: item.hsn_code,
+          qty: item.qty,
+          unit_id: item.unit_id,
+          rate: item.rate ?? "0",
+          amount: item.amount,
+          tax_percentage: item.tax_percentage,
+          cgst_amount: item.cgst_amount,
+          sgst_amount: item.sgst_amount,
+          igst_amount: item.igst_amount,
+          gst_type: gstType,
+          sort_order: idx,
+        }))
+      );
+
+      return newBill.id;
+    });
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes("invoice_insurance_invoice_id_unique")) {
+      throw new Error("Insurance bill already exists for this invoice.");
+    }
+    throw e;
+  }
+
+  revalidatePath("/invoice");
+  return { insuranceBillId };
+}
+
+export async function getInsuranceBillByInvoiceId(invoiceId: string): Promise<InsuranceBillWithItems | null> {
+  const [header] = await db
+    .select()
+    .from(invoiceInsurance)
+    .where(eq(invoiceInsurance.invoice_id, invoiceId));
+
+  if (!header) return null;
+
+  const itemRows = await db
+    .select({
+      id: invoiceInsuranceItems.id,
+      insurance_id: invoiceInsuranceItems.insurance_id,
+      material_id: invoiceInsuranceItems.material_id,
+      material_name_override: invoiceInsuranceItems.material_name_override,
+      hsn_code: invoiceInsuranceItems.hsn_code,
+      qty: invoiceInsuranceItems.qty,
+      unit_id: invoiceInsuranceItems.unit_id,
+      unit_name: units.unit_name,
+      rate: invoiceInsuranceItems.rate,
+      amount: invoiceInsuranceItems.amount,
+      tax_percentage: invoiceInsuranceItems.tax_percentage,
+      cgst_amount: invoiceInsuranceItems.cgst_amount,
+      sgst_amount: invoiceInsuranceItems.sgst_amount,
+      igst_amount: invoiceInsuranceItems.igst_amount,
+      gst_type: invoiceInsuranceItems.gst_type,
+      sort_order: invoiceInsuranceItems.sort_order,
+      material_name: materials.name,
+      material_no: materials.material_no,
+    })
+    .from(invoiceInsuranceItems)
+    .leftJoin(materials, eq(invoiceInsuranceItems.material_id, materials.id))
+    .leftJoin(units, eq(invoiceInsuranceItems.unit_id, units.id))
+    .where(eq(invoiceInsuranceItems.insurance_id, header.id))
+    .orderBy(asc(invoiceInsuranceItems.sort_order));
+
+  return {
+    header: {
+      id: header.id,
+      invoice_id: header.invoice_id,
+      bill_date: header.bill_date,
+      tax_percentage: header.tax_percentage ?? "18",
+      material_margin: header.material_margin ?? "0",
+      discount: header.discount ?? "0",
+      net_amount: header.net_amount ?? "0",
+      gst_type: header.gst_type,
+      include_tax: header.include_tax ?? false,
+      status: header.status,
+      created_at: header.created_at?.toISOString() ?? null,
+      updated_at: header.updated_at?.toISOString() ?? null,
+    },
+    items: itemRows.map((r, idx) => ({
+      id: r.id,
+      insurance_id: r.insurance_id,
+      material_id: r.material_id,
+      material_name_override: r.material_name_override,
+      hsn_code: r.hsn_code,
+      qty: r.qty,
+      unit_id: r.unit_id,
+      unit_name: r.unit_name,
+      rate: r.rate,
+      amount: r.amount,
+      tax_percentage: r.tax_percentage,
+      cgst_amount: r.cgst_amount ?? "0",
+      sgst_amount: r.sgst_amount ?? "0",
+      igst_amount: r.igst_amount ?? "0",
+      gst_type: r.gst_type,
+      sort_order: r.sort_order ?? idx,
+      material_name: r.material_name ?? r.material_name_override ?? null,
+      material_no: r.material_no ?? null,
+    })),
+  };
+}
+
+interface InsuranceBillItemInput {
+  material_id: string | null;
+  material_name_override: string | null;
+  hsn_code: string | null;
+  qty: string;
+  unit_id: string | null;
+  rate: string;
+  amount: string;
+  tax_percentage: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  gst_type: string;
+  sort_order: number;
+}
+
+interface InsuranceBillInput {
+  bill_date: string;
+  tax_percentage: string;
+  material_margin: string;
+  discount: string;
+  net_amount: string;
+  include_tax: boolean;
+  items: InsuranceBillItemInput[];
+}
+
+export async function saveInsuranceBill(id: string, data: InsuranceBillInput): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const [bill] = await db
+    .select({ status: invoiceInsurance.status })
+    .from(invoiceInsurance)
+    .where(eq(invoiceInsurance.id, id));
+  if (!bill) throw new Error("Insurance bill not found.");
+  if (bill.status === "Finalized")
+    throw new Error("Insurance bill is finalized — revert to Draft before editing.");
+
+  await db.transaction(async (tx) => {
+    await tx.update(invoiceInsurance).set({
+      bill_date: data.bill_date,
+      tax_percentage: data.tax_percentage,
+      material_margin: data.material_margin,
+      discount: data.discount,
+      net_amount: data.net_amount,
+      include_tax: data.include_tax,
+      updated_at: new Date(),
+    }).where(eq(invoiceInsurance.id, id));
+
+    await tx.delete(invoiceInsuranceItems).where(eq(invoiceInsuranceItems.insurance_id, id));
+
+    if (data.items.length > 0) {
+      await tx.insert(invoiceInsuranceItems).values(
+        data.items.map((item) => ({
+          insurance_id: id,
+          material_id: item.material_id,
+          material_name_override: item.material_name_override,
+          hsn_code: item.hsn_code,
+          qty: item.qty,
+          unit_id: item.unit_id,
+          rate: item.rate,
+          amount: item.amount,
+          tax_percentage: item.tax_percentage,
+          cgst_amount: item.cgst_amount,
+          sgst_amount: item.sgst_amount,
+          igst_amount: item.igst_amount,
+          gst_type: item.gst_type,
+          sort_order: item.sort_order,
+        }))
+      );
+    }
+  });
+
+  revalidatePath("/invoice");
+}
+
+export async function finalizeInsuranceBill(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const [bill] = await db
+    .select({ status: invoiceInsurance.status })
+    .from(invoiceInsurance)
+    .where(eq(invoiceInsurance.id, id));
+  if (!bill) throw new Error("Insurance bill not found.");
+  if (bill.status === "Finalized") throw new Error("Insurance bill is already finalized.");
+
+  await db.update(invoiceInsurance).set({ status: "Finalized", updated_at: new Date() }).where(eq(invoiceInsurance.id, id));
+  revalidatePath("/invoice");
+}
+
+export async function revertInsuranceBillToDraft(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const [bill] = await db
+    .select({ status: invoiceInsurance.status })
+    .from(invoiceInsurance)
+    .where(eq(invoiceInsurance.id, id));
+  if (!bill) throw new Error("Insurance bill not found.");
+  if (bill.status === "Draft") throw new Error("Insurance bill is already in Draft.");
+
+  await db.update(invoiceInsurance).set({ status: "Draft", updated_at: new Date() }).where(eq(invoiceInsurance.id, id));
+  revalidatePath("/invoice");
+}
+
+export async function deleteInsuranceBill(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const [bill] = await db
+    .select({ status: invoiceInsurance.status })
+    .from(invoiceInsurance)
+    .where(eq(invoiceInsurance.id, id));
+  if (!bill) throw new Error("Insurance bill not found.");
+  if (bill.status === "Finalized")
+    throw new Error("Cannot delete a finalized insurance bill — revert to Draft first.");
+
+  // CASCADE deletes invoice_insurance_items
+  await db.delete(invoiceInsurance).where(eq(invoiceInsurance.id, id));
+  revalidatePath("/invoice");
 }
 
 export async function getLinkedSlipsForInvoice(invoiceId: string): Promise<{ id: string; slip_number: number; issue_date: string; item_count: number }[]> {

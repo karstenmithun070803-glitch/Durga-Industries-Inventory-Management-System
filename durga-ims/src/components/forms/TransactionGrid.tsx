@@ -62,13 +62,16 @@ interface Props {
   mode?: "purchase-order" | "material-issue" | "invoice";
   contractors?: ContractorOption[];
   gstType?: string; // header-level GST type (all rows share it in material-issue / invoice mode)
+  // When true (invoice mode only): shows editable Tax% column + read-only Tax Amt column
+  showTaxColumns?: boolean;
 }
 
-// Column indices per mode (only interactive elements counted)
-// PO:      Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4
-// MI:      Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5
-// Invoice: Material=0, Qty=1, Rate=2
-const COL_CONFIG = {
+// Column indices per mode (only interactive/focusable elements counted)
+// PO:                  Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4
+// MI:                  Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5
+// Invoice:             Material=0, Qty=1, Rate=2
+// Invoice+showTax:     Material=0, Qty=1, Rate=2, Tax%=3
+const STATIC_COL_CONFIG = {
   "purchase-order": { columnCount: 5, qtyCol: 2 },
   "material-issue": { columnCount: 6, qtyCol: 3 },
   invoice:          { columnCount: 3, qtyCol: 1 },
@@ -143,6 +146,7 @@ export function TransactionGrid({
   mode = "purchase-order",
   contractors = [],
   gstType,
+  showTaxColumns = false,
 }: Props) {
   const gridRef = useRef<HTMLTableElement>(null);
   const isIssueMode = mode === "material-issue";
@@ -153,7 +157,11 @@ export function TransactionGrid({
   // In material-issue / invoice mode, gstType is header-level (same for all rows)
   const effectiveGstType = isHeaderGstMode ? (gstType ?? "CGST_SGST") : undefined;
 
-  const { columnCount, qtyCol } = COL_CONFIG[mode];
+  // Dynamic column config — invoice mode gains extra columns when showTaxColumns=true
+  const colConfig = isInvoiceMode
+    ? { columnCount: showTaxColumns ? 4 : 3, qtyCol: 1 }
+    : STATIC_COL_CONFIG[mode];
+  const { columnCount, qtyCol } = colConfig;
 
   // Track which combobox cell is open so the keyboard hook can yield to cmdk
   const [openComboboxCell, setOpenComboboxCell] = useState<{ row: number; col: number } | null>(null);
@@ -337,9 +345,10 @@ export function TransactionGrid({
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-24">Qty</th>
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Unit</th>
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-28">Rate</th>
-            {!isInvoiceMode && <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Tax %</th>}
-            {isInvoiceMode && <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-24">Tax</th>}
+            {(!isInvoiceMode || showTaxColumns) && <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Tax %</th>}
+            {isInvoiceMode && !showTaxColumns && <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-24">Tax</th>}
             <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-28">Amount</th>
+            {isInvoiceMode && showTaxColumns && <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-24">Tax Amt</th>}
             {!readOnly && <th className="px-3 py-2 w-10" />}
           </tr>
         </thead>
@@ -359,7 +368,7 @@ export function TransactionGrid({
             const colAffectsStock = isIssueMode ? 2 : -1;
             const colQty = qtyCol;
             const colRate = isInvoiceMode ? 2 : isIssueMode ? 4 : 3;
-            const colTax = isIssueMode ? 5 : mode === "purchase-order" ? 4 : -1;
+            const colTax = isIssueMode ? 5 : mode === "purchase-order" ? 4 : (isInvoiceMode && showTaxColumns) ? 3 : -1;
 
             return (
               <tr key={row._key} className="border-t border-slate-100">
@@ -557,8 +566,8 @@ export function TransactionGrid({
                   )}
                 </td>
 
-                {/* Tax % — hidden in invoice mode */}
-                {!isInvoiceMode && (
+                {/* Tax % — hidden in invoice mode unless showTaxColumns */}
+                {(!isInvoiceMode || showTaxColumns) && (
                   <td className="px-3 py-1.5">
                     {readOnly ? (
                       <span className="text-slate-800">{row.tax_percentage}</span>
@@ -579,8 +588,8 @@ export function TransactionGrid({
                   </td>
                 )}
 
-                {/* Tax — invoice mode only; shows combined tax amount per line (read-only) */}
-                {isInvoiceMode && (
+                {/* Tax — invoice mode without showTaxColumns: shows combined tax amount per line (read-only) */}
+                {isInvoiceMode && !showTaxColumns && (
                   <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
                     {fmt2(
                       (parseFloat(row.cgst_amount || "0") +
@@ -599,6 +608,17 @@ export function TransactionGrid({
                      parseFloat(row.igst_amount || "0")).toFixed(2)
                   )}
                 </td>
+
+                {/* Tax Amt — invoice mode with showTaxColumns: combined tax per line (read-only) */}
+                {isInvoiceMode && showTaxColumns && (
+                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
+                    {fmt2(
+                      (parseFloat(row.cgst_amount || "0") +
+                       parseFloat(row.sgst_amount || "0") +
+                       parseFloat(row.igst_amount || "0")).toFixed(2)
+                    )}
+                  </td>
+                )}
 
                 {!readOnly && (
                   <td className="px-3 py-1.5">

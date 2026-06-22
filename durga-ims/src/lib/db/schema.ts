@@ -428,7 +428,7 @@ export const invoiceInsurance = pgTable("invoice_insurance", {
   bill_date: date("bill_date").notNull(),
   tax_percentage: numeric("tax_percentage", { precision: 5, scale: 2 }).default("18"),
   material_margin: numeric("material_margin", { precision: 5, scale: 2 }).default("0"),
-  discount: numeric("discount", { precision: 5, scale: 2 }).default("0"),
+  discount: numeric("discount", { precision: 14, scale: 2 }).default("0"),
   net_amount: numeric("net_amount", { precision: 14, scale: 2 }).default("0"),
   // frozen from invoice_items[0].gst_type at creation time
   gst_type: text("gst_type").notNull(),

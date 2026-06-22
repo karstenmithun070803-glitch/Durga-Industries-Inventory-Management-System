@@ -49,6 +49,9 @@ export function InsuranceInvoiceDocument({ groups, companySetting }: Props) {
             </View>
 
             <Text style={styles.docTypeCentered}>INVOICE</Text>
+            <Text style={{ textAlign: "center", fontSize: 8, fontFamily: "Helvetica-Bold", color: "#7c3aed", letterSpacing: 1, marginBottom: 2 }}>
+              INSURANCE COPY
+            </Text>
 
             {/* ── Two-column header: bill info left, customer info right ── */}
             <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>

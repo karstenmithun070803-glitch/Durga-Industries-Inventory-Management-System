@@ -158,7 +158,7 @@ export default async function HomePage() {
           <RecentTable
             headers={["Bill #", "Date", "Customer"]}
             rows={stats.recentInvoices.map((r) => [
-              <Link key={r.id} href={`/invoice/${r.id}/view`} className="font-mono text-blue-600 hover:underline">
+              <Link key={r.id} href={`/invoice?id=${r.id}`} className="font-mono text-blue-600 hover:underline">
                 {r.bill_number}
               </Link>,
               r.bill_date,
