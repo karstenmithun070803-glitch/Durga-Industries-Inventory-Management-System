@@ -165,6 +165,9 @@ export const purchaseOrders = pgTable("purchase_orders", {
   // optional reference to supplier's own invoice for AP reconciliation
   supplier_bill_no: text("supplier_bill_no"),
   supplier_bill_date: date("supplier_bill_date"),
+  // revert-to-draft audit — nullable; stamped even for affects_stock=false POs
+  reverted_at: timestamp("reverted_at", { withTimezone: true }),
+  reverted_by: text("reverted_by"),
   ...timestamps,
 }, (t) => [
   unique("po_number_fy_unique").on(t.po_number, t.financial_year),
@@ -200,6 +203,40 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   index("idx_poi_material_id").on(table.material_id),
 ]);
 
+// ---------------------------------------------------------------------------
+// STAGE MASTER  (must precede material_issues FK reference)
+// ---------------------------------------------------------------------------
+
+export const stages = pgTable("stages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // auto-generated: S001, S002 ... S999, S1000 (padded, then grows)
+  stage_code: text("stage_code").unique().notNull(),
+  stage_name: text("stage_name").notNull(),
+  ...softDelete,
+  ...timestamps,
+}, (table) => [
+  index("idx_stages_is_active").on(table.is_active),
+]);
+
+export const stageMaterials = pgTable("stage_materials", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  stage_id: uuid("stage_id")
+    .notNull()
+    .references(() => stages.id, { onDelete: "cascade" }),
+  material_id: uuid("material_id")
+    .notNull()
+    .references(() => materials.id, { onDelete: "restrict" }),
+  default_qty: numeric("default_qty", { precision: 12, scale: 3 }).notNull().default("0"),
+  unit_id: uuid("unit_id")
+    .notNull()
+    .references(() => units.id),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique("stage_material_unique").on(table.stage_id, table.material_id),
+  index("idx_sm_stage_id").on(table.stage_id),
+  index("idx_sm_material_id").on(table.material_id),
+]);
+
 export const materialIssues = pgTable("material_issues", {
   id: uuid("id").primaryKey().defaultRandom(),
   // integer (not serial) — resets to 1 each FY; backend calculates next number
@@ -213,12 +250,18 @@ export const materialIssues = pgTable("material_issues", {
   financial_year: text("financial_year").notNull(),
   // 'Draft' = editable, 'Issued' = triggers stock deduction
   status: text("status").notNull().default("Draft"),
+  // 'OLD' = standard VMI; 'NEW' = stage-based VMI
+  issue_type: text("issue_type").notNull().default("OLD"),
+  // null for OLD type; set for NEW type
+  stage_id: uuid("stage_id").references(() => stages.id),
   ...timestamps,
 }, (t) => [
   unique("slip_number_fy_unique").on(t.slip_number, t.financial_year),
   index("idx_mi_financial_year").on(t.financial_year),
   index("idx_mi_vehicle_id").on(t.vehicle_id),
   index("idx_mi_fy_status").on(t.financial_year, t.status),
+  index("idx_mi_issue_type").on(t.issue_type),
+  index("idx_mi_stage_id").on(t.stage_id),
 ]);
 
 export const materialIssueItems = pgTable("material_issue_items", {
@@ -279,6 +322,8 @@ export const invoices = pgTable("invoices", {
   // cancellation audit
   cancelled_by: text("cancelled_by"),
   cancelled_at: timestamp("cancelled_at", { withTimezone: true }),
+  // whether to show tax breakdown columns in the invoice grid
+  include_tax: boolean("include_tax").default(false),
   ...timestamps,
 }, (t) => [
   unique("bill_number_fy_unique").on(t.bill_number, t.financial_year),
@@ -361,12 +406,61 @@ export const stockLedger = pgTable("stock_ledger", {
   stock_after: numeric("stock_after", { precision: 12, scale: 4 }).notNull(),
   reason: text("reason"),        // required for ADJUSTMENT
   adjusted_by: text("adjusted_by"), // username, required for ADJUSTMENT
+  // rate at the time of the ledger entry — for value impact transparency in History Drawer
+  rate_at_time: numeric("rate_at_time", { precision: 14, scale: 4 }),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // no updated_at — this table is append-only
 }, (table) => [
   index("idx_sl_material_id").on(table.material_id),
   index("idx_sl_created_at").on(table.created_at),
   index("idx_sl_material_created").on(table.material_id, table.created_at),
+]);
+
+// ---------------------------------------------------------------------------
+// INSURANCE BILL  (linked to a Finalized customer invoice; independent items)
+// ---------------------------------------------------------------------------
+
+export const invoiceInsurance = pgTable("invoice_insurance", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // UNIQUE: one insurance bill per customer invoice; no ON DELETE CASCADE (intentional)
+  // cancelInvoice() is blocked if insurance bill is Finalized
+  invoice_id: uuid("invoice_id").notNull().unique().references(() => invoices.id),
+  bill_date: date("bill_date").notNull(),
+  tax_percentage: numeric("tax_percentage", { precision: 5, scale: 2 }).default("18"),
+  material_margin: numeric("material_margin", { precision: 5, scale: 2 }).default("0"),
+  discount: numeric("discount", { precision: 5, scale: 2 }).default("0"),
+  net_amount: numeric("net_amount", { precision: 14, scale: 2 }).default("0"),
+  // frozen from invoice_items[0].gst_type at creation time
+  gst_type: text("gst_type").notNull(),
+  include_tax: boolean("include_tax").default(false),
+  // 'Draft' | 'Finalized'
+  status: text("status").notNull().default("Draft"),
+  ...timestamps,
+}, (table) => [
+  index("idx_ii_ins_invoice_id").on(table.invoice_id),
+]);
+
+export const invoiceInsuranceItems = pgTable("invoice_insurance_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  insurance_id: uuid("insurance_id")
+    .notNull()
+    .references(() => invoiceInsurance.id, { onDelete: "cascade" }),
+  // null when item is free-text (no master record); use material_name_override instead
+  material_id: uuid("material_id").references(() => materials.id),
+  material_name_override: text("material_name_override"),
+  hsn_code: text("hsn_code"),
+  qty: numeric("qty", { precision: 12, scale: 3 }).notNull(),
+  unit_id: uuid("unit_id").references(() => units.id),
+  rate: numeric("rate", { precision: 14, scale: 4 }).notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  tax_percentage: numeric("tax_percentage", { precision: 5, scale: 2 }).notNull(),
+  cgst_amount: numeric("cgst_amount", { precision: 14, scale: 2 }).default("0"),
+  sgst_amount: numeric("sgst_amount", { precision: 14, scale: 2 }).default("0"),
+  igst_amount: numeric("igst_amount", { precision: 14, scale: 2 }).default("0"),
+  gst_type: text("gst_type").notNull(),
+  sort_order: integer("sort_order").default(0),
+}, (table) => [
+  index("idx_iii_insurance_id").on(table.insurance_id),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -401,6 +495,8 @@ export const unitsRelations = relations(units, ({ many }) => ({
   purchaseOrderItems: many(purchaseOrderItems),
   materialIssueItems: many(materialIssueItems),
   invoiceItems: many(invoiceItems),
+  stageMaterials: many(stageMaterials),
+  invoiceInsuranceItems: many(invoiceInsuranceItems),
 }));
 
 export const materialsRelations = relations(materials, ({ one, many }) => ({
@@ -422,6 +518,8 @@ export const materialsRelations = relations(materials, ({ one, many }) => ({
   materialIssueItems: many(materialIssueItems),
   invoiceItems: many(invoiceItems),
   stockLedger: many(stockLedger),
+  stageMaterials: many(stageMaterials),
+  invoiceInsuranceItems: many(invoiceInsuranceItems),
 }));
 
 export const contractorsRelations = relations(contractors, ({ many }) => ({
@@ -455,10 +553,34 @@ export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one 
   }),
 }));
 
+export const stagesRelations = relations(stages, ({ many }) => ({
+  stageMaterials: many(stageMaterials),
+  materialIssues: many(materialIssues),
+}));
+
+export const stageMaterialsRelations = relations(stageMaterials, ({ one }) => ({
+  stage: one(stages, {
+    fields: [stageMaterials.stage_id],
+    references: [stages.id],
+  }),
+  material: one(materials, {
+    fields: [stageMaterials.material_id],
+    references: [materials.id],
+  }),
+  unit: one(units, {
+    fields: [stageMaterials.unit_id],
+    references: [units.id],
+  }),
+}));
+
 export const materialIssuesRelations = relations(materialIssues, ({ one, many }) => ({
   vehicle: one(vehicles, {
     fields: [materialIssues.vehicle_id],
     references: [vehicles.id],
+  }),
+  stage: one(stages, {
+    fields: [materialIssues.stage_id],
+    references: [stages.id],
   }),
   items: many(materialIssueItems),
 }));
@@ -488,6 +610,33 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
     references: [vehicles.id],
   }),
   items: many(invoiceItems),
+  insuranceBill: one(invoiceInsurance, {
+    fields: [invoices.id],
+    references: [invoiceInsurance.invoice_id],
+  }),
+}));
+
+export const invoiceInsuranceRelations = relations(invoiceInsurance, ({ one, many }) => ({
+  invoice: one(invoices, {
+    fields: [invoiceInsurance.invoice_id],
+    references: [invoices.id],
+  }),
+  items: many(invoiceInsuranceItems),
+}));
+
+export const invoiceInsuranceItemsRelations = relations(invoiceInsuranceItems, ({ one }) => ({
+  insuranceBill: one(invoiceInsurance, {
+    fields: [invoiceInsuranceItems.insurance_id],
+    references: [invoiceInsurance.id],
+  }),
+  material: one(materials, {
+    fields: [invoiceInsuranceItems.material_id],
+    references: [materials.id],
+  }),
+  unit: one(units, {
+    fields: [invoiceInsuranceItems.unit_id],
+    references: [units.id],
+  }),
 }));
 
 export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({

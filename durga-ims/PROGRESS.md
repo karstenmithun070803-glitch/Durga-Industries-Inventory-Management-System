@@ -10,8 +10,8 @@
 ---
 
 ## Current Status
-**Last session:** 2026-06-21 — Planning only, no code written
-**Next up:** Phase 1 — DB Migrations + Library Install
+**Last session:** 2026-06-22 — Phase 1 fully complete. schema.ts updated, migration 0002_unknown_hydra.sql generated and pushed to DB, react-hotkeys-hook installed.
+**Next up:** Phase 2 — Keyboard Navigation + CSS
 
 ---
 
@@ -21,41 +21,46 @@ _Everything else depends on these schema changes. Do this first._
 ### Part 2.1 — stages + stage_materials tables
 | Task | Status | Notes |
 |------|--------|-------|
-| CREATE TABLE stages | ⏳ Not Started | Must come BEFORE material_issues FK |
-| CREATE TABLE stage_materials | ⏳ Not Started | FK to stages(id) + materials(id); ON DELETE RESTRICT on material FK |
+| CREATE TABLE stages | ✅ Done | Added to schema.ts; migration 0002_unknown_hydra.sql generated |
+| CREATE TABLE stage_materials | ✅ Done | FK to stages(id) CASCADE + materials(id) RESTRICT; UNIQUE(stage_id, material_id) |
 
 ### Part 2.2 — material_issues: new columns
 | Task | Status | Notes |
 |------|--------|-------|
-| ADD COLUMN issue_type TEXT NOT NULL DEFAULT 'OLD' | ⏳ Not Started | Existing rows get 'OLD' automatically — safe |
-| ADD COLUMN stage_id UUID REFERENCES stages(id) | ⏳ Not Started | Nullable; only set for New VMI slips |
+| ADD COLUMN issue_type TEXT NOT NULL DEFAULT 'OLD' | ✅ Done | Existing rows get 'OLD' automatically |
+| ADD COLUMN stage_id UUID REFERENCES stages(id) | ✅ Done | Nullable; only set for New VMI slips |
 
 ### Part 2.3 — invoices: tax toggle
 | Task | Status | Notes |
 |------|--------|-------|
-| ADD COLUMN include_tax BOOLEAN DEFAULT false | ⏳ Not Started | Existing invoices show no tax columns by default |
+| ADD COLUMN include_tax BOOLEAN DEFAULT false | ✅ Done | Existing invoices show no tax columns by default |
 
 ### Part 2.4 — insurance bill tables
 | Task | Status | Notes |
 |------|--------|-------|
-| CREATE TABLE invoice_insurance | ⏳ Not Started | UNIQUE(invoice_id); no ON DELETE CASCADE — intentional |
-| CREATE TABLE invoice_insurance_items | ⏳ Not Started | Includes material_name_override TEXT for free-text items |
+| CREATE TABLE invoice_insurance | ✅ Done | UNIQUE(invoice_id); no ON DELETE CASCADE — intentional |
+| CREATE TABLE invoice_insurance_items | ✅ Done | Includes material_name_override TEXT for free-text items |
 
 ### Part 2.5 — purchase_orders: revert audit columns
 | Task | Status | Notes |
 |------|--------|-------|
-| ADD COLUMN reverted_at TIMESTAMPTZ | ⏳ Not Started | Nullable; existing rows unaffected |
-| ADD COLUMN reverted_by TEXT | ⏳ Not Started | Stores email address (same pattern as cancelled_by) |
+| ADD COLUMN reverted_at TIMESTAMPTZ | ✅ Done | Nullable; existing rows unaffected |
+| ADD COLUMN reverted_by TEXT | ✅ Done | Stores email address (same pattern as cancelled_by) |
 
 ### Part 2.6 — stock_ledger: rate transparency
 | Task | Status | Notes |
 |------|--------|-------|
-| ADD COLUMN rate_at_time NUMERIC(14,4) | ⏳ Not Started | Nullable; NULL for pre-migration rows is expected |
+| ADD COLUMN rate_at_time NUMERIC(14,4) | ✅ Done | Nullable; NULL for pre-migration rows is expected |
 
 ### Part 17 — Library Install
 | Task | Status | Notes |
 |------|--------|-------|
-| npm install react-hotkeys-hook | ⏳ Not Started | For Ctrl+S, Alt+N, Escape global shortcuts |
+| npm install react-hotkeys-hook | ✅ Done | Installed successfully |
+
+### DB Push
+| Task | Status | Notes |
+|------|--------|-------|
+| npx drizzle-kit push | ✅ Done | Applied successfully — "Changes applied" confirmed |
 
 ---
 
@@ -450,3 +455,4 @@ _No implementation tasks. Read these when working on the relevant phase._
 | Date | Phase worked on | What was done | Next session |
 |------|----------------|---------------|--------------|
 | 2026-06-21 | Planning | PLAN.md + PROGRESS.md created; all 7 decisions resolved; no code written | Phase 1: DB Migrations + Library Install |
+| 2026-06-22 | Phase 1 | schema.ts: added stages, stage_materials, invoice_insurance, invoice_insurance_items tables; added issue_type+stage_id to material_issues, include_tax to invoices, reverted_at+reverted_by to purchase_orders, rate_at_time to stock_ledger; Drizzle migration 0002_unknown_hydra.sql generated; react-hotkeys-hook installed; DB push needs manual run (TTY required) | Phase 2: Keyboard Navigation + CSS |

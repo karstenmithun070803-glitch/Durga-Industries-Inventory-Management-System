@@ -15,6 +15,13 @@
       "when": 1780733074772,
       "tag": "0001_third_sauron",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782093702299,
+      "tag": "0002_unknown_hydra",
+      "breakpoints": true
     }
   ]
 }
