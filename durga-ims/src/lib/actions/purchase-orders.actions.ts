@@ -9,6 +9,25 @@ import { eq, and, max, desc, inArray } from "drizzle-orm";
 import type { PurchaseOrderWithDetails, PurchaseOrderItemWithDetails } from "@/types";
 
 // ---------------------------------------------------------------------------
+// READ — lightweight dropdown list (one row per PO, for identifier combobox)
+// ---------------------------------------------------------------------------
+
+export async function getPOsForDropdown(financialYear: string) {
+  return db
+    .select({
+      id: purchaseOrders.id,
+      poNumber: purchaseOrders.po_number,
+      supplierName: suppliers.name,
+      date: purchaseOrders.po_date,
+      status: purchaseOrders.status,
+    })
+    .from(purchaseOrders)
+    .leftJoin(suppliers, eq(purchaseOrders.supplier_id, suppliers.id))
+    .where(eq(purchaseOrders.financial_year, financialYear))
+    .orderBy(desc(purchaseOrders.po_number));
+}
+
+// ---------------------------------------------------------------------------
 // READ — list (two-query: headers first, then items; merged into flat rows)
 // ---------------------------------------------------------------------------
 
@@ -596,4 +615,102 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
   });
 
   revalidatePath("/transactions/purchase-orders");
+}
+
+// ---------------------------------------------------------------------------
+// WRITE — revert Received PO back to Draft (atomic: stock reversal + status)
+// ---------------------------------------------------------------------------
+
+export async function revertPOToDraft(
+  poId: string,
+  userEmail: string = "unknown"
+): Promise<{ success: true } | { error: string }> {
+  const [po] = await db
+    .select()
+    .from(purchaseOrders)
+    .where(eq(purchaseOrders.id, poId));
+
+  if (!po) return { error: "Purchase order not found." };
+  if (po.status !== "Received") return { error: "Only Received POs can be reverted to Draft." };
+
+  // Pre-flight: check all materials have enough stock for reversal (single bulk query)
+  if (po.affects_stock) {
+    const stockCheck = await db
+      .select({
+        name: materials.name,
+        current_stock: materials.current_stock,
+        qty: purchaseOrderItems.qty,
+      })
+      .from(purchaseOrderItems)
+      .innerJoin(materials, eq(purchaseOrderItems.material_id, materials.id))
+      .where(eq(purchaseOrderItems.po_id, poId));
+
+    const blocking: string[] = [];
+    for (const item of stockCheck) {
+      const after = parseFloat(item.current_stock) - parseFloat(item.qty);
+      if (after < 0) {
+        blocking.push(
+          `${item.name}: stock ${parseFloat(item.current_stock).toFixed(3)}, need to remove ${parseFloat(item.qty).toFixed(3)}`
+        );
+      }
+    }
+    if (blocking.length > 0) {
+      return {
+        error: `Cannot revert — insufficient stock for:\n• ${blocking.join("\n• ")}`,
+      };
+    }
+  }
+
+  // Atomic transaction: reverse stock + set status = Draft
+  await db.transaction(async (tx) => {
+    if (po.affects_stock) {
+      const poItems = await tx
+        .select({
+          material_id: purchaseOrderItems.material_id,
+          qty: purchaseOrderItems.qty,
+          rate: purchaseOrderItems.rate,
+        })
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.po_id, poId));
+
+      for (const item of poItems) {
+        const [mat] = await tx
+          .select({ current_stock: materials.current_stock })
+          .from(materials)
+          .where(eq(materials.id, item.material_id));
+
+        const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
+
+        await tx
+          .update(materials)
+          .set({ current_stock: newStock, updated_at: new Date() })
+          .where(eq(materials.id, item.material_id));
+
+        await tx.insert(stockLedger).values({
+          material_id: item.material_id,
+          transaction_type: "REVERSAL",
+          reference_id: poId,
+          reference_type: "purchase_order",
+          qty_change: (-parseFloat(item.qty)).toString(),
+          stock_after: newStock,
+          rate_at_time: item.rate,
+          adjusted_by: userEmail,
+          reason: `PO #${po.po_number} reverted to Draft`,
+        });
+      }
+    }
+
+    await tx
+      .update(purchaseOrders)
+      .set({
+        status: "Draft",
+        reverted_at: new Date(),
+        reverted_by: userEmail,
+        updated_at: new Date(),
+      })
+      .where(eq(purchaseOrders.id, poId));
+  });
+
+  revalidatePath("/transactions/purchase-orders");
+  return { success: true };
 }

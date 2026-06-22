@@ -10,8 +10,8 @@
 ---
 
 ## Current Status
-**Last session:** 2026-06-22 — Phase 3 fully complete. stages.actions.ts (saveStage atomic tx, deleteStage with issued-MI guard, reactivateStage, getStagesForDropdown, getStageMaterials), stages-client.tsx (2-col sub-grid keyboard nav, dirty-check Escape, Ctrl+S, deactivate/reactivate dialogs), sidebar Stages entry.
-**Next up:** Phase 4 — Purchase Orders single-screen rewrite
+**Last session:** 2026-06-22 — Phase 4 fully complete. getPOsForDropdown() + revertPOToDraft() added to actions; purchase-orders-client.tsx fully rewritten as single-screen (identifier dropdown, inline header fields, grid, receive/revert/delete dialogs, batch print panel, Ctrl+S/Alt+N/Escape hotkeys); page.tsx updated with searchParams + new data fetching; home page PO links updated to ?id= pattern; dead routes (new/, [id]/edit/, [id]/view/, po-form.tsx) deleted. tsc: clean.
+**Next up:** Phase 5 — Vehicle Material Issue (Old VMI single-screen rewrite + New VMI)
 
 ---
 
@@ -171,42 +171,42 @@ _Requires Part 2.5 (reverted_at/by columns) from Phase 1, and Phase 2 (Transacti
 ### Part 3.2 — Inline Editing (no Edit/Modify button)
 | Task | Status | Notes |
 |------|--------|-------|
-| Rewrite purchase-orders-client.tsx as single screen | ⏳ Not Started | Page opens blank; identifier dropdown auto-focused |
-| All header fields always editable inline (Date, Supplier, Vehicle) | ⏳ Not Started | |
-| Save branches by status: Draft → updatePurchaseOrder(); Received → updateReceivedPurchaseOrder() | ⏳ Not Started | updatePurchaseOrder() has WHERE status='Draft' — must branch |
+| Rewrite purchase-orders-client.tsx as single screen | ✅ Done | Page opens blank; identifier dropdown auto-focused (openOnArrowDown) |
+| All header fields always editable inline (Date, Supplier Bill No, Bill Date, Affects Stock) | ✅ Done | |
+| Save branches by status: Draft → updatePurchaseOrder(); Received → updateReceivedPurchaseOrder() | ✅ Done | |
 
 ### Part 3.3 — Button State Logic
 | Task | Status | Notes |
 |------|--------|-------|
-| No record: show New \| Exit | ⏳ Not Started | |
-| Draft: show New \| Save \| Delete \| Mark as Received \| Print \| Cancel \| Exit | ⏳ Not Started | |
-| Received: show New \| Save \| Delete \| Revert to Draft \| Print \| Cancel \| Exit | ⏳ Not Started | |
+| No record: show New \| Exit | ✅ Done | |
+| Draft: show New \| Save \| Delete \| Mark as Received \| Print \| Cancel \| Exit | ✅ Done | |
+| Received: show New \| Save \| Delete \| Revert to Draft \| Print \| Cancel \| Exit | ✅ Done | |
 
 ### Part 3.4 — revertPOToDraft server action
 | Task | Status | Notes |
 |------|--------|-------|
-| Pre-flight bulk stock check OUTSIDE transaction | ⏳ Not Started | Modelled on deletePurchaseOrder() lines 542–561 |
-| Atomic transaction: stock reversal + INSERT stock_ledger REVERSAL + set status='Draft' | ⏳ Not Started | |
-| Stamp reverted_at=NOW(), reverted_by=userEmail even for affects_stock=false POs | ⏳ Not Started | |
-| Error dialog listing all blocking materials (not just first) | ⏳ Not Started | |
-| DB CHECK constraint current_stock_non_negative as final race guard | ⏳ Not Started | Surfaces as error if race occurs |
+| Pre-flight bulk stock check OUTSIDE transaction | ✅ Done | Lists ALL blocking materials |
+| Atomic transaction: stock reversal + INSERT stock_ledger REVERSAL + set status='Draft' | ✅ Done | stock_after computed inside tx; rate_at_time + adjusted_by stamped |
+| Stamp reverted_at=NOW(), reverted_by=userEmail even for affects_stock=false POs | ✅ Done | |
+| Error dialog listing all blocking materials (not just first) | ✅ Done | whitespace-pre-line in dialog |
+| DB CHECK constraint current_stock_non_negative as final race guard | ✅ Done | DB constraint fires if race occurs |
 
 ### Part 3.5 — Home page deep links
 | Task | Status | Notes |
 |------|--------|-------|
-| PO screen reads ?id= query param on mount and auto-loads that PO | ⏳ Not Started | |
+| PO screen reads ?id= query param on mount and auto-loads that PO | ✅ Done | searchParams in page.tsx; initialSelectedId prop |
 
 ### Part 3.6 — Dead routes to delete
 | Task | Status | Notes |
 |------|--------|-------|
-| Delete /transactions/purchase-orders/new/ | ⏳ Not Started | |
-| Delete /transactions/purchase-orders/[id]/edit/ | ⏳ Not Started | |
-| Delete /transactions/purchase-orders/[id]/view/ | ⏳ Not Started | |
+| Delete /transactions/purchase-orders/new/ | ✅ Done | |
+| Delete /transactions/purchase-orders/[id]/edit/ | ✅ Done | |
+| Delete /transactions/purchase-orders/[id]/view/ | ✅ Done | po-form.tsx also deleted |
 
 ### Part 3.7 — New queries
 | Task | Status | Notes |
 |------|--------|-------|
-| getPOsForDropdown(fy) → { id, poNumber, supplierName, date, status }[] | ⏳ Not Started | |
+| getPOsForDropdown(fy) → { id, poNumber, supplierName, date, status }[] | ✅ Done | Non-cached; leftJoin suppliers |
 
 ### Part 18.5 — PO Revert Edge Cases
 | | Status |
@@ -457,3 +457,4 @@ _No implementation tasks. Read these when working on the relevant phase._
 | 2026-06-22 | Phase 1 | schema.ts: added stages, stage_materials, invoice_insurance, invoice_insurance_items tables; added issue_type+stage_id to material_issues, include_tax to invoices, reverted_at+reverted_by to purchase_orders, rate_at_time to stock_ledger; Drizzle migration 0002_unknown_hydra.sql generated; react-hotkeys-hook installed; DB push needs manual run (TTY required) | Phase 2: Keyboard Navigation + CSS |
 | 2026-06-22 | Phase 2 | useKeyboardGrid hook created; combobox.tsx: onOpenChange+gridRow/Col+onGridKeyDown+openOnArrowDown props; TransactionGrid: full arrow-key nav with COL_CONFIG per mode, auto-focus Qty after material select; all 7 master files: focus-move-after-Enter + Escape dirty-check + ConfirmDialog + dark headers + tighter row padding; stock-client.tsx: useEffect refresh fix; tailwind fontSize scale (14px base); alternating row CSS | Phase 3: Stage Master |
 | 2026-06-22 | Phase 3 | stages.actions.ts: saveStage (atomic tx, duplicate name check, numeric stage_code MAX), deleteStage (Issued MI guard + draftCount warning), reactivateStage, getStagesWithMaterials, getStagesForDropdown, getStageMaterials (with last PO rate); stages-client.tsx: 2-col sub-grid keyboard nav (inline handler), material auto-fill unit, dirty-check Escape, Ctrl+S, deactivate/reactivate ConfirmDialogs, inline 2-panel layout (w-[480px]); sidebar: Stages + Layers icon; cache.ts: stages tag; tsc: clean | Phase 4: Purchase Orders single-screen |
+| 2026-06-22 | Phase 4 | getPOsForDropdown() + revertPOToDraft() (pre-flight + atomic tx + stock_after + rate_at_time + adjusted_by) added to purchase-orders.actions.ts; purchase-orders-client.tsx fully rewritten as single-screen (identifier combobox openOnArrowDown, inline header fields, status badge, TransactionGrid, receive/revert/delete/discard dialogs, multi-supplier split preview, batch print range panel, Ctrl+S/Alt+N/Escape hotkeys, ?id= deep link, FY-change refresh); page.tsx updated with searchParams + Promise.all fetch; home page PO link → ?id=; dead routes + po-form.tsx deleted; tsc: clean | Phase 5: Old VMI + New VMI single-screen |

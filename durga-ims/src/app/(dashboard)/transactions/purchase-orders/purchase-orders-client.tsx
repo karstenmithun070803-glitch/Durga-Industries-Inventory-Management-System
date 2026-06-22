@@ -1,22 +1,83 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { useFY } from "@/lib/financial-year";
-import { getPurchaseOrders, deletePurchaseOrder } from "@/lib/actions/purchase-orders.actions";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Button } from "@/components/ui/button";
+import { isDateInFY } from "@/lib/fy";
+import {
+  getPurchaseOrderById,
+  getPOsForDropdown,
+  createPurchaseOrder,
+  updatePurchaseOrder,
+  updateReceivedPurchaseOrder,
+  receivePurchaseOrder,
+  deletePurchaseOrder,
+  revertPOToDraft,
+} from "@/lib/actions/purchase-orders.actions";
+import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
-import { formatCode } from "@/lib/utils";
-import { Trash2, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PrintButton } from "@/components/pdf/print-button";
 import { PORegisterDocument } from "@/components/pdf/po-register-pdf";
+import { useHotkeys } from "react-hotkeys-hook";
+import { toast } from "sonner";
+import { formatCode } from "@/lib/utils";
+import { AlertTriangle } from "lucide-react";
+import type { PurchaseOrderWithDetails, LineItemDraft } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 
-type ItemRow = {
-  // PO header
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface DropdownItem {
+  id: string;
+  poNumber: number;
+  supplierName: string | null;
+  date: Date | string;
+  status: string;
+}
+
+interface SupplierOption {
+  id: string;
+  code_no: number;
+  name: string;
+  gstin: string | null;
+  state: string | null;
+  address: string | null;
+}
+
+interface MaterialOption {
+  id: string;
+  material_no: number;
+  name: string;
+  hsn_code: string | null;
+  tax_rate_id: string | null;
+  purchase_unit_id: string | null;
+  current_stock: string;
+}
+
+interface TaxRateOption {
+  id: string;
+  tax_percentage: string;
+}
+
+interface UnitOption {
+  id: string;
+  unit_name: string;
+}
+
+// PDF row shape expected by PORegisterDocument
+type PDFItemRow = {
   id: string;
   po_number: number;
   po_date: Date | string;
@@ -24,7 +85,6 @@ type ItemRow = {
   affects_stock: boolean;
   supplier_bill_no: string | null;
   supplier_bill_date: string | null;
-  // line item
   item_id: string | null;
   material_id: string | null;
   material_name: string | null;
@@ -42,48 +102,24 @@ type ItemRow = {
   gst_type: string | null;
 };
 
-type StatusFilter = "All" | "Draft" | "Received";
-
-type GroupedPO = {
-  id: string;
-  po_number: number;
-  po_date: Date | string;
-  status: string;
-  affects_stock: boolean;
-  suppliers: string[];
-  itemCount: number;
-  grandTotal: number;
-  items: ItemRow[];
-};
-
-function groupPORows(rows: ItemRow[]): GroupedPO[] {
-  const map = new Map<string, GroupedPO>();
-  for (const r of rows) {
-    if (!map.has(r.id)) {
-      map.set(r.id, {
-        id: r.id, po_number: r.po_number, po_date: r.po_date,
-        status: r.status, affects_stock: r.affects_stock,
-        suppliers: [], itemCount: 0, grandTotal: 0, items: [],
-      });
-    }
-    const g = map.get(r.id)!;
-    if (r.supplier_name && !g.suppliers.includes(r.supplier_name))
-      g.suppliers.push(r.supplier_name);
-    g.grandTotal +=
-      parseFloat(r.amount ?? "0") +
-      parseFloat(r.cgst_amount ?? "0") +
-      parseFloat(r.sgst_amount ?? "0") +
-      parseFloat(r.igst_amount ?? "0");
-    g.itemCount++;
-    g.items.push(r);
-  }
-  return Array.from(map.values());
-}
-
 interface Props {
-  initialRows: ItemRow[];
+  dropdownItems: DropdownItem[];
+  suppliers: SupplierOption[];
+  materials: MaterialOption[];
+  taxRates: TaxRateOption[];
+  units: UnitOption[];
+  initialSelectedId?: string;
   initialFY: string;
   companySetting?: CompanySetting;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function toISODate(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toISOString().split("T")[0];
 }
 
 function formatDate(d: Date | string): string {
@@ -91,320 +127,869 @@ function formatDate(d: Date | string): string {
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+function formatAmount(n: number): string {
+  return "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
+function calcAllTotals(rows: LineItemDraft[]) {
+  let subtotal = 0, cgst = 0, sgst = 0, igst = 0;
+  for (const r of rows) {
+    if (!r.material_id) continue;
+    subtotal += parseFloat(r.amount) || 0;
+    cgst += parseFloat(r.cgst_amount) || 0;
+    sgst += parseFloat(r.sgst_amount) || 0;
+    igst += parseFloat(r.igst_amount) || 0;
+  }
+  return { subtotal, cgst, sgst, igst, grand: subtotal + cgst + sgst + igst };
+}
 
-export function PurchaseOrdersClient({ initialRows, initialFY, companySetting }: Props) {
-  const router = useRouter();
+function poItemsToRows(po: PurchaseOrderWithDetails): LineItemDraft[] {
+  if (po.items.length === 0) return [newRow()];
+  return po.items.map((item) => ({
+    _key: crypto.randomUUID(),
+    material_id: item.material_id,
+    material_name: item.material_name,
+    material_no: item.material_no ?? 0,
+    hsn_code: item.hsn_code ?? "",
+    supplier_id: item.supplier_id ?? "",
+    supplier_name: item.supplier_name ?? "",
+    gst_type: item.gst_type ?? "IGST",
+    qty: item.qty,
+    unit_id: item.unit_id ?? "",
+    unit_name: item.unit_name ?? "",
+    rate: item.rate,
+    tax_percentage: item.tax_percentage,
+    cgst_amount: item.cgst_amount,
+    sgst_amount: item.sgst_amount,
+    igst_amount: item.igst_amount,
+    amount: item.amount,
+    rateBlank: false,
+    zeroRateConfirmed: true,
+    contractor_id: "",
+    contractor_name: "",
+    affects_inventory: true,
+  }));
+}
+
+function buildItemsPayload(rows: LineItemDraft[]) {
+  return rows.map((r) => ({
+    material_id: r.material_id,
+    supplier_id: r.supplier_id || null,
+    qty: r.qty,
+    unit_id: r.unit_id,
+    rate: r.rate || "0",
+    rate_blank: r.rateBlank,
+    zero_rate_confirmed: r.zeroRateConfirmed,
+    tax_percentage: r.tax_percentage || "0",
+    cgst_amount: r.cgst_amount,
+    sgst_amount: r.sgst_amount,
+    igst_amount: r.igst_amount,
+    amount: r.amount,
+    gst_type: r.gst_type || null,
+  }));
+}
+
+function groupBySupplier(rows: LineItemDraft[]): Map<string, LineItemDraft[]> {
+  const map = new Map<string, LineItemDraft[]>();
+  for (const row of rows) {
+    const key = row.supplier_id || "__none__";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(row);
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export function PurchaseOrdersClient({
+  dropdownItems: initialDropdownItems,
+  suppliers,
+  materials,
+  taxRates,
+  units,
+  initialSelectedId,
+  initialFY,
+  companySetting,
+}: Props) {
   const { activeFY } = useFY();
-  const [rows, setRows] = useState<ItemRow[]>(initialRows);
-  const [loadedFY, setLoadedFY] = useState(initialFY);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [deletingPoId, setDeletingPoId] = useState<string | null>(null);
-  const [deletingStatus, setDeletingStatus] = useState<string>("");
   const [isPending, startTransition] = useTransition();
-  const [isFetching, setIsFetching] = useState(false);
-  const [showRates, setShowRates] = useState(false);
 
-  // Re-fetch when FY changes
+  // Dropdown state
+  const [dropdownItems, setDropdownItems] = useState<DropdownItem[]>(initialDropdownItems);
+  const [loadedFY, setLoadedFY] = useState(initialFY);
+
+  // Loaded PO
+  const [loadedPO, setLoadedPO] = useState<PurchaseOrderWithDetails | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Form fields
+  const [poDate, setPoDate] = useState("");
+  const [affectsStock, setAffectsStock] = useState(true);
+  const [supplierBillNo, setSupplierBillNo] = useState("");
+  const [supplierBillDate, setSupplierBillDate] = useState("");
+  const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Dialog state
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
+  const [revertDialogOpen, setRevertDialogOpen] = useState(false);
+  const [revertError, setRevertError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  // Batch print range
+  const [printFromId, setPrintFromId] = useState("");
+  const [printToId, setPrintToId] = useState("");
+
+  const identifierRef = useRef<HTMLButtonElement>(null);
+
+  // Auto-load on mount if deep-linked via ?id=
+  useEffect(() => {
+    if (initialSelectedId) {
+      void loadPO(initialSelectedId);
+    } else {
+      setTimeout(() => identifierRef.current?.focus(), 100);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // FY change: refresh dropdown + clear form
   useEffect(() => {
     if (activeFY === loadedFY) return;
-    setIsFetching(true);
-    getPurchaseOrders(activeFY).then((data) => {
-      setRows(data as ItemRow[]);
+    getPOsForDropdown(activeFY).then((data) => {
+      setDropdownItems(data as DropdownItem[]);
       setLoadedFY(activeFY);
-      setIsFetching(false);
+      clearForm();
     });
   }, [activeFY, loadedFY]);
 
-  const visible = rows.filter((r) => {
-    if (statusFilter !== "All" && r.status !== statusFilter) return false;
+  // ---------------------------------------------------------------------------
+  // Form helpers
+  // ---------------------------------------------------------------------------
 
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      const rowDate = typeof r.po_date === "string" ? new Date(r.po_date) : r.po_date;
-      if (rowDate < from) return false;
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      to.setHours(23, 59, 59, 999);
-      const rowDate = typeof r.po_date === "string" ? new Date(r.po_date) : r.po_date;
-      if (rowDate > to) return false;
-    }
-
-    const q = search.toLowerCase();
-    if (!q) return true;
-    return (
-      (r.supplier_name ?? "").toLowerCase().includes(q) ||
-      (r.material_name ?? "").toLowerCase().includes(q) ||
-      formatCode("PO-", r.po_number, 4).toLowerCase().includes(q) ||
-      String(r.po_number).includes(q) ||
-      (r.material_no ? formatCode("M", r.material_no).toLowerCase().includes(q) : false) ||
-      (r.material_no ? String(r.material_no).includes(q) : false)
-    );
-  });
-
-
-
-  function handleDeleteClick(r: { id: string; status: string }) {
-    setDeletingPoId(r.id);
-    setDeletingStatus(r.status);
+  function clearForm() {
+    setLoadedPO(null);
+    setPoDate("");
+    setAffectsStock(true);
+    setSupplierBillNo("");
+    setSupplierBillDate("");
+    setRows([newRow()]);
+    setIsDirty(false);
   }
 
-  function confirmDelete() {
-    if (!deletingPoId) return;
+  function populateForm(po: PurchaseOrderWithDetails) {
+    setLoadedPO(po);
+    setPoDate(toISODate(po.po_date));
+    setAffectsStock(po.affects_stock);
+    setSupplierBillNo(po.supplier_bill_no ?? "");
+    setSupplierBillDate(po.supplier_bill_date ? toISODate(po.supplier_bill_date) : "");
+    setRows(poItemsToRows(po));
+    setIsDirty(false);
+  }
+
+  async function loadPO(id: string) {
+    setIsLoading(true);
+    try {
+      const po = await getPurchaseOrderById(id);
+      if (po) {
+        populateForm(po);
+      } else {
+        toast.error("Purchase order not found");
+      }
+    } catch {
+      toast.error("Failed to load purchase order");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function refreshDropdown() {
+    const data = await getPOsForDropdown(activeFY);
+    setDropdownItems(data as DropdownItem[]);
+  }
+
+  function validate(): string | null {
+    if (!poDate) return "Please enter a PO date.";
+    if (!isDateInFY(poDate, activeFY)) return `PO date is outside FY ${activeFY} (1 Apr – 31 Mar).`;
+    const filled = rows.filter((r) => r.material_id);
+    if (filled.length === 0) return "Add at least one material.";
+    const missingSupplier = filled.find((r) => !r.supplier_id);
+    if (missingSupplier) return `Select a supplier for ${missingSupplier.material_name}.`;
+    const zeroQty = filled.find((r) => !r.qty || parseFloat(r.qty) <= 0);
+    if (zeroQty) return `Quantity must be greater than 0 for ${zeroQty.material_name}.`;
+    return null;
+  }
+
+  function buildPayload(rowSet?: LineItemDraft[]) {
+    const filled = (rowSet ?? rows).filter((r) => r.material_id);
+    const { grand } = calcAllTotals(filled);
+    return {
+      po_date: poDate,
+      financial_year: activeFY,
+      total_amount: grand.toFixed(2),
+      affects_stock: affectsStock,
+      supplier_bill_no: supplierBillNo,
+      supplier_bill_date: supplierBillDate,
+      items: buildItemsPayload(filled),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
+
+  function handleSelect(id: string) {
+    if (!id) { clearForm(); return; }
+    if (isDirty) {
+      setPendingAction(() => () => void loadPO(id));
+      setDiscardDialogOpen(true);
+      return;
+    }
+    void loadPO(id);
+  }
+
+  function handleNew() {
+    const doNew = () => {
+      clearForm();
+      setTimeout(() => identifierRef.current?.focus(), 50);
+    };
+    if (isDirty) {
+      setPendingAction(() => doNew);
+      setDiscardDialogOpen(true);
+      return;
+    }
+    doNew();
+  }
+
+  function handleSave() {
+    const err = validate();
+    if (err) { toast.error(err); return; }
+
     startTransition(async () => {
       try {
-        await deletePurchaseOrder(deletingPoId);
-        setRows((prev) => prev.filter((r) => r.id !== deletingPoId));
-        toast.success("Purchase order deleted");
+        if (!loadedPO) {
+          // New PO — group by supplier, create one PO per supplier
+          const filled = rows.filter((r) => r.material_id);
+          const bySupplier = groupBySupplier(filled);
+          let firstId: string | undefined;
+          for (const [, supplierRows] of Array.from(bySupplier)) {
+            const { grand } = calcAllTotals(supplierRows);
+            const id = await createPurchaseOrder({
+              po_date: poDate,
+              financial_year: activeFY,
+              total_amount: grand.toFixed(2),
+              affects_stock: affectsStock,
+              supplier_bill_no: supplierBillNo,
+              supplier_bill_date: supplierBillDate,
+              items: buildItemsPayload(supplierRows),
+            });
+            if (!firstId) firstId = id;
+          }
+          const count = bySupplier.size;
+          toast.success(`${count} draft PO${count > 1 ? "s" : ""} created`);
+          await refreshDropdown();
+          if (firstId) await loadPO(firstId);
+        } else if (loadedPO.status === "Draft") {
+          await updatePurchaseOrder(loadedPO.id, buildPayload());
+          toast.success("Draft saved");
+          const updated = await getPurchaseOrderById(loadedPO.id);
+          if (updated) populateForm(updated);
+          await refreshDropdown();
+        } else {
+          // Received — atomic reversal + reapply
+          await updateReceivedPurchaseOrder(loadedPO.id, buildPayload());
+          toast.success("Stock reversed and reapplied successfully");
+          const updated = await getPurchaseOrderById(loadedPO.id);
+          if (updated) populateForm(updated);
+          await refreshDropdown();
+        }
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Delete failed");
-      } finally {
-        setDeletingPoId(null);
+        toast.error(e instanceof Error ? e.message : "Save failed");
       }
     });
   }
 
-  const deleteTitle = deletingStatus === "Received"
-    ? "Delete received purchase order?"
-    : "Delete draft purchase order?";
-  const deleteDescription = deletingStatus === "Received"
-    ? "This will permanently delete the PO and reverse all stock additions. This cannot be undone."
-    : "This draft PO will be permanently deleted. No stock was added.";
-
-  const tabs: StatusFilter[] = ["All", "Draft", "Received"];
-
-  function downloadCsv() {
-    const headers = ["PO #", "Date", "Supplier", "Material", "Qty", "Unit", "Rate", "Taxable Amount", "CGST", "SGST", "IGST", "Total Amount", "Stock Updated", "Status"];
-    const csvRows = visible.map((r) => {
-      const taxable = parseFloat(r.amount ?? "0");
-      const cgst = parseFloat(r.cgst_amount ?? "0");
-      const sgst = parseFloat(r.sgst_amount ?? "0");
-      const igst = parseFloat(r.igst_amount ?? "0");
-      return [
-        `PO-${String(r.po_number).padStart(4, "0")}`,
-        new Date(r.po_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
-        r.supplier_name ?? "",
-        r.material_name ?? "",
-        r.qty ?? "",
-        r.unit_name ?? "",
-        parseFloat(r.rate ?? "0").toFixed(2),
-        taxable.toFixed(2),
-        cgst.toFixed(2),
-        sgst.toFixed(2),
-        igst.toFixed(2),
-        (taxable + cgst + sgst + igst).toFixed(2),
-        r.affects_stock ? "Yes" : "No",
-        r.status,
-      ];
-    });
-    const bom = "﻿";
-    const csv = bom + [headers, ...csvRows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `purchase-orders-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  function handleMarkAsReceived() {
+    const err = validate();
+    if (err) { toast.error(err); return; }
+    setReceiveDialogOpen(true);
   }
 
-  return (
-    <div className="p-6 h-full flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Purchase Orders</h1>
-          <p className="text-sm text-slate-500 mt-0.5">FY {activeFY}</p>
-        </div>
-        <Link href="/transactions/purchase-orders/new">
-          <Button className="gap-1.5"><Plus className="w-4 h-4" />New PO</Button>
-        </Link>
-      </div>
+  function confirmReceive() {
+    startTransition(async () => {
+      try {
+        if (!loadedPO) {
+          // New → create all POs, then receive each
+          const filled = rows.filter((r) => r.material_id);
+          const bySupplier = groupBySupplier(filled);
+          const poIds: string[] = [];
+          for (const [, supplierRows] of Array.from(bySupplier)) {
+            const { grand } = calcAllTotals(supplierRows);
+            const id = await createPurchaseOrder({
+              po_date: poDate,
+              financial_year: activeFY,
+              total_amount: grand.toFixed(2),
+              affects_stock: affectsStock,
+              supplier_bill_no: supplierBillNo,
+              supplier_bill_date: supplierBillDate,
+              items: buildItemsPayload(supplierRows),
+            });
+            poIds.push(id);
+          }
+          await Promise.all(poIds.map((id) => receivePurchaseOrder(id)));
+          const count = bySupplier.size;
+          const matCount = filled.length;
+          toast.success(
+            `${count} PO${count > 1 ? "s" : ""} created and received. Stock updated for ${matCount} material${matCount !== 1 ? "s" : ""}.`
+          );
+          await refreshDropdown();
+          if (poIds[0]) await loadPO(poIds[0]);
+        } else {
+          // Edit-draft: save then receive
+          await updatePurchaseOrder(loadedPO.id, buildPayload());
+          await receivePurchaseOrder(loadedPO.id);
+          const matCount = rows.filter((r) => r.material_id).length;
+          toast.success(
+            `${formatCode("PO-", loadedPO.po_number, 4)} received. Stock updated for ${matCount} material${matCount !== 1 ? "s" : ""}.`
+          );
+          await refreshDropdown();
+          const updated = await getPurchaseOrderById(loadedPO.id);
+          if (updated) populateForm(updated);
+        }
+        setReceiveDialogOpen(false);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Receive failed");
+        setReceiveDialogOpen(false);
+      }
+    });
+  }
 
-      {/* Table card */}
-      <div className="flex-1 bg-white rounded-lg border border-slate-200 flex flex-col min-h-0">
-        {/* Toolbar */}
-        <div className="p-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
-          {/* Status tabs */}
-          <div className="flex gap-1">
-            {tabs.map((t) => (
-              <button
-                key={t}
-                onClick={() => setStatusFilter(t)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  statusFilter === t
-                    ? "bg-slate-800 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          {/* Date range */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">From</span>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-36 text-xs"
-            />
-            <span className="text-xs text-slate-500">To</span>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-36 text-xs"
-            />
-            {(dateFrom || dateTo) && (
-              <button
-                onClick={() => { setDateFrom(""); setDateTo(""); }}
-                className="text-xs text-slate-400 hover:text-slate-600"
-              >
-                Clear
-              </button>
+  function handleRevertToDraft() {
+    setRevertError(null);
+    setRevertDialogOpen(true);
+  }
+
+  function confirmRevert() {
+    if (!loadedPO) return;
+    startTransition(async () => {
+      const result = await revertPOToDraft(loadedPO.id);
+      if ("error" in result) {
+        setRevertError(result.error);
+        return;
+      }
+      toast.success(`${formatCode("PO-", loadedPO.po_number, 4)} reverted to Draft`);
+      setRevertDialogOpen(false);
+      await refreshDropdown();
+      const updated = await getPurchaseOrderById(loadedPO.id);
+      if (updated) populateForm(updated);
+    });
+  }
+
+  function handleDelete() {
+    setDeleteDialogOpen(true);
+  }
+
+  function confirmDelete() {
+    if (!loadedPO) return;
+    startTransition(async () => {
+      try {
+        await deletePurchaseOrder(loadedPO.id);
+        toast.success("Purchase order deleted");
+        await refreshDropdown();
+        clearForm();
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Delete failed");
+      } finally {
+        setDeleteDialogOpen(false);
+      }
+    });
+  }
+
+  function handleCancel() {
+    if (isDirty) {
+      setPendingAction(() => clearForm);
+      setDiscardDialogOpen(true);
+      return;
+    }
+    clearForm();
+  }
+
+  function confirmDiscard() {
+    setDiscardDialogOpen(false);
+    clearForm();
+    pendingAction?.();
+    setPendingAction(null);
+  }
+
+  // Hotkeys
+  useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("alt+n", (e) => { e.preventDefault(); handleNew(); }, { enableOnFormTags: true });
+  useHotkeys("escape", () => handleCancel(), { enableOnFormTags: true });
+
+  // ---------------------------------------------------------------------------
+  // Computed
+  // ---------------------------------------------------------------------------
+
+  const { subtotal, cgst, sgst, igst, grand } = calcAllTotals(rows);
+  const poStatus = loadedPO?.status ?? null;
+  const filledRows = rows.filter((r) => r.material_id);
+  const hasFormContent = loadedPO !== null || isDirty;
+
+  // Combobox options for identifier dropdown
+  const dropdownOptions = dropdownItems.map((item) => ({
+    value: item.id,
+    label: `${formatCode("PO-", item.poNumber, 4)} | ${item.supplierName ?? "Multi-supplier"} | ${formatDate(item.date)} [${item.status}]`,
+  }));
+
+  // Batch print: filter POs in range by po_number
+  const printFromNum = printFromId ? (dropdownItems.find((d) => d.id === printFromId)?.poNumber ?? 0) : 0;
+  const printToNum = printToId ? (dropdownItems.find((d) => d.id === printToId)?.poNumber ?? 0) : 0;
+
+  // PDF adapter: convert loadedPO → flat rows for PORegisterDocument
+  function buildPDFRows(): PDFItemRow[] {
+    if (!loadedPO) return [];
+    return loadedPO.items.map((item) => ({
+      id: loadedPO.id,
+      po_number: loadedPO.po_number,
+      po_date: loadedPO.po_date,
+      status: loadedPO.status,
+      affects_stock: loadedPO.affects_stock,
+      supplier_bill_no: loadedPO.supplier_bill_no ?? null,
+      supplier_bill_date: loadedPO.supplier_bill_date ?? null,
+      item_id: item.id,
+      material_id: item.material_id,
+      material_name: item.material_name,
+      material_no: item.material_no ?? null,
+      supplier_id: item.supplier_id ?? null,
+      supplier_name: item.supplier_name ?? null,
+      qty: item.qty,
+      unit_name: item.unit_name ?? null,
+      rate: item.rate,
+      tax_percentage: item.tax_percentage,
+      cgst_amount: item.cgst_amount,
+      sgst_amount: item.sgst_amount,
+      igst_amount: item.igst_amount,
+      amount: item.amount,
+      gst_type: item.gst_type ?? null,
+    }));
+  }
+
+  // Batch PDF rows (all POs in range)
+  function buildBatchPDFRows(): PDFItemRow[] {
+    const inRange = dropdownItems.filter(
+      (d) => printFromNum && printToNum && d.poNumber >= printFromNum && d.poNumber <= printToNum
+    );
+    // We only have header-level info; for batch print we create placeholder rows
+    return inRange.map((d) => ({
+      id: d.id,
+      po_number: d.poNumber,
+      po_date: d.date,
+      status: d.status,
+      affects_stock: true,
+      supplier_bill_no: null,
+      supplier_bill_date: null,
+      item_id: null,
+      material_id: null,
+      material_name: null,
+      material_no: null,
+      supplier_id: null,
+      supplier_name: d.supplierName,
+      qty: null,
+      unit_name: null,
+      rate: null,
+      tax_percentage: null,
+      cgst_amount: null,
+      sgst_amount: null,
+      igst_amount: null,
+      amount: null,
+      gst_type: null,
+    }));
+  }
+
+  // Multi-supplier split preview (only when creating a new PO)
+  const supplierGroups = (() => {
+    if (loadedPO) return new Map<string, { name: string; count: number }>();
+    const filled = rows.filter((r) => r.material_id && r.supplier_id);
+    const groups = new Map<string, { name: string; count: number }>();
+    for (const r of filled) {
+      if (!groups.has(r.supplier_id)) groups.set(r.supplier_id, { name: r.supplier_name || r.supplier_id, count: 0 });
+      groups.get(r.supplier_id)!.count++;
+    }
+    return groups;
+  })();
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
+  return (
+    <div className="flex h-full">
+      {/* ── Main content ── */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        <div className="flex-1 overflow-y-auto p-6 pb-0">
+          {/* Header card */}
+          <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
+            {/* Row 1: identifier + status badge + total */}
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 shrink-0">PO Number</span>
+                <Combobox
+                  options={dropdownOptions}
+                  value={loadedPO?.id ?? ""}
+                  onChange={handleSelect}
+                  placeholder="Select or type PO number…"
+                  openOnArrowDown
+                />
+              </div>
+
+              {poStatus && (
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    poStatus === "Received"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {poStatus}
+                </span>
+              )}
+
+              {hasFormContent && (
+                <span className="ml-auto text-sm font-semibold text-slate-700">
+                  Total: {formatAmount(grand)}
+                </span>
+              )}
+            </div>
+
+            {/* Row 2: header fields — shown when a PO is loaded or user has started entering */}
+            {hasFormContent && (
+              <div className="mt-4 grid grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">PO Date</label>
+                  <Input
+                    type="date"
+                    value={poDate}
+                    onChange={(e) => { setPoDate(e.target.value); setIsDirty(true); }}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">Supplier Bill No</label>
+                  <Input
+                    value={supplierBillNo}
+                    onChange={(e) => { setSupplierBillNo(e.target.value); setIsDirty(true); }}
+                    className="h-8 text-sm"
+                    placeholder="—"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500">Supplier Bill Date</label>
+                  <Input
+                    type="date"
+                    value={supplierBillDate}
+                    onChange={(e) => { setSupplierBillDate(e.target.value); setIsDirty(true); }}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={affectsStock}
+                      onChange={(e) => { setAffectsStock(e.target.checked); setIsDirty(true); }}
+                      className="w-4 h-4 accent-slate-700"
+                    />
+                    <span className="text-sm text-slate-700">Update Stock</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Received PO edit warning */}
+            {poStatus === "Received" && (
+              <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">
+                  <span className="font-medium">This PO has been received.</span> Saving will reverse the current stock additions and reapply them with the new values (atomic operation).
+                </p>
+              </div>
             )}
           </div>
-          <Input
-            placeholder="Search supplier, material, M001, PO#..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
-          />
-          {isFetching && <span className="text-xs text-slate-400">Loading...</span>}
-          <div className="ml-auto flex items-center gap-3">
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showRates}
-                onChange={(e) => setShowRates(e.target.checked)}
-                className="w-3.5 h-3.5 accent-slate-700"
+
+          {/* Grid */}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
+              Loading…
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
+              {!hasFormContent && (
+                <div className="px-5 py-3 border-b border-slate-100 text-xs text-slate-400">
+                  Select a PO from the dropdown above, or start adding items to create a new PO.
+                </div>
+              )}
+              <TransactionGrid
+                rows={rows}
+                onChange={(r) => { setRows(r); setIsDirty(true); }}
+                suppliers={suppliers}
+                materials={materials}
+                taxRates={taxRates}
+                units={units}
+                mode="purchase-order"
               />
-              <span className="text-xs text-slate-500">Include rates</span>
-            </label>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs gap-1"
-              onClick={downloadCsv}
-              disabled={visible.length === 0}
-            >
-              Export CSV ({visible.length})
+            </div>
+          )}
+
+          {/* Multi-supplier split preview */}
+          {!loadedPO && supplierGroups.size >= 2 && (
+            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+              <span className="font-medium">Will create {supplierGroups.size} POs on save: </span>
+              {Array.from(supplierGroups.values()).map((g, i) => (
+                <span key={i}>{i > 0 ? " · " : ""}{g.name} ({g.count} item{g.count !== 1 ? "s" : ""})</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Sticky bottom bar ── */}
+        <div className="border-t border-slate-200 bg-white shadow-lg shrink-0">
+          {/* Totals */}
+          <div className="px-6 py-2.5 flex items-center gap-6 text-sm border-b border-slate-100 flex-wrap">
+            <span className="text-slate-500">Subtotal: <span className="font-medium text-slate-800">{formatAmount(subtotal)}</span></span>
+            <span className="text-slate-500">CGST: <span className="font-medium text-slate-800">{formatAmount(cgst)}</span></span>
+            <span className="text-slate-500">SGST: <span className="font-medium text-slate-800">{formatAmount(sgst)}</span></span>
+            <span className="text-slate-500">IGST: <span className="font-medium text-slate-800">{formatAmount(igst)}</span></span>
+            <span className="ml-auto text-slate-600 font-medium">
+              Grand Total: <span className="text-lg font-bold text-slate-900">{formatAmount(grand)}</span>
+            </span>
+          </div>
+
+          {/* Action buttons */}
+          <div className="px-6 py-3 flex items-center gap-3 flex-wrap">
+            <Button variant="outline" onClick={handleNew} disabled={isPending}>
+              New
             </Button>
+
+            {hasFormContent && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleSave}
+                  disabled={isPending || isLoading}
+                >
+                  {isPending ? "Saving…" : "Save"}
+                </Button>
+
+                {loadedPO && (
+                  <Button
+                    variant="outline"
+                    onClick={handleDelete}
+                    disabled={isPending}
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    Delete
+                  </Button>
+                )}
+
+                {/* Mark as Received: shown when Draft or no PO yet */}
+                {(!loadedPO || poStatus === "Draft") && (
+                  <Button
+                    onClick={handleMarkAsReceived}
+                    disabled={isPending}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {isPending ? "Processing…" : "Mark as Received"}
+                  </Button>
+                )}
+
+                {/* Revert to Draft: shown only for Received POs */}
+                {poStatus === "Received" && (
+                  <Button
+                    variant="outline"
+                    onClick={handleRevertToDraft}
+                    disabled={isPending}
+                    className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                  >
+                    Revert to Draft
+                  </Button>
+                )}
+
+                {loadedPO && (
+                  <PrintButton
+                    getDocument={() => (
+                      <PORegisterDocument
+                        rows={buildPDFRows()}
+                        fy={activeFY}
+                        showRates
+                        companySetting={companySetting}
+                      />
+                    )}
+                    label="Print"
+                  />
+                )}
+
+                <Button variant="outline" onClick={handleCancel} disabled={isPending}>
+                  Cancel
+                </Button>
+              </>
+            )}
+
+            <Button
+              variant="outline"
+              className="ml-auto"
+              onClick={() => window.history.back()}
+            >
+              Exit
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Right panel: batch print range ── */}
+      <div className="w-52 shrink-0 border-l border-slate-200 bg-slate-50 p-4 flex flex-col gap-4">
+        <div>
+          <h3 className="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide">Print PO Range</h3>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500">PO No From</label>
+              <Combobox
+                options={dropdownOptions}
+                value={printFromId}
+                onChange={setPrintFromId}
+                placeholder="From…"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-slate-500">PO No To</label>
+              <Combobox
+                options={dropdownOptions}
+                value={printToId}
+                onChange={setPrintToId}
+                placeholder="To…"
+              />
+            </div>
             <PrintButton
-              label={`Print (${visible.length})`}
-              disabled={visible.length === 0}
               getDocument={() => (
                 <PORegisterDocument
-                  rows={visible}
+                  rows={buildBatchPDFRows()}
                   fy={activeFY}
-                  dateFrom={dateFrom}
-                  dateTo={dateTo}
-                  statusFilter={statusFilter}
-                  showRates={showRates}
+                  showRates
                   companySetting={companySetting}
                 />
               )}
+              disabled={!printFromId || !printToId}
+              label="Print POs"
             />
           </div>
         </div>
-
-        {/* Table */}
-        <div className="overflow-auto flex-1 min-w-0">
-          <table className="min-w-max text-sm w-full">
-            <thead className="bg-slate-50 sticky top-0 z-10">
-              <tr>
-                {[
-                  { label: "S.No", align: "" },
-                  { label: "Date", align: "" },
-                  { label: "PO#", align: "" },
-                  { label: "Supplier(s)", align: "" },
-                  { label: "Items", align: "text-right" },
-                  { label: "Grand Total", align: "text-right" },
-                  { label: "Status", align: "" },
-                  { label: "Actions", align: "" },
-                ].map((h) => (
-                  <th
-                    key={h.label}
-                    className={`px-4 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap ${h.align}`}
-                  >
-                    {h.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
-                    {rows.length === 0 ? "No purchase orders yet. Create your first PO." : "No entries match your filters."}
-                  </td>
-                </tr>
-              )}
-              {groupPORows(visible).map((g, i) => (
-                <tr
-                  key={g.id}
-                  className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer"
-                  onClick={() => router.push(`/transactions/purchase-orders/${g.id}/edit`)}
-                >
-                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{i + 1}</td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(g.po_date)}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-800 whitespace-nowrap">
-                    {formatCode("PO-", g.po_number, 4)}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">
-                    {g.suppliers.length === 0 ? "—"
-                      : g.suppliers.length > 2
-                        ? `${g.suppliers[0]} +${g.suppliers.length - 1} more`
-                        : g.suppliers.join(", ")}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap text-right">{g.itemCount}</td>
-                  <td className="px-4 py-2.5 text-slate-800 font-medium whitespace-nowrap text-right">
-                    {"₹" + g.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      g.status === "Received"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-slate-100 text-slate-600"
-                    }`}>
-                      {g.status}
-                    </span>
-                    {!g.affects_stock && (
-                      <span className="ml-1.5 text-xs text-slate-400 italic">no stock</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-red-500 hover:bg-red-50"
-                      title="Delete entire PO"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(g); }}
-                      disabled={isPending}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
 
+      {/* ── Mark as Received dialog ── */}
+      <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Mark {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : "new PO"} as Received?
+            </DialogTitle>
+            <DialogDescription>
+              {affectsStock
+                ? "This will add the following quantities to stock:"
+                : "Stock update is OFF — no warehouse quantities will change."}
+            </DialogDescription>
+          </DialogHeader>
+          {affectsStock && (
+            <div className="max-h-48 overflow-y-auto space-y-1 py-2">
+              {filledRows.map((r) => (
+                <div key={r._key} className="flex justify-between text-sm py-0.5">
+                  <span className="text-slate-700">{r.material_name}</span>
+                  <span className="font-medium text-emerald-700">
+                    +{r.qty} {r.unit_name || ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {affectsStock && (
+            <p className="text-xs text-slate-500">Stock changes are permanent and recorded in the Stock Ledger.</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReceiveDialogOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmReceive}
+              disabled={isPending}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {isPending ? "Processing…" : "Mark as Received"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Revert to Draft dialog ── */}
+      <Dialog
+        open={revertDialogOpen}
+        onOpenChange={(open) => { setRevertDialogOpen(open); if (!open) setRevertError(null); }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Revert {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : ""} to Draft?
+            </DialogTitle>
+            <DialogDescription>
+              {loadedPO?.affects_stock
+                ? "This will reverse all stock additions from this PO. The action is recorded in the Stock Ledger."
+                : "This PO did not affect stock. Status will be set back to Draft."}
+            </DialogDescription>
+          </DialogHeader>
+          {revertError && (
+            <div className="bg-red-50 border border-red-200 rounded px-3 py-2 text-sm text-red-800 whitespace-pre-line">
+              {revertError}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRevertDialogOpen(false); setRevertError(null); }} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmRevert}
+              disabled={isPending}
+              variant="outline"
+              className="text-amber-700 border-amber-300 hover:bg-amber-50"
+            >
+              {isPending ? "Processing…" : "Revert to Draft"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete confirmation ── */}
       <ConfirmDialog
-        open={deletingPoId !== null}
-        onOpenChange={(open) => { if (!open) setDeletingPoId(null); }}
-        title={deleteTitle}
-        description={deleteDescription}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={loadedPO?.status === "Received" ? "Delete received purchase order?" : "Delete draft purchase order?"}
+        description={
+          loadedPO?.status === "Received"
+            ? "This will permanently delete the PO and reverse all stock additions. This cannot be undone."
+            : "This draft PO will be permanently deleted. No stock was added."
+        }
         confirmLabel="Delete"
         onConfirm={confirmDelete}
+        isPending={isPending}
+      />
+
+      {/* ── Discard unsaved changes ── */}
+      <ConfirmDialog
+        open={discardDialogOpen}
+        onOpenChange={(open) => { setDiscardDialogOpen(open); if (!open) setPendingAction(null); }}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes. They will be lost if you continue."
+        confirmLabel="Discard"
+        onConfirm={confirmDiscard}
         isPending={isPending}
       />
     </div>
