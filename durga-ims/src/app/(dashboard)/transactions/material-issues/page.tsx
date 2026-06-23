@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 
 import { getCurrentFY } from "@/lib/fy";
 import {
-  getSlipsForDropdown,
   getActiveVehicles,
   getActiveContractors,
   getActiveIssueMaterials,
@@ -20,9 +19,8 @@ export default async function MaterialIssuesPage({
   const fy = getCurrentFY();
   const { id } = await searchParams;
 
-  const [slips, vehicles, contractors, materials, taxRates, units, companySetting] =
+  const [vehicles, contractors, materials, taxRates, units, companySetting] =
     await Promise.all([
-      getSlipsForDropdown(fy, "OLD"),
       getActiveVehicles(),
       getActiveContractors(),
       getActiveIssueMaterials(),
@@ -33,7 +31,6 @@ export default async function MaterialIssuesPage({
 
   return (
     <MaterialIssuesClient
-      initialSlips={slips}
       vehicles={vehicles}
       contractors={contractors}
       materials={materials}

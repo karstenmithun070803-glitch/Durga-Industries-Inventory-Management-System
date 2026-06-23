@@ -250,6 +250,7 @@ export function InvoiceClient({
 
   // ── View ──────────────────────────────────────────────────────────────────
   const [activeView, setActiveView] = useState<"invoice" | "insurance">("invoice");
+  const [isNewMode, setIsNewMode] = useState(false);
 
   // ── Loaded invoice ────────────────────────────────────────────────────────
   const [currentInvoice, setCurrentInvoice] = useState<InvoiceWithDetails | null>(null);
@@ -343,6 +344,7 @@ export function InvoiceClient({
 
   // ── Load an invoice by ID ─────────────────────────────────────────────────
   async function loadInvoice(id: string) {
+    setIsNewMode(false);
     setIsLoading(true);
     setActiveView("invoice");
     try {
@@ -573,6 +575,7 @@ export function InvoiceClient({
       setInsuranceBill(null);
       setActiveView("invoice");
       setIsDirty(false);
+      setIsNewMode(true);
       // Peek next bill number
       peekNextBillNumber(null, activeFY).then(setBillNumber).catch(() => setBillNumber("—"));
       setTimeout(() => identifierRef.current?.focus(), 100);
@@ -605,6 +608,7 @@ export function InvoiceClient({
         if (!created) throw new Error("Failed to reload created invoice.");
         setCurrentInvoiceId(newId);
         setCurrentInvoice(created);
+        setIsNewMode(false);
         setBillNumber(created.bill_number);
         toast.success(`${created.bill_number} created.`);
         // Refresh dropdown
@@ -815,7 +819,7 @@ export function InvoiceClient({
       </div>
 
       {/* Blank state */}
-      {!currentInvoiceId && !isLoading && (
+      {!currentInvoiceId && !isLoading && !isNewMode && (
         <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-4">
           <p className="text-sm">Search for a bill number above, or create a new invoice.</p>
           <Button size="sm" onClick={handleNew} variant="outline">New Invoice</Button>
@@ -823,7 +827,7 @@ export function InvoiceClient({
       )}
 
       {/* Form body */}
-      {(currentInvoiceId || isLoading) && (
+      {(currentInvoiceId || isLoading || isNewMode) && (
         <>
           {/* Amber warning: insurance is finalized and user has edits */}
           {isFinalized && isDirty && insuranceBillStatus === "Finalized" && (

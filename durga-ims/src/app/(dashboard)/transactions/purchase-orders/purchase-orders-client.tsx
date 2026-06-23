@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useRef } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import {
@@ -248,14 +248,18 @@ export function PurchaseOrdersClient({
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const identifierRef = useRef<HTMLButtonElement>(null);
+  // Filter state — both inputs always visible simultaneously
+  const [filterSupplier, setFilterSupplier] = useState("");
+  const [filterDate, setFilterDate] = useState("");
+
+  // browseMode: true = show filter panel (no active PO context)
+  //             false = user is creating or viewing a PO
+  const [browseMode, setBrowseMode] = useState(!initialSelectedId);
 
   // Auto-load on mount if deep-linked via ?id=
   useEffect(() => {
     if (initialSelectedId) {
       void loadPO(initialSelectedId);
-    } else {
-      setTimeout(() => identifierRef.current?.focus(), 100);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -267,6 +271,7 @@ export function PurchaseOrdersClient({
       setDropdownItems(data as DropdownItem[]);
       setLoadedFY(activeFY);
       clearForm();
+      setBrowseMode(true);
     });
   }, [activeFY, loadedFY]);
 
@@ -300,6 +305,7 @@ export function PurchaseOrdersClient({
       const po = await getPurchaseOrderById(id);
       if (po) {
         populateForm(po);
+        setBrowseMode(false);
       } else {
         toast.error("Purchase order not found");
       }
@@ -358,7 +364,7 @@ export function PurchaseOrdersClient({
   function handleNew() {
     const doNew = () => {
       clearForm();
-      setTimeout(() => identifierRef.current?.focus(), 50);
+      setBrowseMode(false);
     };
     if (isDirty) {
       setPendingAction(() => doNew);
@@ -504,6 +510,7 @@ export function PurchaseOrdersClient({
         toast.success("Purchase order deleted");
         await refreshDropdown();
         clearForm();
+        setBrowseMode(true);
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Delete failed");
       } finally {
@@ -514,11 +521,12 @@ export function PurchaseOrdersClient({
 
   function handleCancel() {
     if (isDirty) {
-      setPendingAction(() => clearForm);
+      setPendingAction(() => () => setBrowseMode(true));
       setDiscardDialogOpen(true);
       return;
     }
     clearForm();
+    setBrowseMode(true);
   }
 
   function confirmDiscard() {
@@ -614,17 +622,20 @@ export function PurchaseOrdersClient({
     }));
   }
 
-  // Multi-supplier split preview (only when creating a new PO)
-  const supplierGroups = (() => {
-    if (loadedPO) return new Map<string, { name: string; count: number }>();
-    const filled = rows.filter((r) => r.material_id && r.supplier_id);
-    const groups = new Map<string, { name: string; count: number }>();
-    for (const r of filled) {
-      if (!groups.has(r.supplier_id)) groups.set(r.supplier_id, { name: r.supplier_name || r.supplier_id, count: 0 });
-      groups.get(r.supplier_id)!.count++;
-    }
-    return groups;
-  })();
+  // Supplier filter options — unique supplier names from loaded dropdown
+  const supplierFilterOptions = Array.from(
+    new Set(dropdownItems.filter((d) => d.supplierName).map((d) => d.supplierName!))
+  ).map((name) => ({ value: name, label: name }));
+
+  // Filter results — AND intersection of both active filters
+  const eitherFilterActive = filterSupplier !== "" || filterDate !== "";
+  const filteredPOs = eitherFilterActive
+    ? dropdownItems.filter((d) => {
+        const supplierMatch = filterSupplier === "" || d.supplierName === filterSupplier;
+        const dateMatch = filterDate === "" || toISODate(d.date) === filterDate;
+        return supplierMatch && dateMatch;
+      })
+    : [];
 
   // ---------------------------------------------------------------------------
   // Render
@@ -637,37 +648,87 @@ export function PurchaseOrdersClient({
         <div className="flex-1 overflow-y-auto p-6 pb-0">
           {/* Header card */}
           <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-            {/* Row 1: identifier + status badge + total */}
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-500 shrink-0">PO Number</span>
-                <div className="w-48">
-                  <Combobox
-                    options={dropdownOptions}
-                    value={loadedPO?.id ?? ""}
-                    onChange={handleSelect}
-                    placeholder="Select or type PO…"
-                    openOnArrowDown
-                  />
+            {/* Row 1: PO No read-only (when editing/creating) OR filter panel (when browsing) */}
+            {!browseMode && (
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-500 shrink-0">PO No</span>
+                  <div className="h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md min-w-[80px]">
+                    {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : "—"}
+                  </div>
                 </div>
-              </div>
-
-              {poStatus && (
-                <span
-                  className={`px-2 py-0.5 rounded text-sm font-medium ${
-                    poStatus === "Received"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {poStatus}
+                {poStatus && (
+                  <span className={`px-2 py-0.5 rounded text-sm font-medium ${
+                    poStatus === "Received" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                  }`}>
+                    {poStatus}
+                  </span>
+                )}
+                <span className="ml-auto text-sm font-semibold text-slate-700">
+                  Total: {formatAmount(grand)}
                 </span>
-              )}
+              </div>
+            )}
 
-              <span className="ml-auto text-sm font-semibold text-slate-700">
-                Total: {formatAmount(grand)}
-              </span>
-            </div>
+            {browseMode && (
+              <div>
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 uppercase tracking-wide">Supplier</label>
+                    <div className="w-64">
+                      <Combobox
+                        options={supplierFilterOptions}
+                        value={filterSupplier}
+                        onChange={setFilterSupplier}
+                        placeholder="Select supplier…"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 uppercase tracking-wide">Date</label>
+                    <div className="w-44">
+                      <Input
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => setFilterDate(e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {filteredPOs.length > 0 && (
+                  <div className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100">
+                    {filteredPOs.map((po) => (
+                      <button
+                        key={po.id}
+                        onClick={() => handleSelect(po.id)}
+                        className="w-full flex items-center gap-4 px-3 py-2 text-sm hover:bg-slate-50 text-left transition-colors"
+                      >
+                        <span className="font-mono font-medium text-slate-800 w-16 shrink-0">
+                          {formatCode("PO-", po.poNumber, 4)}
+                        </span>
+                        <span className="flex-1 text-slate-600 truncate">
+                          {po.supplierName ?? "—"}
+                        </span>
+                        <span className="text-slate-400 shrink-0 text-xs">{formatDate(po.date)}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
+                          po.status === "Received"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                        }`}>
+                          {po.status}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {eitherFilterActive && filteredPOs.length === 0 && (
+                  <p className="mt-2 text-sm text-slate-400">No purchase orders found.</p>
+                )}
+              </div>
+            )}
 
             {/* Row 2: always-visible header fields */}
             <div className="mt-4 flex flex-wrap items-end gap-4">
@@ -715,7 +776,7 @@ export function PurchaseOrdersClient({
             <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
               {!hasFormContent && (
                 <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-400">
-                  Enter a PO date and add materials to create a new PO, or select an existing PO from the dropdown above.
+                  Enter a PO date and add materials to create a new PO, or use the filters above to find an existing PO.
                 </div>
               )}
               <TransactionGrid
@@ -730,15 +791,6 @@ export function PurchaseOrdersClient({
             </div>
           )}
 
-          {/* Multi-supplier split preview */}
-          {!loadedPO && supplierGroups.size >= 2 && (
-            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
-              <span className="font-medium">Will create {supplierGroups.size} POs on save: </span>
-              {Array.from(supplierGroups.values()).map((g, i) => (
-                <span key={i}>{i > 0 ? " · " : ""}{g.name} ({g.count} item{g.count !== 1 ? "s" : ""})</span>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* ── Sticky bottom bar ── */}
@@ -825,13 +877,6 @@ export function PurchaseOrdersClient({
               </>
             )}
 
-            <Button
-              variant="outline"
-              className="h-10 px-5 ml-auto"
-              onClick={() => window.history.back()}
-            >
-              Exit
-            </Button>
           </div>
         </div>
       </div>

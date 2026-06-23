@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 
 import { getCurrentFY } from "@/lib/fy";
 import {
-  getSlipsForDropdown,
   getActiveVehicles,
   getActiveContractors,
   getActiveIssueMaterials,
@@ -21,9 +20,8 @@ export default async function NewVMIPage({
   const fy = getCurrentFY();
   const { id } = await searchParams;
 
-  const [slips, vehicles, stages, contractors, materials, taxRates, units, companySetting] =
+  const [vehicles, stages, contractors, materials, taxRates, units, companySetting] =
     await Promise.all([
-      getSlipsForDropdown(fy, "NEW"),
       getActiveVehicles(),
       getStagesForDropdown(),
       getActiveContractors(),
@@ -35,7 +33,6 @@ export default async function NewVMIPage({
 
   return (
     <NewVMIClient
-      initialSlips={slips}
       vehicles={vehicles}
       stages={stages}
       contractors={contractors}

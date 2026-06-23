@@ -6,7 +6,6 @@ import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import {
   getMaterialIssueById,
-  getSlipsForDropdown,
   createMaterialIssue,
   updateMaterialIssue,
   updateIssuedMaterialIssue,
@@ -42,14 +41,6 @@ import { MISlipDocument } from "@/components/pdf/mi-slip-pdf";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface SlipOption {
-  id: string;
-  slipNumber: number;
-  vehicleName: string | null;
-  date: string;
-  status: string;
-}
 
 interface VehicleOption {
   id: string;
@@ -89,7 +80,6 @@ interface UnitOption {
 }
 
 interface Props {
-  initialSlips: SlipOption[];
   vehicles: VehicleOption[];
   contractors: ContractorOption[];
   materials: MaterialOption[];
@@ -180,7 +170,6 @@ function buildItemsPayload(rows: LineItemDraft[]) {
 // ---------------------------------------------------------------------------
 
 export function MaterialIssuesClient({
-  initialSlips,
   vehicles,
   contractors,
   materials,
@@ -194,7 +183,6 @@ export function MaterialIssuesClient({
   const { activeFY } = useFY();
   const [isPending, startTransition] = useTransition();
 
-  const [slips, setSlips] = useState<SlipOption[]>(initialSlips);
   const [loadedFY, setLoadedFY] = useState(initialFY);
   const [loadedSlip, setLoadedSlip] = useState<MaterialIssueWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -231,13 +219,11 @@ export function MaterialIssuesClient({
       setDiscardDialogOpen(true);
       return;
     }
-    void switchFY(activeFY);
+    switchFY(activeFY);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFY, loadedFY]);
 
-  async function switchFY(fy: string) {
-    const data = await getSlipsForDropdown(fy, "OLD");
-    setSlips(data);
+  function switchFY(fy: string) {
     setLoadedFY(fy);
     clearForm();
   }
@@ -277,11 +263,6 @@ export function MaterialIssuesClient({
     }
   }
 
-  async function refreshSlips() {
-    const data = await getSlipsForDropdown(loadedFY, "OLD");
-    setSlips(data);
-  }
-
   function validate(): string | null {
     if (!vehicleId) return "Please select a vehicle.";
     if (!issueDate) return "Please enter a date.";
@@ -305,16 +286,6 @@ export function MaterialIssuesClient({
     };
   }
 
-  function handleSelect(id: string) {
-    if (!id) { clearForm(); return; }
-    if (isDirty) {
-      setPendingAction(() => () => void loadSlip(id));
-      setDiscardDialogOpen(true);
-      return;
-    }
-    void loadSlip(id);
-  }
-
   function handleNew() {
     const doNew = () => { clearForm(); };
     if (isDirty) {
@@ -334,7 +305,6 @@ export function MaterialIssuesClient({
         try {
           const id = await createMaterialIssue(buildPayload());
           toast.success("Draft slip created");
-          await refreshSlips();
           await loadSlip(id);
         } catch (e: unknown) {
           toast.error(e instanceof Error ? e.message : "Save failed");
@@ -345,7 +315,6 @@ export function MaterialIssuesClient({
         try {
           await updateMaterialIssue(loadedSlip.id, buildPayload());
           toast.success("Draft saved");
-          await refreshSlips();
           const updated = await getMaterialIssueById(loadedSlip.id);
           if (updated) populateForm(updated);
         } catch (e: unknown) {
@@ -364,7 +333,6 @@ export function MaterialIssuesClient({
         await updateIssuedMaterialIssue(loadedSlip.id, buildPayload());
         toast.success("Stock reversed and reapplied successfully");
         setSaveReapplyDialogOpen(false);
-        await refreshSlips();
         const updated = await getMaterialIssueById(loadedSlip.id);
         if (updated) populateForm(updated);
       } catch (e: unknown) {
@@ -387,7 +355,6 @@ export function MaterialIssuesClient({
         const slipNum = await issueMaterialIssue(loadedSlip.id);
         toast.success(`${formatCode("MI-", slipNum, 4)} issued — stock deducted`);
         setIssueDialogOpen(false);
-        await refreshSlips();
         const updated = await getMaterialIssueById(loadedSlip.id);
         if (updated) populateForm(updated);
       } catch (e: unknown) {
@@ -409,7 +376,6 @@ export function MaterialIssuesClient({
         await deleteMaterialIssue(loadedSlip.id);
         toast.success("Slip deleted");
         setDeleteDialogOpen(false);
-        await refreshSlips();
         clearForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Delete failed");
@@ -425,7 +391,6 @@ export function MaterialIssuesClient({
         const result = await cloneOldMaterialIssue(loadedSlip.id);
         setCloneResult(result);
         setCloneDialogOpen(true);
-        await refreshSlips();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Clone failed");
       }
@@ -451,7 +416,7 @@ export function MaterialIssuesClient({
   function confirmDiscard() {
     setDiscardDialogOpen(false);
     if (pendingFY) {
-      void switchFY(pendingFY);
+      switchFY(pendingFY);
       setPendingFY(null);
     } else {
       clearForm();
@@ -468,12 +433,6 @@ export function MaterialIssuesClient({
   const miStatus = loadedSlip?.status ?? null;
   const hasFormContent = loadedSlip !== null || isDirty;
 
-  const dropdownOptions = slips.map((s) => ({
-    value: s.id,
-    label: `${formatCode("MI-", s.slipNumber, 4)} | ${s.vehicleName ?? "—"} | ${s.date} [${s.status}]`,
-    displayLabel: formatCode("MI-", s.slipNumber, 4),
-  }));
-
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
     label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}`,
@@ -485,104 +444,100 @@ export function MaterialIssuesClient({
       <div className="flex-1 overflow-y-auto p-6 pb-0">
         {/* Header card */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-          {/* Row 1: Vehicle Name (primary selector) + Status badge */}
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500 shrink-0">Vehicle Name</span>
-              <div className="w-56">
-                <Combobox
-                  options={vehicleOptions}
-                  value={vehicleId}
-                  onChange={(v) => { setVehicleId(v); setIsDirty(true); }}
-                  placeholder="Select vehicle…"
-                />
+          <div className="flex gap-6 items-start">
+            {/* Left column */}
+            <div className="flex-1 space-y-3">
+              {/* Vehicle Name row */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
+                <div className="w-56">
+                  <Combobox
+                    options={vehicleOptions}
+                    value={vehicleId}
+                    onChange={(v) => { setVehicleId(v); setIsDirty(true); }}
+                    placeholder="Select vehicle…"
+                  />
+                </div>
+                {miStatus && (
+                  <span className={`px-2 py-0.5 rounded text-sm font-medium ${
+                    miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
+                  }`}>
+                    {miStatus}
+                  </span>
+                )}
+              </div>
+
+              {/* Slip No row */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500 w-28 shrink-0">Slip No</span>
+                <div className="w-56 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
+                  {loadedSlip ? formatCode("MI-", loadedSlip.slip_number, 4) : "—"}
+                </div>
+              </div>
+
+              {/* Detail fields row */}
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm text-slate-500">Date</label>
+                  <div className="w-40">
+                    <Input
+                      type="date"
+                      value={issueDate}
+                      onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm text-slate-500">Job No</label>
+                  <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
+                    {selectedVehicle?.job_ref_no || "—"}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm text-slate-500">Margin %</label>
+                  <div className="w-24">
+                    <Input
+                      type="number"
+                      value={marginPct}
+                      onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
+                      className="h-9 text-sm"
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {miStatus === "Issued" && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-800">
+                    <span className="font-medium">This slip has been issued.</span> Saving will reverse the current stock deductions and reapply them with the new values (atomic operation).
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Right column — customer info + total */}
+            <div className="w-52 shrink-0 text-right space-y-1">
+              {selectedVehicle ? (
+                <>
+                  <p className="text-base font-semibold text-slate-800 leading-snug break-words">
+                    {selectedVehicle.customer_address || "—"}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
+                  </p>
+                </>
+              ) : null}
+              <div className="mt-3">
+                <p className="text-xs text-slate-400 uppercase tracking-wide">Total</p>
+                <p className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</p>
               </div>
             </div>
-            {miStatus && (
-              <span className={`px-2 py-0.5 rounded text-sm font-medium ${
-                miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
-              }`}>
-                {miStatus}
-              </span>
-            )}
           </div>
-
-          {/* Row 2: Slip No (load existing) + Total */}
-          <div className="mt-3 flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500 shrink-0">Slip No</span>
-              <div className="w-48">
-                <Combobox
-                  options={dropdownOptions}
-                  value={loadedSlip?.id ?? ""}
-                  onChange={handleSelect}
-                  placeholder="Select or type slip…"
-                  openOnArrowDown
-                />
-              </div>
-            </div>
-            <span className="ml-auto text-sm font-semibold text-slate-700">
-              Total: {formatAmount(grand)}
-            </span>
-          </div>
-
-          {/* Row 3: always-visible detail fields */}
-          <div className="mt-4 flex flex-wrap items-end gap-4">
-            <div className="space-y-1">
-              <label className="text-sm text-slate-500">Date</label>
-              <div className="w-40">
-                <Input
-                  type="date"
-                  value={issueDate}
-                  onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-500">Job No</label>
-              <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
-                {selectedVehicle?.job_ref_no || "—"}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-500">Margin %</label>
-              <div className="w-24">
-                <Input
-                  type="number"
-                  value={marginPct}
-                  onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
-                  className="h-9 text-sm"
-                  min="0"
-                  step="0.01"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Row 4: customer info — only when vehicle selected */}
-          {selectedVehicle && (
-            <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-sm text-slate-400 mb-0.5">Customer Address</p>
-                <p className="text-slate-700">{selectedVehicle.customer_address || "—"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-400 mb-0.5">GST Type</p>
-                <p className="text-slate-700">{gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}</p>
-              </div>
-            </div>
-          )}
-
-          {miStatus === "Issued" && (
-            <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-800">
-                <span className="font-medium">This slip has been issued.</span> Saving will reverse the current stock deductions and reapply them with the new values (atomic operation).
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Grid */}
@@ -592,7 +547,7 @@ export function MaterialIssuesClient({
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
             {!hasFormContent && (
               <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-400">
-                Select a vehicle above and add materials to create a new slip, or select an existing slip from the Slip No field.
+                Select a vehicle above and add materials to create a new slip.
               </div>
             )}
             <TransactionGrid
