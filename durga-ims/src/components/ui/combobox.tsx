@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -59,7 +59,12 @@ export function Combobox({
   openOnArrowDown = false,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const selected = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    if (!value) setSearch("");
+  }, [value]);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -98,7 +103,7 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent className="w-[var(--anchor-width)] p-0" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>

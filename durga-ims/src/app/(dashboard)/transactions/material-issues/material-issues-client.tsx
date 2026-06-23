@@ -51,6 +51,7 @@ interface VehicleOption {
   customer_gstin: string | null;
   customer_state: string | null;
   customer_address: string | null;
+  type: string;
 }
 
 interface ContractorOption {
@@ -345,7 +346,6 @@ export function MaterialIssuesClient({
     const doNew = () => {
       clearForm();
       setBrowseMode(false);
-      if (browseVehicleId) setVehicleId(browseVehicleId);
     };
     if (isDirty) {
       setPendingAction(() => doNew);
@@ -505,12 +505,20 @@ export function MaterialIssuesClient({
     displayLabel: v.vehicle_name ?? v.job_ref_no,
   }));
 
+  const browseVehicleOptions = vehicles
+    .filter((v) => v.type === "Old")
+    .map((v) => ({
+      value: v.id,
+      label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}`,
+      displayLabel: v.vehicle_name ?? v.job_ref_no,
+    }));
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto p-6 pb-0">
         {/* Header card */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-          <div className="flex gap-6 items-start">
+          <div className="flex gap-6 items-stretch">
             {/* Left column */}
             <div className="flex-1 space-y-3">
               {browseMode ? (
@@ -520,7 +528,7 @@ export function MaterialIssuesClient({
                     <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
                     <div className="w-56">
                       <Combobox
-                        options={vehicleOptions}
+                        options={browseVehicleOptions}
                         value={browseVehicleId}
                         onChange={setBrowseVehicleId}
                         placeholder="Search vehicle…"
@@ -635,18 +643,20 @@ export function MaterialIssuesClient({
 
             {/* Right column — customer info + total (hidden in browse mode) */}
             {!browseMode && (
-              <div className="w-52 shrink-0 text-right">
-                {selectedVehicle ? (
-                  <>
-                    <p className="text-base font-semibold text-slate-800 leading-snug break-words mb-2">
-                      {selectedVehicle.customer_address || "—"}
-                    </p>
-                    <p className="text-sm text-slate-500 mb-5">
-                      {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
-                    </p>
-                  </>
-                ) : null}
+              <div className="w-52 shrink-0 text-right flex flex-col justify-between">
                 <div>
+                  {selectedVehicle ? (
+                    <>
+                      <p className="text-base font-semibold text-slate-800 leading-snug break-words mb-2">
+                        {selectedVehicle.customer_address || "—"}
+                      </p>
+                      <p className="text-sm text-slate-700">
+                        {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
+                      </p>
+                    </>
+                  ) : null}
+                </div>
+                <div className="mt-4">
                   <p className="text-xs text-slate-400 uppercase tracking-wide">Total</p>
                   <p className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</p>
                 </div>
@@ -699,33 +709,37 @@ export function MaterialIssuesClient({
         <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
           <Button variant="outline" className="h-10 px-5" onClick={handleNew} disabled={isPending}>New</Button>
 
-          {hasFormContent && (
+          {!browseMode && (
             <>
-              <Button variant="outline" className="h-10 px-5" onClick={handleSave} disabled={isPending || isLoading}>
-                {isPending ? "Saving…" : miStatus === "Issued" ? "Save & Reapply" : "Save"}
-              </Button>
-
-              {(!loadedSlip || miStatus === "Draft") && (
-                <Button className="h-10 px-5 bg-blue-600 hover:bg-blue-700" onClick={handleIssue} disabled={isPending}>
-                  {isPending ? "Processing…" : "Issue"}
-                </Button>
-              )}
-
-              {loadedSlip && (
+              {hasFormContent && (
                 <>
-                  <PrintButton
-                    getDocument={() => <MISlipDocument slip={loadedSlip} companySetting={companySetting} />}
-                    label="Print"
-                  />
-                  <Button variant="outline" className="h-10 px-5" onClick={handleClone} disabled={isPending}>Clone</Button>
-                  <Button
-                    variant="outline"
-                    className="h-10 px-5 text-red-600 border-red-200 hover:bg-red-50"
-                    onClick={handleDelete}
-                    disabled={isPending}
-                  >
-                    Delete
+                  <Button variant="outline" className="h-10 px-5" onClick={handleSave} disabled={isPending || isLoading}>
+                    {isPending ? "Saving…" : !loadedSlip ? "Save Draft" : miStatus === "Issued" ? "Save & Reapply" : "Save"}
                   </Button>
+
+                  {(!loadedSlip || miStatus === "Draft") && (
+                    <Button className="h-10 px-5 bg-blue-600 hover:bg-blue-700" onClick={handleIssue} disabled={isPending}>
+                      {isPending ? "Processing…" : "Issue"}
+                    </Button>
+                  )}
+
+                  {loadedSlip && (
+                    <>
+                      <PrintButton
+                        getDocument={() => <MISlipDocument slip={loadedSlip} companySetting={companySetting} />}
+                        label="Print"
+                      />
+                      <Button variant="outline" className="h-10 px-5" onClick={handleClone} disabled={isPending}>Clone</Button>
+                      <Button
+                        variant="outline"
+                        className="h-10 px-5 text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={handleDelete}
+                        disabled={isPending}
+                      >
+                        Delete
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
 

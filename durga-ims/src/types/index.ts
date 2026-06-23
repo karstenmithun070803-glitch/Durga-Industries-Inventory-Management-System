@@ -375,6 +375,7 @@ export interface InvoiceDropdownItem {
   date: string;
   status: string;
   vehicleName: string | null;
+  customerName: string | null;
   netAmount: string;
 }
 

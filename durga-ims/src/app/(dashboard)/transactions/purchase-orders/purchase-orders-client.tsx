@@ -511,6 +511,24 @@ export function PurchaseOrdersClient({
     });
   }
 
+  function handleFilterSupplierChange(val: string) {
+    if (val !== "") {
+      setFilterSupplier(val);
+      return;
+    }
+    if (loadedPO) {
+      if (isDirty) {
+        setPendingAction(() => () => setFilterSupplier(""));
+        setDiscardDialogOpen(true);
+        return;
+      }
+      clearForm();
+      setFilterSupplier("");
+      return;
+    }
+    setFilterSupplier("");
+  }
+
   function handleCancel() {
     if (isDirty) {
       setPendingAction(() => () => {});
@@ -648,7 +666,7 @@ export function PurchaseOrdersClient({
                     <Combobox
                       options={supplierFilterOptions}
                       value={filterSupplier}
-                      onChange={setFilterSupplier}
+                      onChange={handleFilterSupplierChange}
                       placeholder="Select supplier…"
                     />
                   </div>

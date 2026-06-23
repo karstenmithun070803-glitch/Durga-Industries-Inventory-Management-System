@@ -859,6 +859,7 @@ export async function getInvoicesForDropdown(fy: string): Promise<InvoiceDropdow
       status: invoices.status,
       net_amount: invoices.net_amount,
       vehicle_name: vehicles.vehicle_name,
+      customer_name: invoices.customer_name,
     })
     .from(invoices)
     .leftJoin(vehicles, eq(invoices.vehicle_id, vehicles.id))
@@ -871,6 +872,7 @@ export async function getInvoicesForDropdown(fy: string): Promise<InvoiceDropdow
     date: (r.bill_date as unknown as Date).toISOString().split("T")[0],
     status: r.status,
     vehicleName: r.vehicle_name,
+    customerName: r.customer_name,
     netAmount: r.net_amount,
   }));
 }

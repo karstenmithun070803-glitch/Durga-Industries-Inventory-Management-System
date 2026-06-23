@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
@@ -29,7 +29,6 @@ import {
   finalizeInvoice,
   revertInvoiceToDraft,
   deleteInvoice,
-  cancelInvoice,
   getIssuedMIsForVehicle,
   getAllIssuedMIItemsForVehicle,
   getLinkedSlipsForInvoice,
@@ -242,6 +241,8 @@ export function InvoiceClient({
   const [dropdownItems, setDropdownItems] = useState<InvoiceDropdownItem[]>(initialDropdownItems);
   const [loadedFY, setLoadedFY] = useState(initialFY);
   const [currentInvoiceId, setCurrentInvoiceId] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   // ── Loading / saving ──────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
@@ -281,7 +282,6 @@ export function InvoiceClient({
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
@@ -553,32 +553,45 @@ export function InvoiceClient({
     }
   }
 
+  // ── Shared form reset (no new-mode flag) ─────────────────────────────────
+  function resetForm() {
+    setCurrentInvoiceId(null);
+    setCurrentInvoice(null);
+    setVehicleId("");
+    setSelectedVehicle(null);
+    setGstType("CGST_SGST");
+    setBillDate(new Date().toISOString().slice(0, 10));
+    setBillNumber("—");
+    setMaterialMargin("");
+    setIncludeTax(false);
+    setRows([newRow()]);
+    setMiSlipsMeta([]);
+    setMiSlipsItems([]);
+    setSelectedSlipIds(new Set());
+    setLinkedSlips([]);
+    setInsuranceBillId(null);
+    setInsuranceBillStatus(null);
+    setInsuranceBill(null);
+    setActiveView("invoice");
+    setIsDirty(false);
+    setIsNewMode(false);
+  }
+
   // ── New ───────────────────────────────────────────────────────────────────
   function handleNew() {
     guardDirty(() => {
-      setCurrentInvoiceId(null);
-      setCurrentInvoice(null);
-      setVehicleId("");
-      setSelectedVehicle(null);
-      setGstType("CGST_SGST");
-      setBillDate(new Date().toISOString().slice(0, 10));
-      setBillNumber("—");
-      setMaterialMargin("");
-      setIncludeTax(false);
-      setRows([newRow()]);
-      setMiSlipsMeta([]);
-      setMiSlipsItems([]);
-      setSelectedSlipIds(new Set());
-      setLinkedSlips([]);
-      setInsuranceBillId(null);
-      setInsuranceBillStatus(null);
-      setInsuranceBill(null);
-      setActiveView("invoice");
-      setIsDirty(false);
+      resetForm();
       setIsNewMode(true);
       // Peek next bill number
       peekNextBillNumber(null, activeFY).then(setBillNumber).catch(() => setBillNumber("—"));
       setTimeout(() => identifierRef.current?.focus(), 100);
+    });
+  }
+
+  // ── Go back to browsing screen ────────────────────────────────────────────
+  function handleGoBack() {
+    guardDirty(() => {
+      resetForm();
     });
   }
 
@@ -644,6 +657,7 @@ export function InvoiceClient({
       if (!updated) throw new Error("Failed to reload finalized invoice.");
       setCurrentInvoiceId(id);
       setCurrentInvoice(updated);
+      setIsNewMode(false);
       setBillNumber(updated.bill_number);
       setRows(itemsFromInvoice(updated.items, updated.material_margin ?? "0"));
       setIsDirty(false);
@@ -696,25 +710,6 @@ export function InvoiceClient({
     }
   }
 
-  // ── Cancel invoice ────────────────────────────────────────────────────────
-  async function handleCancelInvoice() {
-    if (!currentInvoiceId) return;
-    setIsSaving(true);
-    try {
-      await cancelInvoice(currentInvoiceId);
-      toast.success("Invoice cancelled.");
-      const newDropdown = await getInvoicesForDropdown(activeFY);
-      setDropdownItems(newDropdown);
-      // Reload to show CANCELLED status
-      await loadInvoice(currentInvoiceId);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to cancel invoice.");
-    } finally {
-      setIsSaving(false);
-      setShowCancelDialog(false);
-    }
-  }
-
   // ── Create insurance bill ─────────────────────────────────────────────────
   async function handleCreateInsuranceBill() {
     if (!currentInvoiceId) return;
@@ -760,9 +755,17 @@ export function InvoiceClient({
   useHotkeys("escape", () => { if (activeView === "insurance") setActiveView("invoice"); }, { enableOnFormTags: true });
 
   // ── Dropdown options ──────────────────────────────────────────────────────
-  const identifierOptions = dropdownItems.map((d) => ({
+  const filteredDropdownItems = useMemo(() => {
+    let items = dropdownItems;
+    if (dateFrom) items = items.filter((d) => d.date >= dateFrom);
+    if (dateTo) items = items.filter((d) => d.date <= dateTo);
+    return items;
+  }, [dropdownItems, dateFrom, dateTo]);
+
+  const identifierOptions = filteredDropdownItems.map((d) => ({
     value: d.id,
-    label: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""} (${d.status})`,
+    label: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""}${d.customerName ? ` — ${d.customerName}` : ""} (${d.status})`,
+    displayLabel: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""} (${d.status})`,
   }));
 
   const vehicleOptions = vehicles.map((v) => ({
@@ -803,17 +806,43 @@ export function InvoiceClient({
   return (
     <div className="flex flex-col h-full">
       {/* Page header + identifier */}
-      <div className="px-6 pt-5 pb-3 flex items-center gap-3">
+      <div className="px-6 pt-5 pb-3 flex items-center gap-3 flex-wrap">
         <h1 className="text-lg font-semibold text-slate-800 shrink-0">Invoices</h1>
         <div className="w-72">
           <Combobox
             options={identifierOptions}
             value={currentInvoiceId ?? ""}
             onChange={(id) => { if (id) void loadInvoice(id); }}
-            placeholder="Search bill number…"
-            searchPlaceholder="Search by bill no or vehicle…"
+            placeholder="Search bill no, vehicle, customer…"
+            searchPlaceholder="Search by bill no, vehicle or customer…"
             openOnArrowDown
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-8 text-xs w-36"
+            title="Filter from date"
+          />
+          <span className="text-slate-400 text-xs">—</span>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-8 text-xs w-36"
+            title="Filter to date"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              className="text-xs text-slate-400 hover:text-slate-600"
+              title="Clear date filter"
+            >
+              ✕
+            </button>
+          )}
         </div>
         {isLoading && <span className="text-sm text-slate-400 animate-pulse">Loading…</span>}
       </div>
@@ -1081,7 +1110,7 @@ export function InvoiceClient({
             </div>
 
             <div className="flex items-center gap-2 px-6 py-3">
-              {/* Left: destructive actions */}
+              {/* Left: destructive actions + cancel navigation */}
               <div className="flex gap-2">
                 {isDraft && currentInvoiceId && (
                   <Button
@@ -1094,15 +1123,15 @@ export function InvoiceClient({
                     Delete
                   </Button>
                 )}
-                {currentInvoiceId && !isCancelled && (
+                {(currentInvoiceId || isNewMode) && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                    onClick={() => setShowCancelDialog(true)}
+                    className="text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                    onClick={handleGoBack}
                     disabled={isSaving}
                   >
-                    Cancel Bill
+                    Cancel
                   </Button>
                 )}
               </div>
@@ -1120,11 +1149,11 @@ export function InvoiceClient({
                     onClick={handleSave}
                     disabled={isSaving}
                   >
-                    {isSaving ? "Saving…" : "Save"}
+                    {isSaving ? "Saving…" : isNewMode ? "Save as Draft" : "Save"}
                   </Button>
                 )}
 
-                {isDraft && (
+                {(isDraft || isNewMode) && (
                   <Button
                     size="sm"
                     onClick={() => setShowFinalizeDialog(true)}
@@ -1218,15 +1247,6 @@ export function InvoiceClient({
         description="This will permanently delete the invoice and all its line items. This cannot be undone."
         confirmLabel="Delete Invoice"
         onConfirm={handleDelete}
-      />
-
-      <ConfirmDialog
-        open={showCancelDialog}
-        onOpenChange={setShowCancelDialog}
-        title={`Cancel ${billNumber}?`}
-        description="This will mark the invoice as CANCELLED. Any linked Draft insurance bill will also be deleted. Finalized insurance bills must be reverted to Draft first."
-        confirmLabel="Cancel Invoice"
-        onConfirm={handleCancelInvoice}
       />
 
       <ConfirmDialog

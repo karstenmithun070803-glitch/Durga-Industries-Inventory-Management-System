@@ -347,8 +347,8 @@ export function TransactionGrid({
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-28">Rate</th>
             {(!isInvoiceMode || showTaxColumns) && <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Tax %</th>}
             {isInvoiceMode && !showTaxColumns && <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-24">Tax</th>}
-            <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-28">Amount</th>
             {isInvoiceMode && showTaxColumns && <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-24">Tax Amt</th>}
+            <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-28">Amount</th>
             {!readOnly && <th className="px-3 py-2 w-10" />}
           </tr>
         </thead>
@@ -599,17 +599,7 @@ export function TransactionGrid({
                   </td>
                 )}
 
-                {/* Amount — tax-inclusive display; stored amount is pre-tax */}
-                <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">
-                  {fmt2(
-                    (parseFloat(row.amount || "0") +
-                     parseFloat(row.cgst_amount || "0") +
-                     parseFloat(row.sgst_amount || "0") +
-                     parseFloat(row.igst_amount || "0")).toFixed(2)
-                  )}
-                </td>
-
-                {/* Tax Amt — invoice mode with showTaxColumns: combined tax per line (read-only) */}
+                {/* Tax Amt — invoice mode with showTaxColumns: combined tax per line (read-only), shown before Amount */}
                 {isInvoiceMode && showTaxColumns && (
                   <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
                     {fmt2(
@@ -619,6 +609,16 @@ export function TransactionGrid({
                     )}
                   </td>
                 )}
+
+                {/* Amount — tax-inclusive display; stored amount is pre-tax */}
+                <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">
+                  {fmt2(
+                    (parseFloat(row.amount || "0") +
+                     parseFloat(row.cgst_amount || "0") +
+                     parseFloat(row.sgst_amount || "0") +
+                     parseFloat(row.igst_amount || "0")).toFixed(2)
+                  )}
+                </td>
 
                 {!readOnly && (
                   <td className="px-3 py-1.5">
