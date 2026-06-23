@@ -274,7 +274,9 @@ export function PurchaseOrdersClient({
 
     const lo = Math.min(from, to);
     const hi = Math.max(from, to);
-    const inRange = dropdownItems.filter((d) => d.poNumber >= lo && d.poNumber <= hi);
+    const inRange = dropdownItems
+      .filter((d) => d.poNumber >= lo && d.poNumber <= hi)
+      .sort((a, b) => a.poNumber - b.poNumber);
     if (inRange.length === 0) { setBatchPOs([]); return; }
 
     let cancelled = false;

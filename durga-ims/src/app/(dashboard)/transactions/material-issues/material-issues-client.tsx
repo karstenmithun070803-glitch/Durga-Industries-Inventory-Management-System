@@ -311,7 +311,6 @@ export function MaterialIssuesClient({
         return;
       }
       populateForm(slip);
-      setBrowseMode(false);
     } catch {
       toast.error("Failed to load slip");
     } finally {
@@ -395,6 +394,7 @@ export function MaterialIssuesClient({
           toast.success("Draft saved");
           const updated = await getMaterialIssueById(loadedSlip.id);
           if (updated) populateForm(updated);
+          await refreshSlips();
         } catch (e: unknown) {
           toast.error(e instanceof Error ? e.message : "Save failed");
         }
@@ -413,6 +413,7 @@ export function MaterialIssuesClient({
         setSaveReapplyDialogOpen(false);
         const updated = await getMaterialIssueById(loadedSlip.id);
         if (updated) populateForm(updated);
+        await refreshSlips();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Save & Reapply failed");
         setSaveReapplyDialogOpen(false);
@@ -573,8 +574,20 @@ export function MaterialIssuesClient({
                             {browsedSlips.map((s) => (
                               <button
                                 key={s.id}
-                                onClick={() => void loadSlip(s.id)}
-                                className="w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50 text-left"
+                                onClick={() => {
+                                  if (s.id === loadedSlip?.id) return;
+                                  if (isDirty) {
+                                    setPendingAction(() => () => void loadSlip(s.id));
+                                    setDiscardDialogOpen(true);
+                                    return;
+                                  }
+                                  void loadSlip(s.id);
+                                }}
+                                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors ${
+                                  s.id === loadedSlip?.id
+                                    ? "bg-blue-50 border-l-2 border-blue-400"
+                                    : "hover:bg-slate-50"
+                                }`}
                               >
                                 <span className="font-mono font-medium text-slate-800 w-20 shrink-0">
                                   {formatCode("MI-", s.slipNumber, 4)}
@@ -589,6 +602,58 @@ export function MaterialIssuesClient({
                           </div>
                         ) : (
                           <p className="text-sm text-slate-400 py-2">No slips found for this vehicle.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Inline form — shown when a slip is loaded in browse mode */}
+                  {loadedSlip && (
+                    <div className="flex items-start gap-3">
+                      <span className="w-28 shrink-0" />
+                      <div className="w-56 space-y-2 pt-2 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-sm font-medium text-slate-800">
+                            {formatCode("MI-", loadedSlip.slip_number, 4)}
+                          </span>
+                          {miStatus && (
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
+                            }`}>
+                              {miStatus}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-3 items-end">
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">Date</label>
+                            <Input
+                              type="date"
+                              value={issueDate}
+                              onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
+                              className="h-8 text-sm w-36"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-slate-500">Margin %</label>
+                            <Input
+                              type="number"
+                              value={marginPct}
+                              onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
+                              onFocus={(e) => e.target.select()}
+                              className="h-8 text-sm w-20"
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                        </div>
+                        {miStatus === "Issued" && (
+                          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-800">
+                              <span className="font-medium">Issued.</span> Saving reverses and reapplies stock.
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -648,6 +713,7 @@ export function MaterialIssuesClient({
                           type="number"
                           value={marginPct}
                           onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
+                          onFocus={(e) => e.target.select()}
                           className="h-9 text-sm"
                           min="0"
                           step="0.01"
@@ -669,13 +735,13 @@ export function MaterialIssuesClient({
               )}
             </div>
 
-            {/* Right column — customer info + total (hidden in browse mode) */}
-            {!browseMode && (
+            {/* Right column — customer info + total */}
+            {(!browseMode || !!loadedSlip) && (
               <div className="w-52 shrink-0 text-right flex flex-col justify-between">
                 <div>
                   {selectedVehicle ? (
                     <>
-                      <p className="text-base font-semibold text-slate-800 leading-snug break-words mb-2">
+                      <p className="text-base font-semibold text-slate-800 leading-snug break-words mb-4">
                         {selectedVehicle.customer_address || "—"}
                       </p>
                       <p className="text-sm text-slate-700">
@@ -696,7 +762,7 @@ export function MaterialIssuesClient({
         {/* Grid */}
         {isLoading ? (
           <div className="flex items-center justify-center py-16 text-slate-400 text-sm">Loading…</div>
-        ) : browseMode ? (
+        ) : (browseMode && !loadedSlip) ? (
           <div className="bg-white rounded-lg border border-slate-200 p-5 text-center text-sm text-slate-400 mb-4">
             Select a vehicle above to find existing slips, or click <strong>New</strong> to create one.
           </div>
@@ -737,7 +803,7 @@ export function MaterialIssuesClient({
         <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
           <Button variant="outline" className="h-10 px-5" onClick={handleNew} disabled={isPending}>New</Button>
 
-          {!browseMode && (
+          {(!browseMode || !!loadedSlip) && (
             <>
               {hasFormContent && (
                 <>
