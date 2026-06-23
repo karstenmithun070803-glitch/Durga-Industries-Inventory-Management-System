@@ -342,6 +342,25 @@ export function MaterialIssuesClient({
     };
   }
 
+  function handleFormVehicleChange(val: string) {
+    if (val !== "") {
+      setVehicleId(val);
+      setIsDirty(true);
+      return;
+    }
+    if (loadedSlip) {
+      if (isDirty) {
+        setPendingAction(() => () => {});
+        setDiscardDialogOpen(true);
+        return;
+      }
+      clearForm();
+      return;
+    }
+    setVehicleId("");
+    setIsDirty(true);
+  }
+
   function handleNew() {
     const doNew = () => {
       clearForm();
@@ -499,12 +518,6 @@ export function MaterialIssuesClient({
     ? allSlips.filter((s) => s.vehicleId === browseVehicleId)
     : [];
 
-  const vehicleOptions = vehicles.map((v) => ({
-    value: v.id,
-    label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}`,
-    displayLabel: v.vehicle_name ?? v.job_ref_no,
-  }));
-
   const browseVehicleOptions = vehicles
     .filter((v) => v.type === "Old")
     .map((v) => ({
@@ -512,6 +525,22 @@ export function MaterialIssuesClient({
       label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}`,
       displayLabel: v.vehicle_name ?? v.job_ref_no,
     }));
+
+  const formVehicleOptions = (() => {
+    if (!vehicleId || browseVehicleOptions.some((o) => o.value === vehicleId)) {
+      return browseVehicleOptions;
+    }
+    const current = vehicles.find((v) => v.id === vehicleId);
+    if (!current) return browseVehicleOptions;
+    return [
+      {
+        value: current.id,
+        label: `${current.job_ref_no} — ${current.vehicle_name ?? ""}`,
+        displayLabel: current.vehicle_name ?? current.job_ref_no,
+      },
+      ...browseVehicleOptions,
+    ];
+  })();
 
   return (
     <div className="flex h-full flex-col">
@@ -550,7 +579,6 @@ export function MaterialIssuesClient({
                                 <span className="font-mono font-medium text-slate-800 w-20 shrink-0">
                                   {formatCode("MI-", s.slipNumber, 4)}
                                 </span>
-                                <span className="text-slate-400 text-xs shrink-0">{s.date}</span>
                                 <span className={`ml-auto px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
                                   s.status === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
                                 }`}>
@@ -573,9 +601,9 @@ export function MaterialIssuesClient({
                     <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
                     <div className="w-56">
                       <Combobox
-                        options={vehicleOptions}
+                        options={formVehicleOptions}
                         value={vehicleId}
-                        onChange={(v) => { setVehicleId(v); setIsDirty(true); }}
+                        onChange={handleFormVehicleChange}
                         placeholder="Select vehicle…"
                       />
                     </div>
