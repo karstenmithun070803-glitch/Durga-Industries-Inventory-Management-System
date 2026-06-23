@@ -375,7 +375,7 @@ export function TransactionGrid({
                 <td className="px-3 py-1.5 text-slate-500">{i + 1}</td>
 
                 {/* Material Code — read-only, auto-filled */}
-                <td className="px-3 py-1.5 font-mono text-xs text-slate-700 whitespace-nowrap">
+                <td className="px-3 py-1.5 font-mono text-sm text-slate-700 whitespace-nowrap">
                   {row.material_no ? formatCode("M", row.material_no) : "—"}
                 </td>
 
@@ -402,7 +402,7 @@ export function TransactionGrid({
 
                 {/* HSN — read-only, auto-filled, issue mode and invoice mode */}
                 {(isIssueMode || isInvoiceMode) && (
-                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500 whitespace-nowrap">
+                  <td className="px-3 py-1.5 font-mono text-sm text-slate-500 whitespace-nowrap">
                     {row.hsn_code || "—"}
                   </td>
                 )}
@@ -509,7 +509,7 @@ export function TransactionGrid({
                 <td className="px-3 py-1.5 whitespace-nowrap">
                   {row.material_id && !row.unit_name ? (
                     <span
-                      className="text-xs text-amber-600"
+                      className="text-sm text-amber-600"
                       title={
                         isHeaderGstMode
                           ? "No sales or purchase unit set — edit in Materials master"
@@ -547,10 +547,10 @@ export function TransactionGrid({
                         title={row.rateBlank ? "No purchase history — enter rate manually" : ""}
                       />
                       {row.rateBlank && (
-                        <p className="text-xs text-amber-600 whitespace-nowrap">First purchase — enter rate</p>
+                        <p className="text-sm text-amber-600 whitespace-nowrap">First purchase — enter rate</p>
                       )}
                       {showZeroWarning && (
-                        <label className="flex items-center gap-1 text-xs text-amber-700 cursor-pointer">
+                        <label className="flex items-center gap-1 text-sm text-amber-700 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={row.zeroRateConfirmed}
@@ -644,7 +644,7 @@ export function TransactionGrid({
           <Button
             variant="outline"
             size="sm"
-            className="text-xs h-7"
+            className="text-sm h-8"
             onClick={() => onChange([...rows, newRow()])}
             type="button"
           >

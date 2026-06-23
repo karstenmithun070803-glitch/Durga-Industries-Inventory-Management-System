@@ -30,6 +30,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import { formatCode } from "@/lib/utils";
+
+const todayISO = new Date().toISOString().split("T")[0];
 import { AlertTriangle } from "lucide-react";
 import { determineGstType } from "@/types";
 import type { MaterialIssueWithDetails, LineItemDraft } from "@/types";
@@ -198,7 +200,7 @@ export function MaterialIssuesClient({
   const [isLoading, setIsLoading] = useState(false);
 
   const [vehicleId, setVehicleId] = useState("");
-  const [issueDate, setIssueDate] = useState("");
+  const [issueDate, setIssueDate] = useState(todayISO);
   const [marginPct, setMarginPct] = useState("0");
   const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
   const [isDirty, setIsDirty] = useState(false);
@@ -243,7 +245,7 @@ export function MaterialIssuesClient({
   function clearForm() {
     setLoadedSlip(null);
     setVehicleId("");
-    setIssueDate("");
+    setIssueDate(todayISO);
     setMarginPct("0");
     setRows([newRow()]);
     setIsDirty(false);
@@ -282,8 +284,8 @@ export function MaterialIssuesClient({
 
   function validate(): string | null {
     if (!vehicleId) return "Please select a vehicle.";
-    if (!issueDate) return "Please enter a DC date.";
-    if (!isDateInFY(issueDate, loadedFY)) return `DC date is outside FY ${loadedFY}.`;
+    if (!issueDate) return "Please enter a date.";
+    if (!isDateInFY(issueDate, loadedFY)) return `Date is outside FY ${loadedFY}.`;
     if (rows.filter((r) => r.material_id).length === 0) return "Add at least one material.";
     return null;
   }
@@ -469,11 +471,13 @@ export function MaterialIssuesClient({
   const dropdownOptions = slips.map((s) => ({
     value: s.id,
     label: `${formatCode("MI-", s.slipNumber, 4)} | ${s.vehicleName ?? "—"} | ${s.date} [${s.status}]`,
+    displayLabel: formatCode("MI-", s.slipNumber, 4),
   }));
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
     label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}`,
+    displayLabel: v.vehicle_name ?? v.job_ref_no,
   }));
 
   return (
@@ -481,35 +485,11 @@ export function MaterialIssuesClient({
       <div className="flex-1 overflow-y-auto p-6 pb-0">
         {/* Header card */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
+          {/* Row 1: Vehicle Name (primary selector) + Status badge */}
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 shrink-0">Slip No</span>
-              <Combobox
-                options={dropdownOptions}
-                value={loadedSlip?.id ?? ""}
-                onChange={handleSelect}
-                placeholder="Select or type slip…"
-                openOnArrowDown
-              />
-            </div>
-            {miStatus && (
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
-              }`}>
-                {miStatus}
-              </span>
-            )}
-            {hasFormContent && (
-              <span className="ml-auto text-sm font-semibold text-slate-700">
-                Total: {formatAmount(grand)}
-              </span>
-            )}
-          </div>
-
-          {hasFormContent && (
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">Vehicle</label>
+              <span className="text-sm text-slate-500 shrink-0">Vehicle Name</span>
+              <div className="w-56">
                 <Combobox
                   options={vehicleOptions}
                   value={vehicleId}
@@ -517,44 +497,79 @@ export function MaterialIssuesClient({
                   placeholder="Select vehicle…"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">DC Date</label>
+            </div>
+            {miStatus && (
+              <span className={`px-2 py-0.5 rounded text-sm font-medium ${
+                miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
+              }`}>
+                {miStatus}
+              </span>
+            )}
+          </div>
+
+          {/* Row 2: Slip No (load existing) + Total */}
+          <div className="mt-3 flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-500 shrink-0">Slip No</span>
+              <div className="w-48">
+                <Combobox
+                  options={dropdownOptions}
+                  value={loadedSlip?.id ?? ""}
+                  onChange={handleSelect}
+                  placeholder="Select or type slip…"
+                  openOnArrowDown
+                />
+              </div>
+            </div>
+            <span className="ml-auto text-sm font-semibold text-slate-700">
+              Total: {formatAmount(grand)}
+            </span>
+          </div>
+
+          {/* Row 3: always-visible detail fields */}
+          <div className="mt-4 flex flex-wrap items-end gap-4">
+            <div className="space-y-1">
+              <label className="text-sm text-slate-500">Date</label>
+              <div className="w-40">
                 <Input
                   type="date"
                   value={issueDate}
                   onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">Job No</label>
-                <div className="h-8 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
-                  {selectedVehicle?.job_ref_no || "—"}
-                </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-500">Job No</label>
+              <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
+                {selectedVehicle?.job_ref_no || "—"}
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-500">Margin %</label>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-500">Margin %</label>
+              <div className="w-24">
                 <Input
                   type="number"
                   value={marginPct}
                   onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                   min="0"
                   step="0.01"
                   placeholder="0"
                 />
               </div>
             </div>
-          )}
+          </div>
 
-          {hasFormContent && selectedVehicle && (
+          {/* Row 4: customer info — only when vehicle selected */}
+          {selectedVehicle && (
             <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-xs text-slate-400 mb-0.5">Customer Address</p>
+                <p className="text-sm text-slate-400 mb-0.5">Customer Address</p>
                 <p className="text-slate-700">{selectedVehicle.customer_address || "—"}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400 mb-0.5">GST Type</p>
+                <p className="text-sm text-slate-400 mb-0.5">GST Type</p>
                 <p className="text-slate-700">{gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}</p>
               </div>
             </div>
@@ -563,7 +578,7 @@ export function MaterialIssuesClient({
           {miStatus === "Issued" && (
             <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800">
+              <p className="text-sm text-amber-800">
                 <span className="font-medium">This slip has been issued.</span> Saving will reverse the current stock deductions and reapply them with the new values (atomic operation).
               </p>
             </div>
@@ -576,8 +591,8 @@ export function MaterialIssuesClient({
         ) : (
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
             {!hasFormContent && (
-              <div className="px-5 py-3 border-b border-slate-100 text-xs text-slate-400">
-                Select a slip from the dropdown above, or fill in the Vehicle and DC Date to create a new slip.
+              <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-400">
+                Select a vehicle above and add materials to create a new slip, or select an existing slip from the Slip No field.
               </div>
             )}
             <TransactionGrid
@@ -602,22 +617,22 @@ export function MaterialIssuesClient({
           <span className="text-slate-500">CGST: <span className="font-medium text-slate-800">{formatAmount(cgst)}</span></span>
           <span className="text-slate-500">SGST: <span className="font-medium text-slate-800">{formatAmount(sgst)}</span></span>
           <span className="text-slate-500">IGST: <span className="font-medium text-slate-800">{formatAmount(igst)}</span></span>
-          <span className="ml-auto text-slate-600 font-medium">
-            Grand Total: <span className="text-lg font-bold text-slate-900">{formatAmount(grand)}</span>
+          <span className="ml-auto text-slate-600 font-semibold text-base">
+            Grand Total: <span className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</span>
           </span>
         </div>
 
-        <div className="px-6 py-3 flex items-center gap-3 flex-wrap">
-          <Button variant="outline" onClick={handleNew} disabled={isPending}>New</Button>
+        <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
+          <Button variant="outline" className="h-10 px-5" onClick={handleNew} disabled={isPending}>New</Button>
 
           {hasFormContent && (
             <>
-              <Button variant="outline" onClick={handleSave} disabled={isPending || isLoading}>
+              <Button variant="outline" className="h-10 px-5" onClick={handleSave} disabled={isPending || isLoading}>
                 {isPending ? "Saving…" : miStatus === "Issued" ? "Save & Reapply" : "Save"}
               </Button>
 
               {loadedSlip && miStatus === "Draft" && (
-                <Button onClick={handleIssue} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+                <Button className="h-10 px-5 bg-blue-600 hover:bg-blue-700" onClick={handleIssue} disabled={isPending}>
                   {isPending ? "Processing…" : "Issue"}
                 </Button>
               )}
@@ -628,27 +643,21 @@ export function MaterialIssuesClient({
                     getDocument={() => <MISlipDocument slip={loadedSlip} companySetting={companySetting} />}
                     label="Print"
                   />
-                  <PrintButton
-                    getDocument={() => <MISlipDocument slip={loadedSlip} showAdvRate companySetting={companySetting} />}
-                    label="Print Adv."
-                  />
-                  <Button variant="outline" onClick={handleClone} disabled={isPending}>Clone</Button>
+                  <Button variant="outline" className="h-10 px-5" onClick={handleClone} disabled={isPending}>Clone</Button>
                   <Button
                     variant="outline"
+                    className="h-10 px-5 text-red-600 border-red-200 hover:bg-red-50"
                     onClick={handleDelete}
                     disabled={isPending}
-                    className="text-red-600 border-red-200 hover:bg-red-50"
                   >
                     Delete
                   </Button>
                 </>
               )}
 
-              <Button variant="outline" onClick={handleCancel} disabled={isPending}>Cancel</Button>
+              <Button variant="outline" className="h-10 px-5" onClick={handleCancel} disabled={isPending}>Cancel</Button>
             </>
           )}
-
-          <Button variant="outline" className="ml-auto" onClick={() => window.history.back()}>Exit</Button>
         </div>
       </div>
 

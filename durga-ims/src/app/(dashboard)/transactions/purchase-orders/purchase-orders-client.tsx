@@ -31,7 +31,8 @@ import { PORegisterDocument } from "@/components/pdf/po-register-pdf";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import { formatCode } from "@/lib/utils";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { PurchaseOrderWithDetails, LineItemDraft } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 
@@ -243,6 +244,9 @@ export function PurchaseOrdersClient({
   // Batch print range
   const [printFromId, setPrintFromId] = useState("");
   const [printToId, setPrintToId] = useState("");
+
+  // Sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const identifierRef = useRef<HTMLButtonElement>(null);
 
@@ -542,6 +546,7 @@ export function PurchaseOrdersClient({
   const dropdownOptions = dropdownItems.map((item) => ({
     value: item.id,
     label: `${formatCode("PO-", item.poNumber, 4)} | ${item.supplierName ?? "Multi-supplier"} | ${formatDate(item.date)} [${item.status}]`,
+    displayLabel: formatCode("PO-", item.poNumber, 4),
   }));
 
   // Batch print: filter POs in range by po_number
@@ -635,19 +640,21 @@ export function PurchaseOrdersClient({
             {/* Row 1: identifier + status badge + total */}
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 shrink-0">PO Number</span>
-                <Combobox
-                  options={dropdownOptions}
-                  value={loadedPO?.id ?? ""}
-                  onChange={handleSelect}
-                  placeholder="Select or type PO number…"
-                  openOnArrowDown
-                />
+                <span className="text-sm text-slate-500 shrink-0">PO Number</span>
+                <div className="w-48">
+                  <Combobox
+                    options={dropdownOptions}
+                    value={loadedPO?.id ?? ""}
+                    onChange={handleSelect}
+                    placeholder="Select or type PO…"
+                    openOnArrowDown
+                  />
+                </div>
               </div>
 
               {poStatus && (
                 <span
-                  className={`px-2 py-0.5 rounded text-xs font-medium ${
+                  className={`px-2 py-0.5 rounded text-sm font-medium ${
                     poStatus === "Received"
                       ? "bg-emerald-100 text-emerald-800"
                       : "bg-amber-100 text-amber-800"
@@ -657,62 +664,42 @@ export function PurchaseOrdersClient({
                 </span>
               )}
 
-              {hasFormContent && (
-                <span className="ml-auto text-sm font-semibold text-slate-700">
-                  Total: {formatAmount(grand)}
-                </span>
-              )}
+              <span className="ml-auto text-sm font-semibold text-slate-700">
+                Total: {formatAmount(grand)}
+              </span>
             </div>
 
-            {/* Row 2: header fields — shown when a PO is loaded or user has started entering */}
-            {hasFormContent && (
-              <div className="mt-4 grid grid-cols-4 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-500">PO Date</label>
+            {/* Row 2: always-visible header fields */}
+            <div className="mt-4 flex flex-wrap items-end gap-4">
+              <div className="space-y-1">
+                <label className="text-sm text-slate-500">PO Date</label>
+                <div className="w-40">
                   <Input
                     type="date"
                     value={poDate}
                     onChange={(e) => { setPoDate(e.target.value); setIsDirty(true); }}
-                    className="h-8 text-sm"
+                    className="h-9 text-sm"
                   />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-500">Supplier Bill No</label>
-                  <Input
-                    value={supplierBillNo}
-                    onChange={(e) => { setSupplierBillNo(e.target.value); setIsDirty(true); }}
-                    className="h-8 text-sm"
-                    placeholder="—"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-500">Supplier Bill Date</label>
-                  <Input
-                    type="date"
-                    value={supplierBillDate}
-                    onChange={(e) => { setSupplierBillDate(e.target.value); setIsDirty(true); }}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="flex items-end pb-1">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={affectsStock}
-                      onChange={(e) => { setAffectsStock(e.target.checked); setIsDirty(true); }}
-                      className="w-4 h-4 accent-slate-700"
-                    />
-                    <span className="text-sm text-slate-700">Update Stock</span>
-                  </label>
                 </div>
               </div>
-            )}
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={affectsStock}
+                    onChange={(e) => { setAffectsStock(e.target.checked); setIsDirty(true); }}
+                    className="w-4 h-4 accent-slate-700"
+                  />
+                  <span className="text-sm text-slate-700">Update Stock</span>
+                </label>
+              </div>
+            </div>
 
             {/* Received PO edit warning */}
-            {poStatus === "Received" && (
+            {hasFormContent && poStatus === "Received" && (
               <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800">
+                <p className="text-sm text-amber-800">
                   <span className="font-medium">This PO has been received.</span> Saving will reverse the current stock additions and reapply them with the new values (atomic operation).
                 </p>
               </div>
@@ -727,8 +714,8 @@ export function PurchaseOrdersClient({
           ) : (
             <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
               {!hasFormContent && (
-                <div className="px-5 py-3 border-b border-slate-100 text-xs text-slate-400">
-                  Select a PO from the dropdown above, or start adding items to create a new PO.
+                <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-400">
+                  Enter a PO date and add materials to create a new PO, or select an existing PO from the dropdown above.
                 </div>
               )}
               <TransactionGrid
@@ -762,14 +749,14 @@ export function PurchaseOrdersClient({
             <span className="text-slate-500">CGST: <span className="font-medium text-slate-800">{formatAmount(cgst)}</span></span>
             <span className="text-slate-500">SGST: <span className="font-medium text-slate-800">{formatAmount(sgst)}</span></span>
             <span className="text-slate-500">IGST: <span className="font-medium text-slate-800">{formatAmount(igst)}</span></span>
-            <span className="ml-auto text-slate-600 font-medium">
-              Grand Total: <span className="text-lg font-bold text-slate-900">{formatAmount(grand)}</span>
+            <span className="ml-auto text-slate-600 font-semibold text-base">
+              Grand Total: <span className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</span>
             </span>
           </div>
 
           {/* Action buttons */}
-          <div className="px-6 py-3 flex items-center gap-3 flex-wrap">
-            <Button variant="outline" onClick={handleNew} disabled={isPending}>
+          <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
+            <Button variant="outline" className="h-10 px-5" onClick={handleNew} disabled={isPending}>
               New
             </Button>
 
@@ -777,6 +764,7 @@ export function PurchaseOrdersClient({
               <>
                 <Button
                   variant="outline"
+                  className="h-10 px-5"
                   onClick={handleSave}
                   disabled={isPending || isLoading}
                 >
@@ -786,9 +774,9 @@ export function PurchaseOrdersClient({
                 {loadedPO && (
                   <Button
                     variant="outline"
+                    className="h-10 px-5 text-red-600 border-red-200 hover:bg-red-50"
                     onClick={handleDelete}
                     disabled={isPending}
-                    className="text-red-600 border-red-200 hover:bg-red-50"
                   >
                     Delete
                   </Button>
@@ -797,9 +785,9 @@ export function PurchaseOrdersClient({
                 {/* Mark as Received: shown when Draft or no PO yet */}
                 {(!loadedPO || poStatus === "Draft") && (
                   <Button
+                    className="h-10 px-5 bg-emerald-600 hover:bg-emerald-700"
                     onClick={handleMarkAsReceived}
                     disabled={isPending}
-                    className="bg-emerald-600 hover:bg-emerald-700"
                   >
                     {isPending ? "Processing…" : "Mark as Received"}
                   </Button>
@@ -809,9 +797,9 @@ export function PurchaseOrdersClient({
                 {poStatus === "Received" && (
                   <Button
                     variant="outline"
+                    className="h-10 px-5 text-amber-700 border-amber-300 hover:bg-amber-50"
                     onClick={handleRevertToDraft}
                     disabled={isPending}
-                    className="text-amber-700 border-amber-300 hover:bg-amber-50"
                   >
                     Revert to Draft
                   </Button>
@@ -831,7 +819,7 @@ export function PurchaseOrdersClient({
                   />
                 )}
 
-                <Button variant="outline" onClick={handleCancel} disabled={isPending}>
+                <Button variant="outline" className="h-10 px-5" onClick={handleCancel} disabled={isPending}>
                   Cancel
                 </Button>
               </>
@@ -839,7 +827,7 @@ export function PurchaseOrdersClient({
 
             <Button
               variant="outline"
-              className="ml-auto"
+              className="h-10 px-5 ml-auto"
               onClick={() => window.history.back()}
             >
               Exit
@@ -848,13 +836,20 @@ export function PurchaseOrdersClient({
         </div>
       </div>
 
-      {/* ── Right panel: batch print range ── */}
-      <div className="w-52 shrink-0 border-l border-slate-200 bg-slate-50 p-4 flex flex-col gap-4">
-        <div>
-          <h3 className="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide">Print PO Range</h3>
-          <div className="space-y-3">
+      {/* ── Right panel: collapsible batch print range ── */}
+      <div className={cn("shrink-0 border-l border-slate-200 bg-slate-50 flex flex-col transition-all duration-200", sidebarOpen ? "w-52" : "w-10")}>
+        <button
+          onClick={() => setSidebarOpen((v) => !v)}
+          className="p-2 hover:bg-slate-100 self-end text-slate-500 hover:text-slate-700"
+          title={sidebarOpen ? "Collapse" : "Print PO Range"}
+        >
+          {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
+        {sidebarOpen && (
+          <div className="px-4 pb-4 flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Print PO Range</h3>
             <div className="space-y-1">
-              <label className="text-xs text-slate-500">PO No From</label>
+              <label className="text-sm text-slate-500">PO No From</label>
               <Combobox
                 options={dropdownOptions}
                 value={printFromId}
@@ -863,7 +858,7 @@ export function PurchaseOrdersClient({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-slate-500">PO No To</label>
+              <label className="text-sm text-slate-500">PO No To</label>
               <Combobox
                 options={dropdownOptions}
                 value={printToId}
@@ -884,7 +879,7 @@ export function PurchaseOrdersClient({
               label="Print POs"
             />
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── Mark as Received dialog ── */}

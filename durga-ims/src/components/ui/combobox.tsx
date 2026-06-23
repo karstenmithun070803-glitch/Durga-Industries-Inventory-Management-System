@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 export interface ComboboxOption {
   value: string;
   label: string;
+  displayLabel?: string;
 }
 
 interface ComboboxProps {
@@ -91,7 +92,7 @@ export function Combobox({
         data-grid-col={gridCol}
       >
         <span className={cn("truncate", !selected && "text-muted-foreground")}>
-          {selected ? selected.label : placeholder}
+          {selected ? (selected.displayLabel ?? selected.label) : placeholder}
         </span>
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
