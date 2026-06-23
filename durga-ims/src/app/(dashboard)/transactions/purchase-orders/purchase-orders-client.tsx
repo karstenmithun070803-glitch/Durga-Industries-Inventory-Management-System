@@ -244,6 +244,8 @@ export function PurchaseOrdersClient({
   // Batch print range
   const [printFromId, setPrintFromId] = useState("");
   const [printToId, setPrintToId] = useState("");
+  const [batchPOs, setBatchPOs] = useState<PurchaseOrderWithDetails[]>([]);
+  const [batchLoading, setBatchLoading] = useState(false);
 
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -259,6 +261,37 @@ export function PurchaseOrdersClient({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-fetch full PO data when batch print range is selected
+  useEffect(() => {
+    if (!printFromId || !printToId) {
+      setBatchPOs([]);
+      return;
+    }
+    const from = dropdownItems.find((d) => d.id === printFromId)?.poNumber ?? 0;
+    const to = dropdownItems.find((d) => d.id === printToId)?.poNumber ?? 0;
+    if (!from || !to) { setBatchPOs([]); return; }
+
+    const lo = Math.min(from, to);
+    const hi = Math.max(from, to);
+    const inRange = dropdownItems.filter((d) => d.poNumber >= lo && d.poNumber <= hi);
+    if (inRange.length === 0) { setBatchPOs([]); return; }
+
+    let cancelled = false;
+    setBatchLoading(true);
+    setBatchPOs([]);
+
+    Promise.all(inRange.map((d) => getPurchaseOrderById(d.id)))
+      .then((results) => {
+        if (!cancelled) setBatchPOs(results.filter(Boolean) as PurchaseOrderWithDetails[]);
+      })
+      .finally(() => {
+        if (!cancelled) setBatchLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printFromId, printToId]);
 
   // FY change: refresh dropdown + clear form
   useEffect(() => {
@@ -358,7 +391,11 @@ export function PurchaseOrdersClient({
   }
 
   function handleNew() {
-    const doNew = () => clearForm();
+    const doNew = () => {
+      clearForm();
+      setFilterSupplier("");
+      setFilterDate("");
+    };
     if (isDirty) {
       setPendingAction(() => doNew);
       setDiscardDialogOpen(true);
@@ -599,36 +636,34 @@ export function PurchaseOrdersClient({
     }));
   }
 
-  // Batch PDF rows (all POs in range)
+  // Batch PDF rows (all POs in range) — uses pre-fetched batchPOs with full item data
   function buildBatchPDFRows(): PDFItemRow[] {
-    const inRange = dropdownItems.filter(
-      (d) => printFromNum && printToNum && d.poNumber >= printFromNum && d.poNumber <= printToNum
+    return batchPOs.flatMap((po) =>
+      po.items.map((item) => ({
+        id: po.id,
+        po_number: po.po_number,
+        po_date: po.po_date,
+        status: po.status,
+        affects_stock: po.affects_stock,
+        supplier_bill_no: po.supplier_bill_no ?? null,
+        supplier_bill_date: po.supplier_bill_date ?? null,
+        item_id: item.id,
+        material_id: item.material_id,
+        material_name: item.material_name,
+        material_no: item.material_no ?? null,
+        supplier_id: item.supplier_id ?? null,
+        supplier_name: item.supplier_name ?? null,
+        qty: item.qty,
+        unit_name: item.unit_name ?? null,
+        rate: item.rate,
+        tax_percentage: item.tax_percentage,
+        cgst_amount: item.cgst_amount,
+        sgst_amount: item.sgst_amount,
+        igst_amount: item.igst_amount,
+        amount: item.amount,
+        gst_type: item.gst_type ?? null,
+      }))
     );
-    // We only have header-level info; for batch print we create placeholder rows
-    return inRange.map((d) => ({
-      id: d.id,
-      po_number: d.poNumber,
-      po_date: d.date,
-      status: d.status,
-      affects_stock: true,
-      supplier_bill_no: null,
-      supplier_bill_date: null,
-      item_id: null,
-      material_id: null,
-      material_name: null,
-      material_no: null,
-      supplier_id: null,
-      supplier_name: d.supplierName,
-      qty: null,
-      unit_name: null,
-      rate: null,
-      tax_percentage: null,
-      cgst_amount: null,
-      sgst_amount: null,
-      igst_amount: null,
-      amount: null,
-      gst_type: null,
-    }));
   }
 
   // Supplier filter options — unique supplier names from loaded dropdown
@@ -927,8 +962,8 @@ export function PurchaseOrdersClient({
                   companySetting={companySetting}
                 />
               )}
-              disabled={!printFromId || !printToId}
-              label="Print POs"
+              disabled={!printFromId || !printToId || batchLoading}
+              label={batchLoading ? "Loading…" : "Print POs"}
             />
           </div>
         )}
