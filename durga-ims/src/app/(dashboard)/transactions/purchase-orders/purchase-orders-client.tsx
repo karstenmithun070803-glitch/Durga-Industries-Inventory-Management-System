@@ -252,10 +252,6 @@ export function PurchaseOrdersClient({
   const [filterSupplier, setFilterSupplier] = useState("");
   const [filterDate, setFilterDate] = useState("");
 
-  // browseMode: true = show filter panel (no active PO context)
-  //             false = user is creating or viewing a PO
-  const [browseMode, setBrowseMode] = useState(!initialSelectedId);
-
   // Auto-load on mount if deep-linked via ?id=
   useEffect(() => {
     if (initialSelectedId) {
@@ -271,7 +267,6 @@ export function PurchaseOrdersClient({
       setDropdownItems(data as DropdownItem[]);
       setLoadedFY(activeFY);
       clearForm();
-      setBrowseMode(true);
     });
   }, [activeFY, loadedFY]);
 
@@ -279,9 +274,11 @@ export function PurchaseOrdersClient({
   // Form helpers
   // ---------------------------------------------------------------------------
 
+  const todayISO = new Date().toISOString().split("T")[0];
+
   function clearForm() {
     setLoadedPO(null);
-    setPoDate("");
+    setPoDate(todayISO);
     setAffectsStock(true);
     setSupplierBillNo("");
     setSupplierBillDate("");
@@ -305,7 +302,6 @@ export function PurchaseOrdersClient({
       const po = await getPurchaseOrderById(id);
       if (po) {
         populateForm(po);
-        setBrowseMode(false);
       } else {
         toast.error("Purchase order not found");
       }
@@ -362,10 +358,7 @@ export function PurchaseOrdersClient({
   }
 
   function handleNew() {
-    const doNew = () => {
-      clearForm();
-      setBrowseMode(false);
-    };
+    const doNew = () => clearForm();
     if (isDirty) {
       setPendingAction(() => doNew);
       setDiscardDialogOpen(true);
@@ -401,7 +394,7 @@ export function PurchaseOrdersClient({
           const count = bySupplier.size;
           toast.success(`${count} draft PO${count > 1 ? "s" : ""} created`);
           await refreshDropdown();
-          if (firstId) await loadPO(firstId);
+          clearForm();
         } else if (loadedPO.status === "Draft") {
           await updatePurchaseOrder(loadedPO.id, buildPayload());
           toast.success("Draft saved");
@@ -456,7 +449,7 @@ export function PurchaseOrdersClient({
             `${count} PO${count > 1 ? "s" : ""} created and received. Stock updated for ${matCount} material${matCount !== 1 ? "s" : ""}.`
           );
           await refreshDropdown();
-          if (poIds[0]) await loadPO(poIds[0]);
+          clearForm();
         } else {
           // Edit-draft: save then receive
           await updatePurchaseOrder(loadedPO.id, buildPayload());
@@ -510,7 +503,6 @@ export function PurchaseOrdersClient({
         toast.success("Purchase order deleted");
         await refreshDropdown();
         clearForm();
-        setBrowseMode(true);
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Delete failed");
       } finally {
@@ -521,12 +513,11 @@ export function PurchaseOrdersClient({
 
   function handleCancel() {
     if (isDirty) {
-      setPendingAction(() => () => setBrowseMode(true));
+      setPendingAction(() => () => {});
       setDiscardDialogOpen(true);
       return;
     }
     clearForm();
-    setBrowseMode(true);
   }
 
   function confirmDiscard() {
@@ -648,87 +639,85 @@ export function PurchaseOrdersClient({
         <div className="flex-1 overflow-y-auto p-6 pb-0">
           {/* Header card */}
           <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-            {/* Row 1: PO No read-only (when editing/creating) OR filter panel (when browsing) */}
-            {!browseMode && (
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
+            {/* Filter panel — always visible */}
+            <div>
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 uppercase tracking-wide">Supplier</label>
+                  <div className="w-64">
+                    <Combobox
+                      options={supplierFilterOptions}
+                      value={filterSupplier}
+                      onChange={setFilterSupplier}
+                      placeholder="Select supplier…"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 uppercase tracking-wide">Date</label>
+                  <div className="w-44">
+                    <Input
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {filteredPOs.length > 0 && (
+                <div className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100">
+                  {filteredPOs.map((po) => (
+                    <button
+                      key={po.id}
+                      onClick={() => handleSelect(po.id)}
+                      className={`w-full flex items-center gap-4 px-3 py-2 text-sm text-left transition-colors ${
+                        po.id === loadedPO?.id
+                          ? "bg-blue-50 border-l-2 border-blue-400"
+                          : "hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="font-mono font-medium text-slate-800 w-16 shrink-0">
+                        {formatCode("PO-", po.poNumber, 4)}
+                      </span>
+                      <span className="flex-1 text-slate-600 truncate">
+                        {po.supplierName ?? "—"}
+                      </span>
+                      <span className="text-slate-400 shrink-0 text-xs">{formatDate(po.date)}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
+                        po.status === "Received"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {po.status}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {eitherFilterActive && filteredPOs.length === 0 && (
+                <p className="mt-2 text-sm text-slate-400">No purchase orders found.</p>
+              )}
+
+              {/* PO No + Status — shown inline below results when a PO is loaded */}
+              {loadedPO && (
+                <div className="mt-3 flex items-center gap-3">
                   <span className="text-sm text-slate-500 shrink-0">PO No</span>
                   <div className="h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md min-w-[80px]">
-                    {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : "—"}
+                    {formatCode("PO-", loadedPO.po_number, 4)}
                   </div>
+                  {poStatus && (
+                    <span className={`px-2 py-0.5 rounded text-sm font-medium ${
+                      poStatus === "Received" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                    }`}>
+                      {poStatus}
+                    </span>
+                  )}
                 </div>
-                {poStatus && (
-                  <span className={`px-2 py-0.5 rounded text-sm font-medium ${
-                    poStatus === "Received" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                  }`}>
-                    {poStatus}
-                  </span>
-                )}
-                <span className="ml-auto text-sm font-semibold text-slate-700">
-                  Total: {formatAmount(grand)}
-                </span>
-              </div>
-            )}
-
-            {browseMode && (
-              <div>
-                <div className="flex flex-wrap items-end gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 uppercase tracking-wide">Supplier</label>
-                    <div className="w-64">
-                      <Combobox
-                        options={supplierFilterOptions}
-                        value={filterSupplier}
-                        onChange={setFilterSupplier}
-                        placeholder="Select supplier…"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400 uppercase tracking-wide">Date</label>
-                    <div className="w-44">
-                      <Input
-                        type="date"
-                        value={filterDate}
-                        onChange={(e) => setFilterDate(e.target.value)}
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {filteredPOs.length > 0 && (
-                  <div className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100">
-                    {filteredPOs.map((po) => (
-                      <button
-                        key={po.id}
-                        onClick={() => handleSelect(po.id)}
-                        className="w-full flex items-center gap-4 px-3 py-2 text-sm hover:bg-slate-50 text-left transition-colors"
-                      >
-                        <span className="font-mono font-medium text-slate-800 w-16 shrink-0">
-                          {formatCode("PO-", po.poNumber, 4)}
-                        </span>
-                        <span className="flex-1 text-slate-600 truncate">
-                          {po.supplierName ?? "—"}
-                        </span>
-                        <span className="text-slate-400 shrink-0 text-xs">{formatDate(po.date)}</span>
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
-                          po.status === "Received"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}>
-                          {po.status}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {eitherFilterActive && filteredPOs.length === 0 && (
-                  <p className="mt-2 text-sm text-slate-400">No purchase orders found.</p>
-                )}
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Row 2: always-visible header fields */}
             <div className="mt-4 flex flex-wrap items-end gap-4">

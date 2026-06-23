@@ -12,7 +12,9 @@ import {
   issueMaterialIssue,
   deleteMaterialIssue,
   cloneNewMaterialIssue,
+  getSlipsForDropdown,
 } from "@/lib/actions/material-issues.actions";
+import { useDebounce } from "@/hooks/use-debounce";
 import { getStageMaterials } from "@/lib/actions/stages.actions";
 import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
 import { Combobox } from "@/components/ui/combobox";
@@ -86,7 +88,17 @@ interface UnitOption {
   unit_name: string;
 }
 
+interface SlipSummary {
+  id: string;
+  slipNumber: number;
+  vehicleId: string;
+  vehicleName: string | null;
+  date: string;
+  status: string;
+}
+
 interface Props {
+  initialSlips: SlipSummary[];
   vehicles: VehicleOption[];
   stages: StageOption[];
   contractors: ContractorOption[];
@@ -150,7 +162,8 @@ function computeRowAmounts(
   };
 }
 
-function miItemsToRows(slip: MaterialIssueWithDetails): LineItemDraft[] {
+function miItemsToRows(slip: MaterialIssueWithDetails, marginPct: string): LineItemDraft[] {
+  const factor = 1 + parseFloat(marginPct || "0") / 100;
   if (slip.items.length === 0) return [newRow()];
   return slip.items.map((item) => ({
     _key: crypto.randomUUID(),
@@ -165,6 +178,7 @@ function miItemsToRows(slip: MaterialIssueWithDetails): LineItemDraft[] {
     unit_id: item.unit_id ?? "",
     unit_name: item.unit_name ?? "",
     rate: item.rate,
+    baseRate: factor > 1 ? (parseFloat(item.rate) / factor).toFixed(4) : item.rate,
     tax_percentage: item.tax_percentage,
     cgst_amount: item.cgst_amount,
     sgst_amount: item.sgst_amount,
@@ -205,6 +219,7 @@ function buildItemsPayload(rows: LineItemDraft[]) {
 // ---------------------------------------------------------------------------
 
 export function NewVMIClient({
+  initialSlips,
   vehicles,
   stages,
   contractors,
@@ -224,16 +239,20 @@ export function NewVMIClient({
   const [isLoading, setIsLoading] = useState(false);
   const [stageLoading, setStageLoading] = useState(false);
 
+  const [browseMode, setBrowseMode] = useState(!initialSelectedId);
+  const [browseVehicleId, setBrowseVehicleId] = useState("");
+  const [allSlips, setAllSlips] = useState<SlipSummary[]>(initialSlips);
+
   const [vehicleId, setVehicleId] = useState("");
   const [stageId, setStageId] = useState("");
   const [issueDate, setIssueDate] = useState(todayISO);
   const [marginPct, setMarginPct] = useState("0");
+  const debouncedMargin = useDebounce(marginPct, 300);
   const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
   const [isDirty, setIsDirty] = useState(false);
   const [pendingFY, setPendingFY] = useState<string | null>(null);
   const [pendingStageName, setPendingStageName] = useState<string | null>(null);
 
-  const [issueDialogOpen, setIssueDialogOpen] = useState(false);
   const [zeroRateDialogOpen, setZeroRateDialogOpen] = useState(false);
   const [saveReapplyDialogOpen, setSaveReapplyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -262,8 +281,36 @@ export function NewVMIClient({
       return;
     }
     switchFY(activeFY);
+    getSlipsForDropdown(activeFY, "NEW").then(setAllSlips).catch(() => {});
+    setBrowseVehicleId("");
+    setBrowseMode(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFY, loadedFY]);
+
+  useEffect(() => {
+    if (rows.length === 0) return;
+    const factor = 1 + parseFloat(debouncedMargin || "0") / 100;
+    setRows((prev) =>
+      prev.map((row) => {
+        const base = parseFloat(row.baseRate || row.rate || "0");
+        const newRate = (base * factor).toFixed(4);
+        const qty = parseFloat(row.qty || "0");
+        const taxPct = parseFloat(row.tax_percentage || "0");
+        const newAmount = (parseFloat(newRate) * qty).toFixed(2);
+        const amt = parseFloat(newAmount);
+        let cgst = "0.00", sgst = "0.00", igst = "0.00";
+        const gst = row.gst_type ?? gstType;
+        if (gst === "CGST_SGST") {
+          const half = ((amt * taxPct) / 100 / 2).toFixed(2);
+          cgst = half; sgst = half;
+        } else {
+          igst = ((amt * taxPct) / 100).toFixed(2);
+        }
+        return { ...row, rate: newRate, amount: newAmount, cgst_amount: cgst, sgst_amount: sgst, igst_amount: igst };
+      })
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedMargin]);
 
   function switchFY(fy: string) {
     setLoadedFY(fy);
@@ -286,8 +333,15 @@ export function NewVMIClient({
     setStageId(slip.stage_id ?? "");
     setIssueDate(toISODate(slip.issue_date));
     setMarginPct(slip.margin_percentage ?? "0");
-    setRows(miItemsToRows(slip));
+    setRows(miItemsToRows(slip, slip.margin_percentage ?? "0"));
     setIsDirty(false);
+  }
+
+  async function refreshSlips() {
+    try {
+      const fresh = await getSlipsForDropdown(loadedFY, "NEW");
+      setAllSlips(fresh);
+    } catch { /* silent */ }
   }
 
   async function loadSlip(id: string) {
@@ -300,6 +354,7 @@ export function NewVMIClient({
         return;
       }
       populateForm(slip);
+      setBrowseMode(false);
     } catch {
       toast.error("Failed to load slip");
     } finally {
@@ -328,6 +383,7 @@ export function NewVMIClient({
           unit_id: m.unit_id,
           unit_name: m.unit_name,
           rate,
+          baseRate: rate,
           tax_percentage: taxPct,
           rateBlank: m.last_po_rate === null,
           zeroRateConfirmed: false,
@@ -389,7 +445,11 @@ export function NewVMIClient({
   }
 
   function handleNew() {
-    const doNew = () => { clearForm(); };
+    const doNew = () => {
+      clearForm();
+      setBrowseMode(false);
+      if (browseVehicleId) setVehicleId(browseVehicleId);
+    };
     if (isDirty) {
       setPendingAction(() => doNew);
       setDiscardDialogOpen(true);
@@ -444,10 +504,42 @@ export function NewVMIClient({
     });
   }
 
+  function doIssue(currentRows: LineItemDraft[]) {
+    const filled = currentRows.filter((r) => r.material_id);
+    const { grand } = calcTotals(filled);
+    const payload = {
+      vehicle_id: vehicleId,
+      issue_date: issueDate,
+      financial_year: loadedFY,
+      margin_percentage: marginPct || "0",
+      total_amount: grand.toFixed(2),
+      issue_type: "NEW" as const,
+      stage_id: stageId || null,
+      items: buildItemsPayload(filled),
+    };
+    startTransition(async () => {
+      try {
+        let targetId: string;
+        if (!loadedSlip) {
+          targetId = await createMaterialIssue(payload);
+        } else {
+          await updateMaterialIssue(loadedSlip.id, payload);
+          targetId = loadedSlip.id;
+        }
+        const slipNum = await issueMaterialIssue(targetId);
+        toast.success(`${formatCode("MI-", slipNum, 4)} issued — stock deducted`);
+        await refreshSlips();
+        clearForm();
+        setBrowseMode(true);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Issue failed");
+      }
+    });
+  }
+
   function handleIssue() {
     const err = validate();
     if (err) { toast.error(err); return; }
-    // Check for unconfirmed zero-rate items
     const zeroRows = rows.filter(
       (r) => r.material_id && parseFloat(r.rate || "0") === 0 && !r.rateBlank && !r.zeroRateConfirmed
     );
@@ -455,36 +547,18 @@ export function NewVMIClient({
       setZeroRateDialogOpen(true);
       return;
     }
-    setIssueDialogOpen(true);
+    doIssue(rows);
   }
 
   function confirmZeroRate() {
     setZeroRateDialogOpen(false);
-    // Mark zero-rate rows as confirmed and proceed to issue dialog
-    setRows((prev) =>
-      prev.map((r) =>
-        r.material_id && parseFloat(r.rate || "0") === 0 && !r.rateBlank
-          ? { ...r, zeroRateConfirmed: true }
-          : r
-      )
+    const confirmedRows = rows.map((r) =>
+      r.material_id && parseFloat(r.rate || "0") === 0 && !r.rateBlank
+        ? { ...r, zeroRateConfirmed: true }
+        : r
     );
-    setIssueDialogOpen(true);
-  }
-
-  function confirmIssue() {
-    if (!loadedSlip) return;
-    startTransition(async () => {
-      try {
-        const slipNum = await issueMaterialIssue(loadedSlip.id);
-        toast.success(`${formatCode("MI-", slipNum, 4)} issued — stock deducted`);
-        setIssueDialogOpen(false);
-        const updated = await getMaterialIssueById(loadedSlip.id);
-        if (updated) populateForm(updated);
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Issue failed");
-        setIssueDialogOpen(false);
-      }
-    });
+    setRows(confirmedRows);
+    doIssue(confirmedRows);
   }
 
   function handleDelete() {
@@ -500,6 +574,7 @@ export function NewVMIClient({
         toast.success("Slip deleted");
         setDeleteDialogOpen(false);
         clearForm();
+        setBrowseMode(true);
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Delete failed");
         setDeleteDialogOpen(false);
@@ -529,11 +604,12 @@ export function NewVMIClient({
 
   function handleCancel() {
     if (isDirty) {
-      setPendingAction(() => clearForm);
+      setPendingAction(() => () => setBrowseMode(true));
       setDiscardDialogOpen(true);
       return;
     }
     clearForm();
+    setBrowseMode(true);
   }
 
   function confirmDiscard() {
@@ -556,6 +632,10 @@ export function NewVMIClient({
   const miStatus = loadedSlip?.status ?? null;
   const hasFormContent = loadedSlip !== null || isDirty;
 
+  const browsedSlips = browseVehicleId
+    ? allSlips.filter((s) => s.vehicleId === browseVehicleId)
+    : [];
+
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
     label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}`,
@@ -576,117 +656,167 @@ export function NewVMIClient({
           <div className="flex gap-6 items-start">
             {/* Left column */}
             <div className="flex-1 space-y-3">
-              {/* Vehicle Name row */}
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
-                <div className="w-56">
-                  <Combobox
-                    options={vehicleOptions}
-                    value={vehicleId}
-                    onChange={(v) => { setVehicleId(v); setIsDirty(true); }}
-                    placeholder="Select vehicle…"
-                  />
-                </div>
-                {miStatus && (
-                  <span className={`px-2 py-0.5 rounded text-sm font-medium ${
-                    miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
-                  }`}>
-                    {miStatus}
-                  </span>
-                )}
-                <span className="px-2 py-0.5 rounded text-sm font-medium bg-emerald-100 text-emerald-800">NEW</span>
-              </div>
-
-              {/* Slip No row */}
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-500 w-28 shrink-0">Slip No</span>
-                <div className="w-56 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
-                  {loadedSlip ? formatCode("MI-", loadedSlip.slip_number, 4) : "—"}
-                </div>
-              </div>
-
-              {/* Detail fields row */}
-              <div className="flex flex-wrap items-end gap-4">
-                <div className="space-y-1">
-                  <label className="text-sm text-slate-500">Stage</label>
-                  <div className="w-48">
-                    <Combobox
-                      options={stageOptions}
-                      value={stageId}
-                      onChange={handleStageChange}
-                      placeholder="Select stage…"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm text-slate-500">Date</label>
-                  <div className="w-40">
-                    <Input
-                      type="date"
-                      value={issueDate}
-                      onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm text-slate-500">Job No</label>
-                  <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
-                    {selectedVehicle?.job_ref_no || "—"}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-sm text-slate-500">Margin %</label>
-                  <div className="w-24">
-                    <Input
-                      type="number"
-                      value={marginPct}
-                      onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
-                      className="h-9 text-sm"
-                      min="0"
-                      step="0.01"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {miStatus === "Issued" && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="text-sm text-amber-800">
-                    <span className="font-medium">This slip has been issued.</span> Saving will reverse the current stock deductions and reapply them atomically.
-                  </p>
-                </div>
-              )}
-
-              {hasNoRate && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-sm text-amber-700">
-                    Some materials have no purchase history — rate is ₹0. Enter rates before issuing.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Right column — customer info + total */}
-            <div className="w-52 shrink-0 text-right space-y-1">
-              {selectedVehicle ? (
+              {browseMode ? (
                 <>
-                  <p className="text-base font-semibold text-slate-800 leading-snug break-words">
-                    {selectedVehicle.customer_address || "—"}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
-                  </p>
+                  {/* Browse panel */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
+                    <div className="w-56">
+                      <Combobox
+                        options={vehicleOptions}
+                        value={browseVehicleId}
+                        onChange={setBrowseVehicleId}
+                        placeholder="Search vehicle…"
+                      />
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-sm font-medium bg-emerald-100 text-emerald-800">NEW</span>
+                  </div>
+                  {(browsedSlips.length > 0 || browseVehicleId) && (
+                    <div className="flex items-start gap-3">
+                      <span className="w-28 shrink-0" />
+                      <div className="w-56">
+                        {browsedSlips.length > 0 ? (
+                          <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100">
+                            {browsedSlips.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => void loadSlip(s.id)}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50 text-left"
+                              >
+                                <span className="font-mono font-medium text-slate-800 w-20 shrink-0">
+                                  {formatCode("MI-", s.slipNumber, 4)}
+                                </span>
+                                <span className="text-slate-400 text-xs shrink-0">{s.date}</span>
+                                <span className={`ml-auto px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
+                                  s.status === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
+                                }`}>
+                                  {s.status}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-400 py-2">No slips found for this vehicle.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
-              ) : null}
-              <div className="mt-3">
-                <p className="text-xs text-slate-400 uppercase tracking-wide">Total</p>
-                <p className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</p>
-              </div>
+              ) : (
+                <>
+                  {/* Form mode */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
+                    <div className="w-56">
+                      <Combobox
+                        options={vehicleOptions}
+                        value={vehicleId}
+                        onChange={(v) => { setVehicleId(v); setIsDirty(true); }}
+                        placeholder="Select vehicle…"
+                      />
+                    </div>
+                    {miStatus && (
+                      <span className={`px-2 py-0.5 rounded text-sm font-medium ${
+                        miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {miStatus}
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 rounded text-sm font-medium bg-emerald-100 text-emerald-800">NEW</span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-500 w-28 shrink-0">Slip No</span>
+                    <div className="w-56 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
+                      {loadedSlip ? formatCode("MI-", loadedSlip.slip_number, 4) : "—"}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div className="space-y-1">
+                      <label className="text-sm text-slate-500">Stage</label>
+                      <div className="w-48">
+                        <Combobox
+                          options={stageOptions}
+                          value={stageId}
+                          onChange={handleStageChange}
+                          placeholder="Select stage…"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm text-slate-500">Date</label>
+                      <div className="w-40">
+                        <Input
+                          type="date"
+                          value={issueDate}
+                          onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm text-slate-500">Job No</label>
+                      <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
+                        {selectedVehicle?.job_ref_no || "—"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm text-slate-500">Margin %</label>
+                      <div className="w-24">
+                        <Input
+                          type="number"
+                          value={marginPct}
+                          onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
+                          className="h-9 text-sm"
+                          min="0"
+                          step="0.01"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {miStatus === "Issued" && (
+                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-sm text-amber-800">
+                        <span className="font-medium">This slip has been issued.</span> Saving will reverse the current stock deductions and reapply them atomically.
+                      </p>
+                    </div>
+                  )}
+
+                  {hasNoRate && (
+                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-sm text-amber-700">
+                        Some materials have no purchase history — rate is ₹0. Enter rates before issuing.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
+
+            {/* Right column — customer info + total (hidden in browse mode) */}
+            {!browseMode && (
+              <div className="w-52 shrink-0 text-right">
+                {selectedVehicle ? (
+                  <>
+                    <p className="text-base font-semibold text-slate-800 leading-snug break-words mb-2">
+                      {selectedVehicle.customer_address || "—"}
+                    </p>
+                    <p className="text-sm text-slate-500 mb-5">
+                      {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
+                    </p>
+                  </>
+                ) : null}
+                <div>
+                  <p className="text-xs text-slate-400 uppercase tracking-wide">Total</p>
+                  <p className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -694,6 +824,10 @@ export function NewVMIClient({
         {isLoading || stageLoading ? (
           <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
             {stageLoading ? "Loading stage materials…" : "Loading…"}
+          </div>
+        ) : browseMode ? (
+          <div className="bg-white rounded-lg border border-slate-200 p-5 text-center text-sm text-slate-400 mb-4">
+            Select a vehicle above to find existing slips, or click <strong>New</strong> to create one.
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
@@ -738,7 +872,7 @@ export function NewVMIClient({
                 {isPending ? "Saving…" : miStatus === "Issued" ? "Save & Reapply" : "Save Draft"}
               </Button>
 
-              {loadedSlip && miStatus === "Draft" && (
+              {(!loadedSlip || miStatus === "Draft") && (
                 <Button className="h-10 px-5 bg-blue-600 hover:bg-blue-700" onClick={handleIssue} disabled={isPending}>
                   {isPending ? "Processing…" : "Issue"}
                 </Button>
@@ -792,17 +926,6 @@ export function NewVMIClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Issue confirm */}
-      <ConfirmDialog
-        open={issueDialogOpen}
-        onOpenChange={setIssueDialogOpen}
-        title={`Issue ${loadedSlip ? formatCode("MI-", loadedSlip.slip_number, 4) : "this slip"}?`}
-        description="Stock will be deducted for all items with Affects Inventory enabled."
-        confirmLabel="Issue"
-        onConfirm={confirmIssue}
-        isPending={isPending}
-      />
 
       {/* Stage change confirm */}
       <Dialog open={stageChangeDialogOpen} onOpenChange={setStageChangeDialogOpen}>

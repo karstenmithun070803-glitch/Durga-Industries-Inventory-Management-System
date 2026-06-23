@@ -238,11 +238,12 @@ export async function getLastMaterialRate(materialId: string): Promise<string | 
 export async function getSlipsForDropdown(
   financialYear: string,
   issueType: "OLD" | "NEW"
-): Promise<{ id: string; slipNumber: number; vehicleName: string | null; date: string; status: string }[]> {
+): Promise<{ id: string; slipNumber: number; vehicleId: string; vehicleName: string | null; date: string; status: string }[]> {
   const rows = await db
     .select({
       id: materialIssues.id,
       slip_number: materialIssues.slip_number,
+      vehicle_id: materialIssues.vehicle_id,
       vehicle_name: vehicles.vehicle_name,
       issue_date: materialIssues.issue_date,
       status: materialIssues.status,
@@ -260,6 +261,7 @@ export async function getSlipsForDropdown(
   return rows.map((r) => ({
     id: r.id,
     slipNumber: r.slip_number,
+    vehicleId: r.vehicle_id,
     vehicleName: r.vehicle_name,
     date:
       r.issue_date instanceof Date
