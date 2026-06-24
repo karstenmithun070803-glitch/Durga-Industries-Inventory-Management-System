@@ -84,7 +84,13 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
             {slip.customer_address && (
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabel}>ADDRESS</Text>
-                <Text style={styles.infoLineValue}>: {slip.customer_address}</Text>
+                <Text style={styles.infoLineValue}>
+                  : {slip.customer_address
+                      .split(/\r?\n/)
+                      .map((line) => line.replace(/^:\s*/, "").trim())
+                      .filter(Boolean)
+                      .join("\n")}
+                </Text>
               </View>
             )}
             {slip.customer_gstin && (
@@ -201,22 +207,6 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
               {igstTotal > 0 && <Text style={styles.plainTableCell}>{fmtAmt(String(igstTotal))}</Text>}
               <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(String(grandTotal))}</Text>
             </View>
-          </View>
-        </View>
-
-        {/* Signature strip */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 44 }}>
-          <View
-            style={{ width: "38%", borderTopWidth: 0.5, borderTopColor: "#000", paddingTop: 4 }}
-          >
-            <Text style={[styles.plainTableCell, { textAlign: "center" }]}>Received By</Text>
-          </View>
-          <View
-            style={{ width: "38%", borderTopWidth: 0.5, borderTopColor: "#000", paddingTop: 4 }}
-          >
-            <Text style={[styles.plainTableCell, { textAlign: "center" }]}>
-              Authorised Signatory
-            </Text>
           </View>
         </View>
 

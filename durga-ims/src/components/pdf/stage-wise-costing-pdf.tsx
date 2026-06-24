@@ -37,8 +37,17 @@ export function StageWiseCostingDocument({
   const grandTotal = rows.reduce((s, r) => s + r.amount, 0);
 
   const W = isStageWise
-    ? { sno: "6%", code: "12%", name: "64%", amount: "18%" }
+    ? { code: "14%", name: "68%", amount: "18%" }
     : { sno: "5%", code: "10%", name: "40%", stages: "27%", amount: "18%" };
+
+  const slipGroups = (() => {
+    const map = new Map<number, typeof stageRows>();
+    for (const r of stageRows) {
+      if (!map.has(r.slip_number)) map.set(r.slip_number, []);
+      map.get(r.slip_number)!.push(r);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a - b);
+  })();
 
   return (
     <Document title={`${isStageWise ? "Stage" : "Material"} Wise Costing — ${vehicleName} — FY ${fy}`}>
@@ -63,7 +72,6 @@ export function StageWiseCostingDocument({
         {/* Table header */}
         {isStageWise ? (
           <View style={[styles.plainTableHead, { marginTop: 4 }]}>
-            <Text style={[styles.plainTableHeadCell, { width: W.sno }]}>S.No</Text>
             <Text style={[styles.plainTableHeadCell, { width: W.code }]}>Code</Text>
             <Text style={[styles.plainTableHeadCell, { width: W.name }]}>Stage Name</Text>
             <Text style={[styles.plainTableHeadCell, { width: W.amount, textAlign: "right" }]}>Amount (₹)</Text>
@@ -82,20 +90,26 @@ export function StageWiseCostingDocument({
 
         {/* Rows */}
         {isStageWise
-          ? (stageRows as (StageWiseCostingRow & { amount: number })[]).map((r, i) => (
-              <View
-                key={r.code}
-                style={[styles.plainTableRow, r.is_direct ? { backgroundColor: "#FFFBEB" } : {}]}
-              >
-                <Text style={[styles.plainTableCell, { width: W.sno }]}>{i + 1}</Text>
-                <Text style={[styles.plainTableCell, { width: W.code, fontFamily: "Helvetica-Oblique" }]}>{r.code}</Text>
-                <Text style={[styles.plainTableCell, { width: W.name, fontFamily: r.is_direct ? "Helvetica-Oblique" : "Helvetica" }]}>{r.name}</Text>
-                <Text style={[styles.plainTableCellBold, { width: W.amount, textAlign: "right" }]}>{fmt(r.amount)}</Text>
-              </View>
+          ? slipGroups.map(([slipNum, slipRows]) => (
+              <React.Fragment key={slipNum}>
+                <View style={styles.stageHeaderRow}>
+                  <Text style={styles.stageHeaderText}>{`MI-${String(slipNum).padStart(4, "0")}`}</Text>
+                </View>
+                {slipRows.map((r) => (
+                  <View
+                    key={`${slipNum}-${r.code}`}
+                    style={[styles.plainTableRow, r.is_direct ? { backgroundColor: "#FFFBEB" } : {}]}
+                  >
+                    <Text style={[styles.plainTableCell, { width: W.code, paddingLeft: 8, fontFamily: "Helvetica-Oblique" }]}>{r.code}</Text>
+                    <Text style={[styles.plainTableCell, { width: W.name, fontFamily: r.is_direct ? "Helvetica-Oblique" : "Helvetica" }]}>{r.name}</Text>
+                    <Text style={[styles.plainTableCellBold, { width: W.amount, textAlign: "right" }]}>{fmt(r.amount)}</Text>
+                  </View>
+                ))}
+              </React.Fragment>
             ))
           : (materialRows as (MaterialWiseCostingRow & { amount: number })[]).map((r, i) => (
               <View key={r.code + i} style={styles.plainTableRow}>
-                <Text style={[styles.plainTableCell, { width: W.sno }]}>{i + 1}</Text>
+                <Text style={[styles.plainTableCell, { width: (W as { sno: string }).sno }]}>{i + 1}</Text>
                 <Text style={[styles.plainTableCell, { width: W.code }]}>{r.code}</Text>
                 <Text style={[styles.plainTableCell, { width: W.name }]}>{r.name}</Text>
                 <Text style={[styles.plainTableCell, { width: (W as { stages: string }).stages, color: "#6B7280" }]}>{r.stages || "—"}</Text>
@@ -106,13 +120,21 @@ export function StageWiseCostingDocument({
         <View style={[styles.separator, { marginTop: 2 }]} />
 
         {/* Totals row */}
-        <View style={[styles.plainTableRow, { backgroundColor: "#F8FAFC" }]}>
-          <Text style={[styles.plainTableCellBold, { width: W.sno }]} />
-          <Text style={[styles.plainTableCellBold, { width: W.code }]} />
-          <Text style={[styles.plainTableCellBold, { width: W.name, textAlign: "right" }]}>TOTAL</Text>
-          {!isStageWise && <Text style={[styles.plainTableCellBold, { width: (W as { stages: string }).stages }]} />}
-          <Text style={[styles.plainTableCellBold, { width: W.amount, textAlign: "right" }]}>{fmt(grandTotal)}</Text>
-        </View>
+        {isStageWise ? (
+          <View style={[styles.plainTableRow, { backgroundColor: "#F8FAFC" }]}>
+            <Text style={[styles.plainTableCellBold, { width: W.code }]} />
+            <Text style={[styles.plainTableCellBold, { width: W.name, textAlign: "right" }]}>TOTAL</Text>
+            <Text style={[styles.plainTableCellBold, { width: W.amount, textAlign: "right" }]}>{fmt(grandTotal)}</Text>
+          </View>
+        ) : (
+          <View style={[styles.plainTableRow, { backgroundColor: "#F8FAFC" }]}>
+            <Text style={[styles.plainTableCellBold, { width: (W as { sno: string }).sno }]} />
+            <Text style={[styles.plainTableCellBold, { width: W.code }]} />
+            <Text style={[styles.plainTableCellBold, { width: W.name, textAlign: "right" }]}>TOTAL</Text>
+            <Text style={[styles.plainTableCellBold, { width: (W as { stages: string }).stages }]} />
+            <Text style={[styles.plainTableCellBold, { width: W.amount, textAlign: "right" }]}>{fmt(grandTotal)}</Text>
+          </View>
+        )}
 
         {/* Footer */}
         <View style={styles.pageFooter} fixed>

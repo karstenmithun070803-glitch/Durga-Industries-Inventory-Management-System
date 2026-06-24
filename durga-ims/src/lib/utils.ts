@@ -19,6 +19,16 @@ export function matchesCode(search: string, prefix: string, num: number, pad = 3
   return !isNaN(asNum) && num === asNum;
 }
 
+export function formatActionError(e: unknown, fallback = "Action failed"): string {
+  const msg = e instanceof Error ? e.message : "";
+  if (!msg) return fallback;
+  const m = msg.match(
+    /^Insufficient stock for "([^"]+)": available ([\d.]+), requested ([\d.]+)\.?$/
+  );
+  if (m) return `Not enough stock — ${m[1]} (available: ${m[2]}, needed: ${m[3]})`;
+  return msg;
+}
+
 export const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
 
 // Returns an error message string if invalid, null if valid or empty (GSTIN is optional).

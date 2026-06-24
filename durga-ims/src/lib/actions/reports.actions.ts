@@ -384,6 +384,7 @@ export async function getMonthlyStockReport(params: {
 // ---------------------------------------------------------------------------
 
 export interface StageWiseCostingRow {
+  slip_number: number;
   code: string;
   name: string;
   base_amount: number;
@@ -402,32 +403,38 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string): Pr
   if (!UUID_REGEX.test(vehicleId)) throw new Error("Invalid vehicleId");
   if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
 
-  // No cache — must reflect latest issued slips
   const rows = await db
     .select({
-      stage_id: materialIssues.stage_id,
-      code: sql<string>`COALESCE(${stages.stage_code}, 'DIRECT')`,
-      name: sql<string>`COALESCE(${stages.stage_name}, 'Direct Issue')`,
+      slip_number: materialIssues.slip_number,
+      code: sql<string>`COALESCE(${stages.stage_code}, 'MANUAL')`,
+      name: sql<string>`COALESCE(${stages.stage_name}, 'Manual Entry')`,
       base_amount: sql<string>`SUM(${materialIssueItems.amount})`,
     })
     .from(materialIssueItems)
     .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
-    .leftJoin(stages, eq(materialIssues.stage_id, stages.id))
+    .leftJoin(stages, eq(materialIssueItems.stage_id, stages.id))
     .where(
       and(
         eq(materialIssues.vehicle_id, vehicleId),
         eq(materialIssues.status, "Issued"),
-        eq(materialIssues.financial_year, fy)
+        eq(materialIssues.financial_year, fy),
+        eq(materialIssues.issue_type, "NEW"),
       )
     )
-    .groupBy(materialIssues.stage_id, stages.stage_code, stages.stage_name)
-    .orderBy(sql`${stages.stage_code} NULLS LAST`);
+    .groupBy(
+      materialIssues.slip_number,
+      materialIssueItems.stage_id,
+      stages.stage_code,
+      stages.stage_name,
+    )
+    .orderBy(materialIssues.slip_number, sql`${stages.stage_code} NULLS LAST`);
 
   return rows.map((r) => ({
+    slip_number: r.slip_number,
     code: r.code,
     name: r.name,
     base_amount: parseFloat(r.base_amount ?? "0"),
-    is_direct: r.code === "DIRECT",
+    is_direct: r.code === "MANUAL",
   }));
 }
 
@@ -447,12 +454,13 @@ export async function getMaterialWiseCostingData(vehicleId: string, fy: string):
     .from(materialIssueItems)
     .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
     .innerJoin(materials, eq(materialIssueItems.material_id, materials.id))
-    .leftJoin(stages, eq(materialIssues.stage_id, stages.id))
+    .leftJoin(stages, eq(materialIssueItems.stage_id, stages.id))
     .where(
       and(
         eq(materialIssues.vehicle_id, vehicleId),
         eq(materialIssues.status, "Issued"),
-        eq(materialIssues.financial_year, fy)
+        eq(materialIssues.financial_year, fy),
+        eq(materialIssues.issue_type, "NEW"),
       )
     )
     .groupBy(materials.id, materials.material_no, materials.name)

@@ -30,7 +30,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
-import { formatCode } from "@/lib/utils";
+import { formatCode, formatActionError } from "@/lib/utils";
 
 const todayISO = new Date().toISOString().split("T")[0];
 import { AlertTriangle } from "lucide-react";
@@ -388,7 +388,7 @@ export function MaterialIssuesClient({
           toast.success("Draft slip created");
           await loadSlip(id);
         } catch (e: unknown) {
-          toast.error(e instanceof Error ? e.message : "Save failed");
+          toast.error(formatActionError(e, "Save failed"));
         }
       });
     } else if (loadedSlip.status === "Draft") {
@@ -400,7 +400,7 @@ export function MaterialIssuesClient({
           if (updated) populateForm(updated);
           await refreshSlips();
         } catch (e: unknown) {
-          toast.error(e instanceof Error ? e.message : "Save failed");
+          toast.error(formatActionError(e, "Save failed"));
         }
       });
     } else if (loadedSlip.status === "Issued") {
@@ -419,7 +419,7 @@ export function MaterialIssuesClient({
         if (updated) populateForm(updated);
         await refreshSlips();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Save & Reapply failed");
+        toast.error(formatActionError(e, "Save & Reapply failed"));
         setSaveReapplyDialogOpen(false);
       }
     });
@@ -443,7 +443,7 @@ export function MaterialIssuesClient({
         clearForm();
         setBrowseMode(true);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Issue failed");
+        toast.error(formatActionError(e, "Issue failed"));
       }
     });
   }
@@ -463,7 +463,7 @@ export function MaterialIssuesClient({
         clearForm();
         setBrowseMode(true);
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Delete failed");
+        toast.error(formatActionError(e, "Delete failed"));
         setDeleteDialogOpen(false);
       }
     });
@@ -478,7 +478,7 @@ export function MaterialIssuesClient({
         setCloneDialogOpen(true);
         await refreshSlips();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Clone failed");
+        toast.error(formatActionError(e, "Clone failed"));
       }
     });
   }
@@ -562,7 +562,7 @@ export function MaterialIssuesClient({
               {browseMode ? (
                 <>
                   {/* Browse panel */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
                     <div className="w-56" onClick={() => setIsSlipListOpen(true)}>
                       <Combobox
@@ -572,10 +572,8 @@ export function MaterialIssuesClient({
                         placeholder="Search vehicle…"
                       />
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-slate-500 w-28 shrink-0">Date</span>
-                    <div className="w-40">
+                    <span className="text-sm text-slate-500 shrink-0">Date</span>
+                    <div className="w-36">
                       <Input
                         type="date"
                         value={browseDateFilter}
@@ -691,7 +689,7 @@ export function MaterialIssuesClient({
               ) : (
                 <>
                   {/* Form mode */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
                     <div className="w-56">
                       <Combobox
@@ -708,6 +706,15 @@ export function MaterialIssuesClient({
                         {miStatus}
                       </span>
                     )}
+                    <span className="text-sm text-slate-500 shrink-0">Date</span>
+                    <div className="w-36">
+                      <Input
+                        type="date"
+                        value={issueDate}
+                        onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
+                        className="h-9 text-sm"
+                      />
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-3">
@@ -718,17 +725,6 @@ export function MaterialIssuesClient({
                   </div>
 
                   <div className="flex flex-wrap items-end gap-4">
-                    <div className="space-y-1">
-                      <label className="text-sm text-slate-500">Date</label>
-                      <div className="w-40">
-                        <Input
-                          type="date"
-                          value={issueDate}
-                          onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                    </div>
                     <div className="space-y-1">
                       <label className="text-sm text-slate-500">Job No</label>
                       <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">

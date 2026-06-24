@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
-import { cn } from "@/lib/utils";
+import { cn, formatCode } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   getStageWiseCostingData,
@@ -88,6 +88,17 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     [materialRows, marginPct]
   );
 
+  const slipGroups = useMemo(() => {
+    const map = new Map<number, { rows: typeof displayStageRows; slipTotal: number }>();
+    for (const r of displayStageRows) {
+      if (!map.has(r.slip_number)) map.set(r.slip_number, { rows: [], slipTotal: 0 });
+      const g = map.get(r.slip_number)!;
+      g.rows.push(r);
+      g.slipTotal += r.amount;
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a - b);
+  }, [displayStageRows]);
+
   const activeRows = rptType === "stage" ? displayStageRows : displayMaterialRows;
   const grandTotal = activeRows.reduce((s, r) => s + r.amount, 0);
 
@@ -97,10 +108,15 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     let headers: string[];
     let csvRows: string[][];
     if (rptType === "stage") {
-      headers = ["S.No", "Code", "Name", "Amount (Excl. Tax)"];
-      csvRows = displayStageRows.map((r, i) => [
-        String(i + 1), safeVal(r.code), safeVal(r.name), r.amount.toFixed(2),
-      ]);
+      headers = ["Slip No", "Code", "Stage Name", "Amount (Excl. Tax)"];
+      csvRows = slipGroups.flatMap(([slipNum, { rows }]) =>
+        rows.map((r) => [
+          formatCode("MI-", slipNum, 4),
+          safeVal(r.code),
+          safeVal(r.name),
+          r.amount.toFixed(2),
+        ])
+      );
     } else {
       headers = ["S.No", "Material No", "Name", "Stages", "Amount (Excl. Tax)"];
       csvRows = displayMaterialRows.map((r, i) => [
@@ -130,6 +146,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Stage Wise Costing</h2>
         <p className="text-sm text-slate-500 mt-0.5">Material cost breakdown by stage or material for a vehicle</p>
+        <p className="text-xs text-slate-400 mt-0.5">Stage-wise view shows VMI New (stage-based) issues only.</p>
       </div>
 
       {/* Filters */}
@@ -225,31 +242,46 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
               <table className="min-w-max w-full text-xs">
                 <thead className="bg-slate-700 text-white sticky top-0 z-10">
                   <tr>
-                    <th className="px-3 py-2.5 text-left font-medium w-12">S.No</th>
                     <th className="px-3 py-2.5 text-left font-medium w-24">Code</th>
                     <th className="px-3 py-2.5 text-left font-medium">Stage Name</th>
                     <th className="px-3 py-2.5 text-right font-medium w-40">Amount (Excl. Tax)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayStageRows.map((r, i) => (
-                    <tr
-                      key={r.code}
-                      className={cn(
-                        "border-t border-slate-100 hover:bg-slate-50/50",
-                        r.is_direct && "bg-amber-50/60 italic"
+                  {slipGroups.map(([slipNum, { rows, slipTotal }]) => (
+                    <>
+                      <tr key={`hdr-${slipNum}`} className="bg-slate-100 border-t-2 border-slate-300">
+                        <td colSpan={3} className="px-3 py-1.5 font-mono font-semibold text-slate-700">
+                          {formatCode("MI-", slipNum, 4)}
+                        </td>
+                      </tr>
+                      {rows.map((r) => (
+                        <tr
+                          key={`${slipNum}-${r.code}`}
+                          className={cn(
+                            "border-t border-slate-100 hover:bg-slate-50/50",
+                            r.is_direct && "bg-amber-50/60 italic"
+                          )}
+                        >
+                          <td className="px-3 py-1.5 pl-8 font-mono text-slate-500">{r.code}</td>
+                          <td className="px-3 py-1.5 text-slate-700">{r.name}</td>
+                          <td className="px-3 py-1.5 text-right font-medium text-slate-800">{fmtAmt(r.amount)}</td>
+                        </tr>
+                      ))}
+                      {slipGroups.length > 1 && (
+                        <tr key={`sub-${slipNum}`} className="border-t border-slate-200 bg-slate-50">
+                          <td colSpan={2} className="px-3 py-1 text-right text-slate-400 italic">
+                            {formatCode("MI-", slipNum, 4)} subtotal
+                          </td>
+                          <td className="px-3 py-1 text-right font-semibold text-slate-600">{fmtAmt(slipTotal)}</td>
+                        </tr>
                       )}
-                    >
-                      <td className="px-3 py-1.5 text-slate-500">{i + 1}</td>
-                      <td className="px-3 py-1.5 font-mono text-slate-600">{r.code}</td>
-                      <td className="px-3 py-1.5 text-slate-700">{r.name}</td>
-                      <td className="px-3 py-1.5 text-right font-medium text-slate-800">{fmtAmt(r.amount)}</td>
-                    </tr>
+                    </>
                   ))}
                 </tbody>
                 <tfoot className="bg-slate-100 sticky bottom-0">
                   <tr className="border-t-2 border-slate-300 font-semibold text-slate-800">
-                    <td colSpan={3} className="px-3 py-2 text-right">TOTAL</td>
+                    <td colSpan={2} className="px-3 py-2 text-right">TOTAL</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(grandTotal)}</td>
                   </tr>
                 </tfoot>
