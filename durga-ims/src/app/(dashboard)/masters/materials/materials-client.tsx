@@ -14,7 +14,7 @@ import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { BulkImportDialog } from "@/components/masters/bulk-import-dialog";
 
-const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", opening_stock: "0", min_level: "0" };
+const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", opening_stock: "0", min_level: "0", standard_cost: "" };
 
 interface Props { materials: Material[]; taxRates: TaxRate[]; units: Unit[]; }
 
@@ -50,7 +50,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
   function startEdit(m: Material) {
     setEditing(m);
     setFocusedIdx(-1);
-    const next = { name: m.name, hsn_code: m.hsn_code ?? "", tax_rate_id: m.tax_rate_id ?? "", purchase_unit_id: m.purchase_unit_id ?? "", opening_stock: m.opening_stock, min_level: m.min_level ?? "0" };
+    const next = { name: m.name, hsn_code: m.hsn_code ?? "", tax_rate_id: m.tax_rate_id ?? "", purchase_unit_id: m.purchase_unit_id ?? "", opening_stock: m.opening_stock, min_level: m.min_level ?? "0", standard_cost: m.standard_cost ?? "" };
     setForm(next);
     originalFormRef.current = next;
   }
@@ -141,6 +141,12 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                 <Input type="number" value={form.min_level} onChange={(e) => set("min_level", e.target.value)} />
               </div>
             </div>
+            {editing && (
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-500">Standard Cost (₹) <span className="text-slate-400">— for valuation when no PO rate</span></label>
+                <Input type="number" min={0} step="any" placeholder="e.g. 150.00" value={form.standard_cost} onChange={(e) => set("standard_cost", e.target.value)} />
+              </div>
+            )}
             <div className="flex gap-2 pt-1">
               <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}

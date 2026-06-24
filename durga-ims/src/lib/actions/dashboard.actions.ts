@@ -17,6 +17,7 @@ export interface DashboardStats {
   lowStockCount: number;
   totalStockValue: number;
   materialsExcludedFromValue: number;
+  standardCostCount: number;
   fyTotalSales: number;
   fyTotalPurchases: number;
   recentPOs: { id: string; po_number: number; po_date: string; status: string; supplier_name: string | null }[];
@@ -56,7 +57,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
     // Active materials — id needed for rate map join
     db
-      .select({ id: materials.id, current_stock: materials.current_stock, min_level: materials.min_level })
+      .select({ id: materials.id, current_stock: materials.current_stock, min_level: materials.min_level, standard_cost: materials.standard_cost })
       .from(materials)
       .where(eq(materials.is_active, true)),
 
@@ -126,10 +127,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   );
   let totalStockValue = 0;
   let materialsExcludedFromValue = 0;
+  let standardCostCount = 0;
   for (const r of stockRows) {
-    const rate = rateMap.get(r.id);
-    if (rate) {
-      totalStockValue += parseFloat(r.current_stock) * parseFloat(rate);
+    const poRate = rateMap.get(r.id) ?? null;
+    const effectiveRate = poRate ?? r.standard_cost;
+    if (effectiveRate !== null) {
+      totalStockValue += parseFloat(r.current_stock) * parseFloat(effectiveRate);
+      if (!poRate) standardCostCount++;
     } else {
       materialsExcludedFromValue++;
     }
@@ -139,6 +143,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     lowStockCount,
     totalStockValue,
     materialsExcludedFromValue,
+    standardCostCount,
     fyTotalSales: parseFloat(salesRow[0]?.total ?? "0"),
     fyTotalPurchases: parseFloat(purchaseRow[0]?.total ?? "0"),
     recentPOs: recentPORows.map((r) => ({

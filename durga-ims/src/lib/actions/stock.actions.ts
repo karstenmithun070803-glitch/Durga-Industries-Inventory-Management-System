@@ -30,6 +30,7 @@ export interface StockMaterialRow {
   min_level: string | null;
   max_level: string | null;
   last_po_rate: string | null;
+  standard_cost: string | null;
   is_active: boolean;
 }
 
@@ -39,6 +40,7 @@ export interface StockSummary {
   outOfStockCount: number;
   totalStockValue: number;
   materialsExcludedFromValue: number;
+  standardCostCount: number;
 }
 
 export interface StockLedgerEntry {
@@ -103,6 +105,7 @@ export async function getStockDashboardMaterials(): Promise<{
       max_level: materials.max_level,
       is_active: materials.is_active,
       unit_id: materials.purchase_unit_id,
+      standard_cost: materials.standard_cost,
     })
     .from(materials)
     .where(eq(materials.is_active, true))
@@ -111,7 +114,7 @@ export async function getStockDashboardMaterials(): Promise<{
   if (allMats.length === 0) {
     return {
       rows: [],
-      summary: { totalMaterials: 0, lowStockCount: 0, outOfStockCount: 0, totalStockValue: 0, materialsExcludedFromValue: 0 },
+      summary: { totalMaterials: 0, lowStockCount: 0, outOfStockCount: 0, totalStockValue: 0, materialsExcludedFromValue: 0, standardCostCount: 0 },
     };
   }
 
@@ -143,6 +146,7 @@ export async function getStockDashboardMaterials(): Promise<{
     min_level: m.min_level,
     max_level: m.max_level,
     last_po_rate: rateMap.get(m.id) ?? null,
+    standard_cost: m.standard_cost,
     is_active: m.is_active,
   }));
 
@@ -160,9 +164,12 @@ export async function getStockDashboardMaterials(): Promise<{
 
   let totalStockValue = 0;
   let materialsExcludedFromValue = 0;
+  let standardCostCount = 0;
   for (const r of activeMats) {
-    if (r.last_po_rate) {
-      totalStockValue += parseFloat(r.current_stock) * parseFloat(r.last_po_rate);
+    const effectiveRate = r.last_po_rate ?? r.standard_cost;
+    if (effectiveRate !== null) {
+      totalStockValue += parseFloat(r.current_stock) * parseFloat(effectiveRate);
+      if (!r.last_po_rate) standardCostCount++;
     } else {
       materialsExcludedFromValue++;
     }
@@ -170,7 +177,7 @@ export async function getStockDashboardMaterials(): Promise<{
 
   return {
     rows,
-    summary: { totalMaterials, lowStockCount, outOfStockCount, totalStockValue, materialsExcludedFromValue },
+    summary: { totalMaterials, lowStockCount, outOfStockCount, totalStockValue, materialsExcludedFromValue, standardCostCount },
   };
 }
 
@@ -248,10 +255,12 @@ export async function getStockMovementHistory(
 export async function adjustStock(
   materialId: string,
   newQty: number,
-  reason: string
+  reason: string,
+  standardCost?: number
 ): Promise<void> {
   if (newQty < 0) throw new Error("Stock cannot go below zero.");
   if (!reason || reason.trim().length < 10) throw new Error("Reason must be at least 10 characters.");
+  if (standardCost !== undefined && standardCost < 0) throw new Error("Unit cost cannot be negative.");
 
   // Get current username from session
   let username = "system";
@@ -263,9 +272,9 @@ export async function adjustStock(
     // proceed with "system" if auth unavailable
   }
 
-  // Read current stock
+  // Read current stock and standard_cost in one query
   const [mat] = await db
-    .select({ current_stock: materials.current_stock })
+    .select({ current_stock: materials.current_stock, standard_cost: materials.standard_cost })
     .from(materials)
     .where(eq(materials.id, materialId));
 
@@ -275,8 +284,9 @@ export async function adjustStock(
   const delta = newQty - currentQty;
   const fullReason = `${reason.trim()} — Adjusted from ${currentQty} to ${newQty} by ${username}`;
 
-  // Fetch the most recent received PO rate for this material — informational only (not critical).
-  // Queried before the update to minimise the timing gap; null if material has never been purchased.
+  // Fetch the most recent received PO rate for this material.
+  // Falls back to standard_cost (existing or newly supplied) so rate_at_time is always
+  // populated once a cost is known — keeps the stock history drawer informative.
   const rateResult = await db.execute<{ rate: string }>(sql`
     SELECT DISTINCT ON (poi.material_id) poi.rate
     FROM purchase_order_items poi
@@ -285,12 +295,18 @@ export async function adjustStock(
     ORDER BY poi.material_id, po.po_date DESC
     LIMIT 1
   `);
-  const rateAtTime = Array.from(rateResult)[0]?.rate ?? null;
+  const poRate = Array.from(rateResult)[0]?.rate ?? null;
+  const effectiveStandardCost = standardCost !== undefined ? String(standardCost) : mat.standard_cost;
+  const rateAtTime = poRate ?? effectiveStandardCost;
+
+  // Build the SET payload — include standard_cost update when a new value is supplied
+  const setPayload: Record<string, string> = { current_stock: String(newQty) };
+  if (standardCost !== undefined) setPayload.standard_cost = String(standardCost);
 
   // Atomic update with optimistic concurrency check
   await db
     .update(materials)
-    .set({ current_stock: String(newQty) })
+    .set(setPayload)
     .where(and(eq(materials.id, materialId), eq(materials.current_stock, mat.current_stock)));
 
   // Verify the update actually landed — re-read current_stock.
@@ -317,6 +333,7 @@ export async function adjustStock(
   });
 
   revalidatePath("/stock");
+  revalidatePath("/");
 }
 
 // ---------------------------------------------------------------------------
@@ -325,9 +342,9 @@ export async function adjustStock(
 
 export async function getStockForMaterial(
   materialId: string
-): Promise<{ current_stock: string } | null> {
+): Promise<{ current_stock: string; standard_cost: string | null } | null> {
   const [row] = await db
-    .select({ current_stock: materials.current_stock })
+    .select({ current_stock: materials.current_stock, standard_cost: materials.standard_cost })
     .from(materials)
     .where(eq(materials.id, materialId));
   return row ?? null;

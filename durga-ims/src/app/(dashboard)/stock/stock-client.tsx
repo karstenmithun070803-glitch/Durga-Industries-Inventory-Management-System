@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, useEffect } from "react";
+import { useState, useMemo, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -136,16 +136,27 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
   const [adjustFreshStock, setAdjustFreshStock] = useState<string | null>(null);
   const [newQty, setNewQty] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
+  const [adjustStandardCost, setAdjustStandardCost] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-
   // ---------------------------------------------------------------------------
-  // Refresh
+  // Refresh — update timestamp only after transition fully settles
   // ---------------------------------------------------------------------------
 
-  async function handleRefresh() {
-    await new Promise<void>((resolve) => startTransition(() => { router.refresh(); resolve(); }));
-    setLastUpdated(new Date());
+  const refreshTriggered = useRef(false);
+  const prevPending = useRef(false);
+
+  useEffect(() => {
+    if (prevPending.current && !isPending && refreshTriggered.current) {
+      setLastUpdated(new Date());
+      refreshTriggered.current = false;
+    }
+    prevPending.current = isPending;
+  }, [isPending]);
+
+  function handleRefresh() {
+    refreshTriggered.current = true;
+    startTransition(() => { router.refresh(); });
   }
 
   // ---------------------------------------------------------------------------
@@ -196,16 +207,20 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
 
   async function openAdjust(mat: StockMaterialRow) {
     const initialQty = parseFloat(mat.current_stock).toString();
+    const initialCost = mat.standard_cost ? parseFloat(mat.standard_cost).toString() : "";
     setAdjustMaterial(mat);
     setAdjustFreshStock(null);
     setNewQty(initialQty);
     setAdjustReason("");
+    setAdjustStandardCost(initialCost);
     setAdjustOpen(true);
-    // Fetch live stock — only update the input if the user hasn't changed the pre-fill yet
+    // Fetch live stock — only update inputs if the user hasn't changed the pre-filled values yet
     const fresh = await getStockForMaterial(mat.id);
     if (fresh) {
       setAdjustFreshStock(fresh.current_stock);
       setNewQty((prev) => (prev === initialQty ? parseFloat(fresh.current_stock).toString() : prev));
+      const freshCost = fresh.standard_cost ? parseFloat(fresh.standard_cost).toString() : "";
+      setAdjustStandardCost((prev) => (prev === initialCost ? freshCost : prev));
     }
   }
 
@@ -228,13 +243,23 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       toast.error("Reason must be at least 10 characters.");
       return;
     }
+    // Validate cost field when shown (items with no PO rate)
+    const showCostField = adjustMaterial.last_po_rate === null;
+    let parsedCost: number | undefined;
+    if (showCostField && adjustStandardCost.trim() !== "") {
+      parsedCost = parseFloat(adjustStandardCost);
+      if (isNaN(parsedCost) || parsedCost < 0) {
+        toast.error("Unit cost must be a non-negative number.");
+        return;
+      }
+    }
     setIsSaving(true);
     try {
-      await adjustStock(adjustMaterial.id, adjustedQty, adjustReason);
+      await adjustStock(adjustMaterial.id, adjustedQty, adjustReason, parsedCost);
       toast.success(`Stock adjusted for ${adjustMaterial.name}`);
       setAdjustOpen(false);
-      router.refresh();
-      setLastUpdated(new Date());
+      refreshTriggered.current = true;
+      startTransition(() => { router.refresh(); });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Adjustment failed.");
     } finally {
@@ -279,9 +304,10 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
         <SummaryCard
           label="Stock Value"
           value={fmtLargeAmt(summary.totalStockValue)}
-          sub={summary.materialsExcludedFromValue > 0
-            ? `* excludes ${summary.materialsExcludedFromValue} with no purchase history`
-            : "based on last PO rate"}
+          sub={[
+            summary.standardCostCount > 0 ? `${summary.standardCostCount} use standard cost` : null,
+            summary.materialsExcludedFromValue > 0 ? `${summary.materialsExcludedFromValue} excl. (no cost set)` : null,
+          ].filter(Boolean).join(" · ") || "based on last PO rate"}
         />
         <SummaryCard
           label="Low Stock"
@@ -395,8 +421,11 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                 filtered.map((row) => {
                   const status = getStatus(row);
                   const stock = parseFloat(row.current_stock);
-                  const rate = row.last_po_rate ? parseFloat(row.last_po_rate) : null;
-                  const value = rate != null ? stock * rate : null;
+                  const poRate = row.last_po_rate !== null ? parseFloat(row.last_po_rate) : null;
+                  const stdRate = row.standard_cost !== null ? parseFloat(row.standard_cost) : null;
+                  const rate = poRate ?? stdRate;
+                  const isStdRate = poRate === null && stdRate !== null;
+                  const value = rate !== null ? stock * rate : null;
 
                   const rowBg =
                     status === "out" ? "bg-red-50"
@@ -421,10 +450,15 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                         {row.min_level && parseFloat(row.min_level) > 0 ? fmtQty(row.min_level) : "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
-                        {rate != null ? fmtAmt(rate) : "—"}
+                        {rate !== null ? (
+                          <span className="inline-flex items-center gap-1 justify-end">
+                            {fmtAmt(rate)}
+                            {isStdRate && <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1 rounded">Std</span>}
+                          </span>
+                        ) : "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
-                        {value != null ? fmtAmt(value) : "—"}
+                        {value !== null ? fmtAmt(value) : "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <StatusBadge status={status} />
@@ -597,6 +631,27 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                 </p>
               )}
             </div>
+
+            {adjustMaterial?.last_po_rate === null && (
+              <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+                <label className="text-sm font-medium text-slate-700">
+                  Unit Cost (₹) <span className="text-slate-400 font-normal">— for stock valuation</span>
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={adjustStandardCost}
+                  onChange={(e) => setAdjustStandardCost(e.target.value)}
+                  className="text-sm bg-white"
+                  placeholder="e.g. 150.00"
+                />
+                <p className="text-xs text-amber-700">
+                  This item has no purchase history. Enter a unit cost to include it in total stock value.
+                  {adjustMaterial?.standard_cost ? " Current cost will be updated." : " Leave blank to keep it excluded."}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-slate-700">Reason <span className="text-slate-400 font-normal">(required)</span></label>

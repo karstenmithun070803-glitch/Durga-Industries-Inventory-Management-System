@@ -143,9 +143,9 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
         r.closing_stock.toFixed(3),
       ];
       if (showPrices) {
-        const rate = r.last_po_rate;
-        base.push(rate != null ? rate.toFixed(2) : "");
-        base.push(rate != null ? (r.closing_stock * rate).toFixed(2) : "");
+        const rate = r.last_po_rate ?? r.standard_cost;
+        base.push(rate !== null ? rate.toFixed(2) : "");
+        base.push(rate !== null ? (r.closing_stock * rate).toFixed(2) : "");
       }
       return base;
     });
@@ -301,8 +301,10 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const closingValue = showPrices && r.last_po_rate != null
-                    ? r.closing_stock * r.last_po_rate
+                  const effectiveRate = r.last_po_rate ?? r.standard_cost;
+                  const isStdRate = r.last_po_rate === null && r.standard_cost !== null;
+                  const closingValue = showPrices && effectiveRate !== null
+                    ? r.closing_stock * effectiveRate
                     : null;
                   return (
                     <tr key={r.material_id} className="border-t border-slate-100 hover:bg-slate-50/50">
@@ -342,10 +344,15 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                       {showPrices && (
                         <>
                           <td className="px-3 py-1.5 whitespace-nowrap text-right text-slate-500">
-                            {r.last_po_rate != null ? fmtAmt(r.last_po_rate) : "—"}
+                            {effectiveRate !== null ? (
+                              <span className="inline-flex items-center gap-1 justify-end">
+                                {fmtAmt(effectiveRate)}
+                                {isStdRate && <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1 rounded">Std</span>}
+                              </span>
+                            ) : "—"}
                           </td>
                           <td className="px-3 py-1.5 whitespace-nowrap text-right font-medium text-slate-800">
-                            {closingValue != null ? fmtAmt(closingValue) : "—"}
+                            {closingValue !== null ? fmtAmt(closingValue) : "—"}
                           </td>
                         </>
                       )}

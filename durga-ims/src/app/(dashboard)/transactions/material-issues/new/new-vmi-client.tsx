@@ -242,6 +242,7 @@ export function NewVMIClient({
 
   const [browseMode, setBrowseMode] = useState(!initialSelectedId);
   const [browseVehicleId, setBrowseVehicleId] = useState("");
+  const [isSlipListOpen, setIsSlipListOpen] = useState(false);
   const [allSlips, setAllSlips] = useState<SlipSummary[]>(initialSlips);
 
   const [vehicleId, setVehicleId] = useState("");
@@ -467,6 +468,7 @@ export function NewVMIClient({
     const doNew = () => {
       clearForm();
       setBrowseMode(false);
+      setIsSlipListOpen(false);
     };
     if (isDirty) {
       setPendingAction(() => doNew);
@@ -609,6 +611,7 @@ export function NewVMIClient({
         const result = await cloneNewMaterialIssue(loadedSlip.id);
         setCloneResult(result);
         setCloneDialogOpen(true);
+        await refreshSlips();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Clone failed");
       }
@@ -700,7 +703,7 @@ export function NewVMIClient({
                   {/* Browse panel */}
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
-                    <div className="w-56">
+                    <div className="w-56" onClick={() => setIsSlipListOpen(true)}>
                       <Combobox
                         options={browseVehicleOptions}
                         value={browseVehicleId}
@@ -710,7 +713,7 @@ export function NewVMIClient({
                     </div>
                     <span className="px-2 py-0.5 rounded text-sm font-medium bg-emerald-100 text-emerald-800">NEW</span>
                   </div>
-                  {(browsedSlips.length > 0 || browseVehicleId) && (
+                  {isSlipListOpen && browseVehicleId && (
                     <div className="flex items-start gap-3">
                       <span className="w-28 shrink-0" />
                       <div className="w-56">
@@ -722,10 +725,11 @@ export function NewVMIClient({
                                 onClick={() => {
                                   if (s.id === loadedSlip?.id) return;
                                   if (isDirty) {
-                                    setPendingAction(() => () => void loadSlip(s.id));
+                                    setPendingAction(() => () => { setIsSlipListOpen(false); void loadSlip(s.id); });
                                     setDiscardDialogOpen(true);
                                     return;
                                   }
+                                  setIsSlipListOpen(false);
                                   void loadSlip(s.id);
                                 }}
                                 className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors ${

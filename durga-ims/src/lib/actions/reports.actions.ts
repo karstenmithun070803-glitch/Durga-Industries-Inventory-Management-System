@@ -244,6 +244,7 @@ export interface MonthlyStockRow {
   adjustments: number;
   closing_stock: number;
   last_po_rate: number | null;
+  standard_cost: number | null;
 }
 
 export async function getMonthlyStockReport(params: {
@@ -263,6 +264,7 @@ export async function getMonthlyStockReport(params: {
       name: materials.name,
       opening_stock: materials.opening_stock,
       unit_id: materials.purchase_unit_id,
+      standard_cost: materials.standard_cost,
     })
     .from(materials)
     .where(
@@ -372,6 +374,7 @@ export async function getMonthlyStockReport(params: {
       adjustments: mov.adjustments,
       closing_stock: closing,
       last_po_rate: rateMap.get(mat.id) ?? null,
+      standard_cost: mat.standard_cost !== null ? parseFloat(mat.standard_cost) : null,
     };
   });
 }

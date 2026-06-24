@@ -50,15 +50,19 @@ export async function updateMaterial(id: string, data: {
   tax_rate_id?: string;
   purchase_unit_id?: string;
   min_level?: string;
+  standard_cost?: string;
 }) {
   if (!data.name.trim()) throw new Error("Material name is required");
   if (!data.purchase_unit_id) throw new Error("Purchase unit is required.");
+  const parsedCost = data.standard_cost?.trim() ? parseFloat(data.standard_cost) : null;
+  if (parsedCost !== null && (isNaN(parsedCost) || parsedCost < 0)) throw new Error("Standard cost must be a non-negative number.");
   await db.update(materials).set({
     name: data.name.trim().toUpperCase(),
     hsn_code: data.hsn_code?.trim() || null,
     tax_rate_id: data.tax_rate_id || null,
     purchase_unit_id: data.purchase_unit_id || null,
     min_level: data.min_level || "0",
+    standard_cost: parsedCost !== null ? String(parsedCost) : null,
   }).where(eq(materials.id, id));
   revalidateTag(CACHE_TAGS.materials);
 }
