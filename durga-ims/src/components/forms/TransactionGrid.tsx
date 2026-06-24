@@ -64,6 +64,8 @@ interface Props {
   gstType?: string; // header-level GST type (all rows share it in material-issue / invoice mode)
   // When true (invoice mode only): shows editable Tax% column + read-only Tax Amt column
   showTaxColumns?: boolean;
+  // When true (VMI New only): shows read-only Stage column after S.No
+  showStageColumn?: boolean;
 }
 
 // Column indices per mode (only interactive/focusable elements counted)
@@ -147,6 +149,7 @@ export function TransactionGrid({
   contractors = [],
   gstType,
   showTaxColumns = false,
+  showStageColumn = false,
 }: Props) {
   const gridRef = useRef<HTMLTableElement>(null);
   const isIssueMode = mode === "material-issue";
@@ -319,6 +322,9 @@ export function TransactionGrid({
         <thead className="bg-slate-700 text-white sticky top-0 z-10">
           <tr>
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-10">S.No</th>
+            {showStageColumn && (
+              <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-24">Stage</th>
+            )}
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Mat. Code</th>
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-56">Material Name</th>
 
@@ -373,6 +379,11 @@ export function TransactionGrid({
             return (
               <tr key={row._key} className="border-t border-slate-100">
                 <td className="px-3 py-1.5 text-slate-500">{i + 1}</td>
+                {showStageColumn && (
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-400 whitespace-nowrap">
+                    {row.stage_name || "—"}
+                  </td>
+                )}
 
                 {/* Material Code — read-only, auto-filled */}
                 <td className="px-3 py-1.5 font-mono text-sm text-slate-700 whitespace-nowrap">

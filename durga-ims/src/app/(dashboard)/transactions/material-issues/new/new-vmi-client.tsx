@@ -34,7 +34,7 @@ import { toast } from "sonner";
 import { formatCode } from "@/lib/utils";
 
 const todayISO = new Date().toISOString().split("T")[0];
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Copy } from "lucide-react";
 import { determineGstType } from "@/types";
 import type { MaterialIssueWithDetails, LineItemDraft, GstType } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
@@ -190,6 +190,8 @@ function miItemsToRows(slip: MaterialIssueWithDetails, marginPct: string): LineI
     contractor_id: item.contractor_id ?? "",
     contractor_name: item.contractor_name ?? "",
     affects_inventory: item.affects_inventory,
+    stage_id: item.stage_id ?? undefined,
+    stage_name: item.stage_name ?? undefined,
   }));
 }
 
@@ -212,6 +214,7 @@ function buildItemsPayload(rows: LineItemDraft[]) {
       amount: r.amount,
       gst_type: r.gst_type || "CGST_SGST",
       affects_inventory: r.affects_inventory,
+      stage_id: r.stage_id ?? null,
     }));
 }
 
@@ -238,29 +241,27 @@ export function NewVMIClient({
   const [loadedFY, setLoadedFY] = useState(initialFY);
   const [loadedSlip, setLoadedSlip] = useState<MaterialIssueWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [stageLoading, setStageLoading] = useState(false);
 
   const [browseMode, setBrowseMode] = useState(!initialSelectedId);
   const [browseVehicleId, setBrowseVehicleId] = useState("");
   const [isSlipListOpen, setIsSlipListOpen] = useState(false);
+  const [browseDateFilter, setBrowseDateFilter] = useState("");
   const [allSlips, setAllSlips] = useState<SlipSummary[]>(initialSlips);
 
   const [vehicleId, setVehicleId] = useState("");
-  const [stageId, setStageId] = useState("");
+  const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
+  const [loadingStageIds, setLoadingStageIds] = useState<Set<string>>(new Set());
   const [issueDate, setIssueDate] = useState(todayISO);
   const [marginPct, setMarginPct] = useState("0");
   const debouncedMargin = useDebounce(marginPct, 300);
   const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
   const [isDirty, setIsDirty] = useState(false);
   const [pendingFY, setPendingFY] = useState<string | null>(null);
-  const [pendingStageName, setPendingStageName] = useState<string | null>(null);
 
   const [zeroRateDialogOpen, setZeroRateDialogOpen] = useState(false);
   const [saveReapplyDialogOpen, setSaveReapplyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
-  const [stageChangeDialogOpen, setStageChangeDialogOpen] = useState(false);
-  const [pendingStageId, setPendingStageId] = useState<string | null>(null);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [cloneResult, setCloneResult] = useState<{ newSlipId: string; newSlipNumber: number } | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -322,7 +323,7 @@ export function NewVMIClient({
   function clearForm() {
     setLoadedSlip(null);
     setVehicleId("");
-    setStageId("");
+    setSelectedStageIds([]);
     setIssueDate(todayISO);
     setMarginPct("0");
     setRows([newRow()]);
@@ -332,7 +333,15 @@ export function NewVMIClient({
   function populateForm(slip: MaterialIssueWithDetails) {
     setLoadedSlip(slip);
     setVehicleId(slip.vehicle_id);
-    setStageId(slip.stage_id ?? "");
+    const seen = new Set<string>();
+    const stageIds: string[] = [];
+    for (const item of slip.items) {
+      if (item.stage_id && !seen.has(item.stage_id)) {
+        seen.add(item.stage_id);
+        stageIds.push(item.stage_id);
+      }
+    }
+    setSelectedStageIds(stageIds);
     setIssueDate(toISODate(slip.issue_date));
     setMarginPct(slip.margin_percentage ?? "0");
     setRows(miItemsToRows(slip, slip.margin_percentage ?? "0"));
@@ -363,63 +372,64 @@ export function NewVMIClient({
     }
   }
 
-  async function loadStageRows(newStageId: string, currentGstType: GstType) {
-    setStageLoading(true);
-    try {
-      const stageMats = await getStageMaterials(newStageId);
-      const newRows: LineItemDraft[] = stageMats.map((m) => {
-        const rate = m.last_po_rate ?? "0";
-        const taxPct = m.tax_percentage ?? "0";
-        const amounts = computeRowAmounts(m.default_qty, rate, taxPct, currentGstType);
-        return {
-          _key: crypto.randomUUID(),
-          material_id: m.material_id,
-          material_name: m.material_name,
-          material_no: m.material_no,
-          hsn_code: m.hsn_code ?? "",
-          supplier_id: "",
-          supplier_name: "",
-          gst_type: currentGstType,
-          qty: m.default_qty,
-          unit_id: m.unit_id,
-          unit_name: m.unit_name,
-          rate,
-          baseRate: rate,
-          tax_percentage: taxPct,
-          rateBlank: m.last_po_rate === null,
-          zeroRateConfirmed: false,
-          contractor_id: "",
-          contractor_name: "",
-          affects_inventory: true,
-          ...amounts,
-        };
+  async function handleStageToggle(stageId: string, checked: boolean) {
+    if (checked) {
+      if (selectedStageIds.includes(stageId)) return;
+      setLoadingStageIds((prev) => { const s = new Set(prev); s.add(stageId); return s; });
+      try {
+        const stageMats = await getStageMaterials(stageId);
+        const stage = stages.find((s) => s.id === stageId);
+        const factor = 1 + parseFloat(marginPct || "0") / 100;
+        const newRows: LineItemDraft[] = stageMats.map((m) => {
+          const baseRate = m.last_po_rate ?? "0";
+          const displayRate = factor > 1 ? (parseFloat(baseRate) * factor).toFixed(4) : baseRate;
+          const taxPct = m.tax_percentage ?? "0";
+          const amounts = computeRowAmounts(m.default_qty, displayRate, taxPct, gstType);
+          return {
+            _key: crypto.randomUUID(),
+            stage_id: stageId,
+            stage_name: stage?.stage_name ?? "",
+            material_id: m.material_id,
+            material_name: m.material_name,
+            material_no: m.material_no,
+            hsn_code: m.hsn_code ?? "",
+            supplier_id: "",
+            supplier_name: "",
+            gst_type: gstType,
+            qty: m.default_qty,
+            unit_id: m.unit_id,
+            unit_name: m.unit_name,
+            rate: displayRate,
+            baseRate: baseRate,
+            tax_percentage: taxPct,
+            rateBlank: m.last_po_rate === null,
+            zeroRateConfirmed: false,
+            contractor_id: "",
+            contractor_name: "",
+            affects_inventory: true,
+            ...amounts,
+          };
+        });
+        setRows((prev) => {
+          const cleaned = prev.filter((r) => r.material_id);
+          const combined = [...cleaned, ...newRows];
+          return combined.length > 0 ? combined : [newRow()];
+        });
+        setSelectedStageIds((prev) => [...prev, stageId]);
+        setIsDirty(true);
+      } catch {
+        toast.error("Failed to load stage materials");
+      } finally {
+        setLoadingStageIds((prev) => { const s = new Set(prev); s.delete(stageId); return s; });
+      }
+    } else {
+      setRows((prev) => {
+        const remaining = prev.filter((r) => r.stage_id !== stageId);
+        return remaining.length > 0 ? remaining : [newRow()];
       });
-      setRows(newRows.length > 0 ? newRows : [newRow()]);
-      setStageId(newStageId);
+      setSelectedStageIds((prev) => prev.filter((id) => id !== stageId));
       setIsDirty(true);
-    } catch {
-      toast.error("Failed to load stage materials");
-    } finally {
-      setStageLoading(false);
     }
-  }
-
-  function handleStageChange(newStageId: string) {
-    if (!newStageId) {
-      setStageId("");
-      setRows([newRow()]);
-      setIsDirty(true);
-      return;
-    }
-    const hasGridData = rows.some((r) => r.material_id || parseFloat(r.qty) > 0);
-    if (hasGridData) {
-      const stage = stages.find((s) => s.id === newStageId);
-      setPendingStageName(stage?.stage_name ?? null);
-      setPendingStageId(newStageId);
-      setStageChangeDialogOpen(true);
-      return;
-    }
-    void loadStageRows(newStageId, gstType);
   }
 
   function validate(): string | null {
@@ -440,7 +450,7 @@ export function NewVMIClient({
       margin_percentage: marginPct || "0",
       total_amount: grand.toFixed(2),
       issue_type: "NEW" as const,
-      stage_id: stageId || null,
+      stage_id: null,
       items: buildItemsPayload(filled),
     };
   }
@@ -469,6 +479,7 @@ export function NewVMIClient({
       clearForm();
       setBrowseMode(false);
       setIsSlipListOpen(false);
+      setBrowseDateFilter("");
     };
     if (isDirty) {
       setPendingAction(() => doNew);
@@ -536,7 +547,7 @@ export function NewVMIClient({
       margin_percentage: marginPct || "0",
       total_amount: grand.toFixed(2),
       issue_type: "NEW" as const,
-      stage_id: stageId || null,
+      stage_id: null,
       items: buildItemsPayload(filled),
     };
     startTransition(async () => {
@@ -604,11 +615,10 @@ export function NewVMIClient({
     });
   }
 
-  function handleClone() {
-    if (!loadedSlip) return;
+  function handleCloneSlip(slipId: string) {
     startTransition(async () => {
       try {
-        const result = await cloneNewMaterialIssue(loadedSlip.id);
+        const result = await cloneNewMaterialIssue(slipId);
         setCloneResult(result);
         setCloneDialogOpen(true);
         await refreshSlips();
@@ -616,6 +626,11 @@ export function NewVMIClient({
         toast.error(e instanceof Error ? e.message : "Clone failed");
       }
     });
+  }
+
+  function handleClone() {
+    if (!loadedSlip) return;
+    handleCloneSlip(loadedSlip.id);
   }
 
   function handleLoadClone() {
@@ -656,7 +671,10 @@ export function NewVMIClient({
   const hasFormContent = loadedSlip !== null || isDirty;
 
   const browsedSlips = browseVehicleId
-    ? allSlips.filter((s) => s.vehicleId === browseVehicleId)
+    ? allSlips.filter((s) =>
+        s.vehicleId === browseVehicleId &&
+        (browseDateFilter === "" || toISODate(s.date) === browseDateFilter)
+      )
     : [];
 
   const browseVehicleOptions = vehicles
@@ -683,10 +701,7 @@ export function NewVMIClient({
     ];
   })();
 
-  const stageOptions = stages.map((s) => ({
-    value: s.id,
-    label: `${s.stage_code} — ${s.stage_name}`,
-  }));
+  const isAnyStageLoading = loadingStageIds.size > 0;
 
   const hasNoRate = rows.some((r) => r.rateBlank && r.material_id);
 
@@ -713,6 +728,17 @@ export function NewVMIClient({
                     </div>
                     <span className="px-2 py-0.5 rounded text-sm font-medium bg-emerald-100 text-emerald-800">NEW</span>
                   </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-500 w-28 shrink-0">Date</span>
+                    <div className="w-40">
+                      <Input
+                        type="date"
+                        value={browseDateFilter}
+                        onChange={(e) => { setBrowseDateFilter(e.target.value); setIsSlipListOpen(true); }}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
                   {isSlipListOpen && browseVehicleId && (
                     <div className="flex items-start gap-3">
                       <span className="w-28 shrink-0" />
@@ -720,33 +746,42 @@ export function NewVMIClient({
                         {browsedSlips.length > 0 ? (
                           <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100">
                             {browsedSlips.map((s) => (
-                              <button
-                                key={s.id}
-                                onClick={() => {
-                                  if (s.id === loadedSlip?.id) return;
-                                  if (isDirty) {
-                                    setPendingAction(() => () => { setIsSlipListOpen(false); void loadSlip(s.id); });
-                                    setDiscardDialogOpen(true);
-                                    return;
-                                  }
-                                  setIsSlipListOpen(false);
-                                  void loadSlip(s.id);
-                                }}
-                                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors ${
-                                  s.id === loadedSlip?.id
-                                    ? "bg-blue-50 border-l-2 border-blue-400"
-                                    : "hover:bg-slate-50"
-                                }`}
-                              >
-                                <span className="font-mono font-medium text-slate-800 w-20 shrink-0">
-                                  {formatCode("MI-", s.slipNumber, 4)}
-                                </span>
-                                <span className={`ml-auto px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
-                                  s.status === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
-                                }`}>
-                                  {s.status}
-                                </span>
-                              </button>
+                              <div key={s.id} className="flex items-stretch divide-x divide-slate-100">
+                                <button
+                                  onClick={() => {
+                                    if (s.id === loadedSlip?.id) return;
+                                    if (isDirty) {
+                                      setPendingAction(() => () => { setIsSlipListOpen(false); void loadSlip(s.id); });
+                                      setDiscardDialogOpen(true);
+                                      return;
+                                    }
+                                    setIsSlipListOpen(false);
+                                    void loadSlip(s.id);
+                                  }}
+                                  className={`flex-1 flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors ${
+                                    s.id === loadedSlip?.id
+                                      ? "bg-blue-50 border-l-2 border-blue-400"
+                                      : "hover:bg-slate-50"
+                                  }`}
+                                >
+                                  <span className="font-mono font-medium text-slate-800 w-20 shrink-0">
+                                    {formatCode("MI-", s.slipNumber, 4)}
+                                  </span>
+                                  <span className={`ml-auto px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
+                                    s.status === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
+                                  }`}>
+                                    {s.status}
+                                  </span>
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleCloneSlip(s.id); }}
+                                  disabled={isPending}
+                                  title="Clone this slip"
+                                  className="px-2.5 text-slate-300 hover:text-slate-600 hover:bg-slate-100 shrink-0 transition-colors"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             ))}
                           </div>
                         ) : (
@@ -772,18 +807,35 @@ export function NewVMIClient({
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-end gap-4">
-                        <div className="space-y-1">
-                          <label className="text-sm text-slate-500">Stage</label>
-                          <div className="w-48">
-                            <Combobox
-                              options={stageOptions}
-                              value={stageId}
-                              onChange={handleStageChange}
-                              placeholder="Select stage…"
-                            />
-                          </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-slate-500 w-28 shrink-0 pt-1">Stages</span>
+                        <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                          {stages.length === 0 && <p className="text-xs text-slate-400">No stages configured.</p>}
+                          {stages.map((stage) => {
+                            const isChecked = selectedStageIds.includes(stage.id);
+                            const isThisLoading = loadingStageIds.has(stage.id);
+                            const isIssued = miStatus === "Issued";
+                            return (
+                              <label key={stage.id}
+                                className={`flex items-center gap-2 text-sm select-none ${
+                                  isIssued || isThisLoading ? "opacity-60 cursor-default" : "cursor-pointer"
+                                }`}
+                              >
+                                <input type="checkbox"
+                                  checked={isChecked}
+                                  disabled={isIssued || isThisLoading}
+                                  onChange={(e) => void handleStageToggle(stage.id, e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 shrink-0"
+                                />
+                                <span className="font-mono text-xs text-slate-400 w-12 shrink-0">{stage.stage_code}</span>
+                                <span className="text-slate-700 truncate">{stage.stage_name}</span>
+                                {isThisLoading && <span className="text-xs text-slate-400 shrink-0">loading…</span>}
+                              </label>
+                            );
+                          })}
                         </div>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-4">
                         <div className="space-y-1">
                           <label className="text-sm text-slate-500">Date</label>
                           <div className="w-40">
@@ -858,18 +910,36 @@ export function NewVMIClient({
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-end gap-4">
-                    <div className="space-y-1">
-                      <label className="text-sm text-slate-500">Stage</label>
-                      <div className="w-48">
-                        <Combobox
-                          options={stageOptions}
-                          value={stageId}
-                          onChange={handleStageChange}
-                          placeholder="Select stage…"
-                        />
-                      </div>
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-slate-500 w-28 shrink-0 pt-1">Stages</span>
+                    <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                      {stages.length === 0 && <p className="text-xs text-slate-400">No stages configured.</p>}
+                      {stages.map((stage) => {
+                        const isChecked = selectedStageIds.includes(stage.id);
+                        const isThisLoading = loadingStageIds.has(stage.id);
+                        const isIssued = miStatus === "Issued";
+                        return (
+                          <label key={stage.id}
+                            className={`flex items-center gap-2 text-sm select-none ${
+                              isIssued || isThisLoading ? "opacity-60 cursor-default" : "cursor-pointer"
+                            }`}
+                          >
+                            <input type="checkbox"
+                              checked={isChecked}
+                              disabled={isIssued || isThisLoading}
+                              onChange={(e) => void handleStageToggle(stage.id, e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 shrink-0"
+                            />
+                            <span className="font-mono text-xs text-slate-400 w-12 shrink-0">{stage.stage_code}</span>
+                            <span className="text-slate-700 truncate">{stage.stage_name}</span>
+                            {isThisLoading && <span className="text-xs text-slate-400 shrink-0">loading…</span>}
+                          </label>
+                        );
+                      })}
                     </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-end gap-4">
                     <div className="space-y-1">
                       <label className="text-sm text-slate-500">Date</label>
                       <div className="w-40">
@@ -950,9 +1020,9 @@ export function NewVMIClient({
         </div>
 
         {/* Grid */}
-        {isLoading || stageLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
-            {stageLoading ? "Loading stage materials…" : "Loading…"}
+            Loading…
           </div>
         ) : (browseMode && !loadedSlip) ? (
           <div className="bg-white rounded-lg border border-slate-200 p-5 text-center text-sm text-slate-400 mb-4">
@@ -962,7 +1032,7 @@ export function NewVMIClient({
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
             {!hasFormContent && (
               <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-400">
-                Select a vehicle and stage above to pre-populate materials, or add them manually.
+                Select a vehicle and stages above to pre-populate materials, or add them manually.
               </div>
             )}
             <TransactionGrid
@@ -975,6 +1045,7 @@ export function NewVMIClient({
               contractors={contractors}
               gstType={gstType}
               mode="material-issue"
+              showStageColumn={true}
             />
           </div>
         )}
@@ -999,7 +1070,7 @@ export function NewVMIClient({
             <>
               {hasFormContent && (
                 <>
-                  <Button variant="outline" className="h-10 px-5" onClick={handleSave} disabled={isPending || isLoading || stageLoading}>
+                  <Button variant="outline" className="h-10 px-5" onClick={handleSave} disabled={isPending || isLoading || isAnyStageLoading}>
                     {isPending ? "Saving…" : !loadedSlip ? "Save Draft" : miStatus === "Issued" ? "Save & Reapply" : "Save"}
                   </Button>
 
@@ -1055,36 +1126,6 @@ export function NewVMIClient({
             <Button variant="outline" onClick={() => setZeroRateDialogOpen(false)}>Cancel</Button>
             <Button onClick={confirmZeroRate} className="bg-amber-600 hover:bg-amber-700">
               Confirm & Issue
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Stage change confirm */}
-      <Dialog open={stageChangeDialogOpen} onOpenChange={setStageChangeDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Replace Grid Items?</DialogTitle>
-            <DialogDescription>
-              Changing to {pendingStageName ? `"${pendingStageName}"` : "this stage"} will replace all current grid items with the stage&apos;s materials. Unsaved changes will be lost.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => { setStageChangeDialogOpen(false); setPendingStageId(null); }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                setStageChangeDialogOpen(false);
-                if (pendingStageId) void loadStageRows(pendingStageId, gstType);
-                setPendingStageId(null);
-              }}
-              className="bg-amber-600 hover:bg-amber-700"
-            >
-              Replace
             </Button>
           </DialogFooter>
         </DialogContent>

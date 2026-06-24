@@ -288,10 +288,13 @@ export const materialIssueItems = pgTable("material_issue_items", {
   affects_inventory: boolean("affects_inventory").notNull().default(true),
   // frozen at save time — "CGST_SGST" | "IGST"
   gst_type: text("gst_type"),
+  // which stage this row belongs to (NEW VMI multi-stage only); null for OLD VMI and manual rows
+  stage_id: uuid("stage_id").references(() => stages.id),
   ...timestamps,
 }, (table) => [
   index("idx_mii_issue_id").on(table.issue_id),
   index("idx_mii_material_id").on(table.material_id),
+  index("idx_mii_stage_id").on(table.stage_id),
 ]);
 
 export const invoices = pgTable("invoices", {
@@ -557,6 +560,7 @@ export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one 
 export const stagesRelations = relations(stages, ({ many }) => ({
   stageMaterials: many(stageMaterials),
   materialIssues: many(materialIssues),
+  materialIssueItems: many(materialIssueItems),
 }));
 
 export const stageMaterialsRelations = relations(stageMaterials, ({ one }) => ({
@@ -602,6 +606,10 @@ export const materialIssueItemsRelations = relations(materialIssueItems, ({ one 
   contractor: one(contractors, {
     fields: [materialIssueItems.contractor_id],
     references: [contractors.id],
+  }),
+  stage: one(stages, {
+    fields: [materialIssueItems.stage_id],
+    references: [stages.id],
   }),
 }));
 

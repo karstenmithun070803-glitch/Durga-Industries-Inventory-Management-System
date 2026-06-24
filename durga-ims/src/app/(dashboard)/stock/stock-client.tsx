@@ -30,8 +30,9 @@ import type {
   StockMaterialRow,
   StockSummary,
   StockLedgerEntry,
+  DraftCommitmentsResult,
 } from "@/lib/actions/stock.actions";
-import { History, SlidersHorizontal, RefreshCw, ShoppingCart } from "lucide-react";
+import { History, SlidersHorizontal, RefreshCw, ShoppingCart, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -97,6 +98,16 @@ const LEDGER_TYPE_LABELS: Record<string, string> = {
   ADJUSTMENT: "Manual Adjustment",
 };
 
+const ADJUSTMENT_TYPES = [
+  "Physical Count Correction",
+  "Damage / Scrap",
+  "Theft / Loss",
+  "Wastage / Spoilage",
+  "Transfer / Write-off",
+  "Opening Stock Correction",
+  "Other",
+];
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -139,6 +150,11 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
   const [adjustStandardCost, setAdjustStandardCost] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Adjustment guardrail state
+  const [adjustType, setAdjustType] = useState("Physical Count Correction");
+  const [draftCommitments, setDraftCommitments] = useState<DraftCommitmentsResult | null>(null);
+  const [commitmentBreachAcknowledged, setCommitmentBreachAcknowledged] = useState(false);
+
   // ---------------------------------------------------------------------------
   // Refresh — update timestamp only after transition fully settles
   // ---------------------------------------------------------------------------
@@ -160,6 +176,57 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
   }
 
   // ---------------------------------------------------------------------------
+  // Derived adjustment values
+  // ---------------------------------------------------------------------------
+
+  const adjustedQty = parseFloat(newQty);
+  const currentQty = parseFloat(adjustFreshStock ?? adjustMaterial?.current_stock ?? "0");
+  const delta = isNaN(adjustedQty) ? 0 : adjustedQty - currentQty;
+
+  const isReduction = delta < 0;
+  const commitmentBreached = isReduction
+    && draftCommitments !== null
+    && draftCommitments.totalCommitted > adjustedQty;
+
+  const effectiveRateStr = adjustMaterial?.last_po_rate ?? adjustMaterial?.standard_cost ?? null;
+  const effectiveRate = effectiveRateStr !== null ? parseFloat(effectiveRateStr) : null;
+  const writeOff = (isReduction && effectiveRate !== null && !isNaN(effectiveRate))
+    ? Math.abs(delta) * effectiveRate
+    : null;
+
+  const isLargeReduction = isReduction
+    && currentQty > 0
+    && Math.abs(delta) / currentQty > 0.5
+    && Math.abs(delta) >= 10;
+
+  const minLevel = adjustMaterial?.min_level ? parseFloat(adjustMaterial.min_level) : 0;
+  const isBelowMinLevel = !isNaN(adjustedQty)
+    && adjustedQty >= 0
+    && minLevel > 0
+    && adjustedQty < minLevel;
+
+  const deltaLabel = isNaN(adjustedQty)
+    ? ""
+    : delta === 0
+    ? "No change in quantity"
+    : delta > 0
+    ? `This will ADD ${fmtQty(Math.abs(delta))} to stock`
+    : `This will REMOVE ${fmtQty(Math.abs(delta))} from stock`;
+
+  // ---------------------------------------------------------------------------
+  // Auto-reset breach acknowledgment when qty becomes safe
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const isBreached = isReduction && draftCommitments !== null &&
+      draftCommitments.totalCommitted > adjustedQty;
+    if (!isBreached && commitmentBreachAcknowledged) {
+      setCommitmentBreachAcknowledged(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adjustedQty]);
+
+  // ---------------------------------------------------------------------------
   // Filtered table rows
   // ---------------------------------------------------------------------------
 
@@ -179,13 +246,10 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
     return result;
   }, [rows, tab, search]);
 
-  // Summary tab counts
-  const tabCounts = useMemo(() => {
-    return {
-      low: rows.filter((r) => getStatus(r) === "low").length,
-      out: rows.filter((r) => getStatus(r) === "out").length,
-    };
-  }, [rows]);
+  const tabCounts = useMemo(() => ({
+    low: rows.filter((r) => getStatus(r) === "low").length,
+    out: rows.filter((r) => getStatus(r) === "out").length,
+  }), [rows]);
 
   // ---------------------------------------------------------------------------
   // History drawer
@@ -213,27 +277,20 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
     setNewQty(initialQty);
     setAdjustReason("");
     setAdjustStandardCost(initialCost);
+    setAdjustType("Physical Count Correction");
+    setDraftCommitments(null);
+    setCommitmentBreachAcknowledged(false);
     setAdjustOpen(true);
-    // Fetch live stock — only update inputs if the user hasn't changed the pre-filled values yet
+    // Fetch live stock + draft commitments in one round-trip
     const fresh = await getStockForMaterial(mat.id);
     if (fresh) {
       setAdjustFreshStock(fresh.current_stock);
       setNewQty((prev) => (prev === initialQty ? parseFloat(fresh.current_stock).toString() : prev));
       const freshCost = fresh.standard_cost ? parseFloat(fresh.standard_cost).toString() : "";
       setAdjustStandardCost((prev) => (prev === initialCost ? freshCost : prev));
+      setDraftCommitments(fresh.draftCommitments);
     }
   }
-
-  const adjustedQty = parseFloat(newQty);
-  const currentQty = parseFloat(adjustFreshStock ?? adjustMaterial?.current_stock ?? "0");
-  const delta = isNaN(adjustedQty) ? 0 : adjustedQty - currentQty;
-  const deltaLabel = isNaN(adjustedQty)
-    ? ""
-    : delta === 0
-    ? "No change in quantity"
-    : delta > 0
-    ? `This will ADD ${fmtQty(Math.abs(delta))} to stock`
-    : `This will REMOVE ${fmtQty(Math.abs(delta))} from stock`;
 
   async function handleAdjust() {
     if (!adjustMaterial) return;
@@ -243,7 +300,6 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       toast.error("Reason must be at least 10 characters.");
       return;
     }
-    // Validate cost field when shown (items with no PO rate)
     const showCostField = adjustMaterial.last_po_rate === null;
     let parsedCost: number | undefined;
     if (showCostField && adjustStandardCost.trim() !== "") {
@@ -253,9 +309,19 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
         return;
       }
     }
+    // Draft commitment guards
+    if (isReduction && draftCommitments === null) {
+      toast.error("Still loading issue slip data. Please wait a moment.");
+      return;
+    }
+    if (commitmentBreached && !commitmentBreachAcknowledged) {
+      toast.error("Acknowledge the impact on Draft issue slips before proceeding.");
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await adjustStock(adjustMaterial.id, adjustedQty, adjustReason, parsedCost);
+      await adjustStock(adjustMaterial.id, adjustedQty, adjustReason, parsedCost, adjustType);
       toast.success(`Stock adjusted for ${adjustMaterial.name}`);
       setAdjustOpen(false);
       refreshTriggered.current = true;
@@ -362,11 +428,13 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             size="sm"
             className="h-8 text-xs ml-auto"
             onClick={() => {
-              const headers = ["Code", "Material Name", "Unit", "Current Stock", "Min Level", "Max Level", "Last PO Rate", "Stock Value", "Status"];
+              const headers = ["Code", "Material Name", "Unit", "Current Stock", "Min Level", "Max Level", "Valuation Rate", "Stock Value", "Status"];
               const statusLabel: Record<string, string> = { ok: "OK", low: "Low Stock", out: "Out of Stock" };
               const csvRows = filtered.map((r) => {
                 const stock = parseFloat(r.current_stock);
-                const rate = r.last_po_rate ? parseFloat(r.last_po_rate) : null;
+                const poRate = r.last_po_rate !== null ? parseFloat(r.last_po_rate) : null;
+                const stdRate = r.standard_cost !== null ? parseFloat(r.standard_cost) : null;
+                const rate = poRate ?? stdRate;
                 return [
                   formatCode("M", r.material_no),
                   r.name,
@@ -588,7 +656,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
 
       {/* ── Stock Adjustment Dialog ── */}
       <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Adjust Stock — {adjustMaterial?.name}
@@ -602,6 +670,8 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+
+            {/* Current Stock panel */}
             <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
               <div>
                 <span className="text-sm text-slate-500">Current Stock</span>
@@ -614,6 +684,21 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               </span>
             </div>
 
+            {/* Adjustment Type dropdown */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Adjustment Type</label>
+              <select
+                value={adjustType}
+                onChange={(e) => setAdjustType(e.target.value)}
+                className="w-full h-9 text-sm border border-input rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {ADJUSTMENT_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* New Quantity input */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-slate-700">New Quantity</label>
               <Input
@@ -632,6 +717,75 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               )}
             </div>
 
+            {/* Value write-off (only when reducing and write-off > 0) */}
+            {isReduction && writeOff !== null && writeOff > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                <p className="text-xs font-medium text-red-700">
+                  This adjustment will write off {fmtAmt(writeOff)} from total stock value
+                </p>
+              </div>
+            )}
+
+            {/* Draft Commitment section (only when reducing) */}
+            {isReduction && (
+              <div className="space-y-1.5">
+                {draftCommitments === null ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                    <p className="text-xs text-amber-700">Checking pending issue slips…</p>
+                  </div>
+                ) : draftCommitments.totalCommitted > 0 ? (
+                  commitmentBreached ? (
+                    <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-3 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold text-red-700">
+                            Reducing to {fmtQty(adjustedQty)} will prevent these Draft Issue Slips from being issued:
+                          </p>
+                          <ul className="text-xs text-red-700 space-y-0.5">
+                            {draftCommitments.slips.map((s) => (
+                              <li key={s.slip_number}>
+                                • MI-{String(s.slip_number).padStart(4, "0")}: {fmtQty(s.committed_qty)} units needed
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="text-xs text-red-600 font-medium">
+                            Total needed: {fmtQty(draftCommitments.totalCommitted)} — Shortfall: {fmtQty(draftCommitments.totalCommitted - adjustedQty)} units
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                      <p className="text-xs text-amber-700">
+                        {fmtQty(adjustedQty)} units still covers the {fmtQty(draftCommitments.totalCommitted)} committed in {draftCommitments.slips.length} Draft Issue Slip{draftCommitments.slips.length > 1 ? "s" : ""}.
+                      </p>
+                    </div>
+                  )
+                ) : null}
+              </div>
+            )}
+
+            {/* Large reduction warning */}
+            {isLargeReduction && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-700">
+                  You are reducing by {Math.round(Math.abs(delta) / currentQty * 100)}% of current stock ({fmtQty(Math.abs(delta))} units). Verify this is correct before confirming.
+                </p>
+              </div>
+            )}
+
+            {/* Below min level warning */}
+            {isBelowMinLevel && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs text-amber-700">
+                  New quantity is below minimum stock level ({fmtQty(minLevel)} units).
+                </p>
+              </div>
+            )}
+
+            {/* Unit Cost field (when no PO rate) */}
             {adjustMaterial?.last_po_rate === null && (
               <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
                 <label className="text-sm font-medium text-slate-700">
@@ -653,6 +807,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               </div>
             )}
 
+            {/* Reason textarea */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-slate-700">Reason <span className="text-slate-400 font-normal">(required)</span></label>
               <Textarea
@@ -667,6 +822,22 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               )}
             </div>
 
+            {/* Commitment breach acknowledgment checkbox */}
+            {commitmentBreached && (
+              <label className="flex items-start gap-2.5 cursor-pointer rounded-lg border border-red-300 bg-red-50 px-3 py-3">
+                <input
+                  type="checkbox"
+                  checked={commitmentBreachAcknowledged}
+                  onChange={(e) => setCommitmentBreachAcknowledged(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-red-400 accent-red-600 shrink-0"
+                />
+                <span className="text-xs text-red-700 leading-relaxed">
+                  I understand that this reduction will leave insufficient stock for pending Draft Issue Slips. Those slips will fail when issued.
+                </span>
+              </label>
+            )}
+
+            {/* Permanent warning */}
             <p className="text-xs text-slate-400">
               ⚠ Adjustments are permanent and cannot be undone. They will appear in this material&apos;s movement history.
             </p>
@@ -676,7 +847,14 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             <Button variant="outline" onClick={() => setAdjustOpen(false)} disabled={isSaving}>
               Cancel
             </Button>
-            <Button onClick={handleAdjust} disabled={isSaving}>
+            <Button
+              onClick={handleAdjust}
+              disabled={
+                isSaving ||
+                (commitmentBreached && !commitmentBreachAcknowledged) ||
+                (isReduction && draftCommitments === null)
+              }
+            >
               {isSaving ? "Saving…" : "Confirm Adjustment"}
             </Button>
           </DialogFooter>
@@ -731,4 +909,3 @@ function StatusBadge({ status }: { status: StockStatus }) {
   if (status === "low") return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Low Stock</span>;
   return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>;
 }
-

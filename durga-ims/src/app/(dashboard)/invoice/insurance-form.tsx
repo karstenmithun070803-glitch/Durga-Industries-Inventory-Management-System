@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
@@ -198,9 +198,9 @@ export function InsuranceForm({
 
   // ── Saving ────────────────────────────────────────────────────────────────
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   // ── Dialog state ──────────────────────────────────────────────────────────
-  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRevertDialog, setShowRevertDialog] = useState(false);
 
@@ -308,6 +308,8 @@ export function InsuranceForm({
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function handleSave() {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       await saveInsuranceBill(insuranceBillId, buildPayload());
@@ -316,11 +318,14 @@ export function InsuranceForm({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save insurance bill.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   }
 
   async function handleFinalize() {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       await saveInsuranceBill(insuranceBillId, buildPayload());
@@ -331,12 +336,14 @@ export function InsuranceForm({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to finalize insurance bill.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
-      setShowFinalizeDialog(false);
     }
   }
 
   async function handleRevert() {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       await revertInsuranceBillToDraft(insuranceBillId);
@@ -346,12 +353,15 @@ export function InsuranceForm({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to revert insurance bill.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
       setShowRevertDialog(false);
     }
   }
 
   async function handleDelete() {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       await deleteInsuranceBill(insuranceBillId);
@@ -360,6 +370,7 @@ export function InsuranceForm({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete insurance bill.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
       setShowDeleteDialog(false);
     }
@@ -535,7 +546,6 @@ export function InsuranceForm({
                 id="ins-include-tax"
                 checked={includeTax}
                 onChange={(e) => setIncludeTax(e.target.checked)}
-                disabled={isFinalized}
                 className="w-4 h-4 accent-slate-700"
               />
               <label htmlFor="ins-include-tax" className="text-sm text-slate-600 cursor-pointer select-none">
@@ -768,7 +778,7 @@ export function InsuranceForm({
               </Button>
               <Button
                 size="sm"
-                onClick={() => setShowFinalizeDialog(true)}
+                onClick={handleFinalize}
                 disabled={isSaving}
                 className="bg-purple-600 hover:bg-purple-700 text-white"
               >
@@ -795,15 +805,6 @@ export function InsuranceForm({
           />
         </div>
       </div>
-
-      <ConfirmDialog
-        open={showFinalizeDialog}
-        onOpenChange={setShowFinalizeDialog}
-        title="Finalize Insurance Bill?"
-        description="This will lock the insurance bill. Click 'Revert to Draft' at any time to make further edits."
-        confirmLabel="Finalize"
-        onConfirm={handleFinalize}
-      />
 
       <ConfirmDialog
         open={showDeleteDialog}

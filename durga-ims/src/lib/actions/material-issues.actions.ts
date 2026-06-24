@@ -13,6 +13,7 @@ import {
   stockLedger,
   invoiceSlipLinks,
   invoices,
+  stages,
 } from "@/lib/db/schema";
 import { eq, and, sql, desc, max } from "drizzle-orm";
 import { revalidatePath, unstable_cache } from "next/cache";
@@ -40,6 +41,7 @@ interface IssueItemInput {
   gst_type: string;
   affects_inventory: boolean;
   zero_rate_confirmed: boolean;
+  stage_id?: string | null;
 }
 
 interface IssueHeaderInput {
@@ -81,14 +83,15 @@ function validateIssueItems(items: IssueItemInput[]) {
     if (parseFloat(item.qty || "0") <= 0) throw new Error("All quantities must be greater than zero.");
   }
 
-  // Duplicate check: material_id|contractor_id|normalizedRate
+  // Duplicate check: material_id|contractor_id|normalizedRate|stage_id
+  // stage_id is included so two stages can legitimately share the same material at the same rate
   const seen = new Set<string>();
   for (const item of items) {
     const rate = parseFloat(item.rate || "0").toFixed(2);
-    const key = `${item.material_id}|${item.contractor_id ?? ""}|${rate}`;
+    const key = `${item.material_id}|${item.contractor_id ?? ""}|${rate}|${item.stage_id ?? ""}`;
     if (seen.has(key))
       throw new Error(
-        "Duplicate entry detected: same material, same contractor, and same rate already exists. Combine into one row or adjust the rate."
+        "Duplicate entry detected: same material, same contractor, same rate, and same stage already exists. Combine into one row or adjust the rate."
       );
     seen.add(key);
   }
@@ -118,6 +121,7 @@ function itemValues(issueId: string, item: IssueItemInput) {
     amount: item.amount || "0",
     gst_type: item.gst_type || null,
     affects_inventory: item.affects_inventory,
+    stage_id: item.stage_id ?? null,
   };
 }
 
@@ -416,11 +420,14 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
       amount: materialIssueItems.amount,
       gst_type: materialIssueItems.gst_type,
       affects_inventory: materialIssueItems.affects_inventory,
+      stage_id: materialIssueItems.stage_id,
+      stage_name: stages.stage_name,
     })
     .from(materialIssueItems)
     .innerJoin(materials, eq(materialIssueItems.material_id, materials.id))
     .leftJoin(contractors, eq(materialIssueItems.contractor_id, contractors.id))
     .leftJoin(units, eq(materialIssueItems.unit_id, units.id))
+    .leftJoin(stages, eq(materialIssueItems.stage_id, stages.id))
     .where(eq(materialIssueItems.issue_id, id));
 
   const items: MaterialIssueItemWithDetails[] = itemRows.map((r) => ({
@@ -443,6 +450,8 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
     amount: r.amount,
     gst_type: r.gst_type ?? null,
     affects_inventory: r.affects_inventory,
+    stage_id: r.stage_id ?? null,
+    stage_name: r.stage_name ?? null,
   }));
 
   return {
@@ -948,7 +957,7 @@ export async function cloneNewMaterialIssue(
         slip_number: slipNum,
         status: "Draft",
         issue_type: "NEW",
-        stage_id: src.stage_id,
+        stage_id: null,
         vehicle_id: src.vehicle_id,
         financial_year: src.financial_year,
         issue_date: cloneDate,
@@ -972,6 +981,7 @@ export async function cloneNewMaterialIssue(
         amount: materialIssueItems.amount,
         gst_type: materialIssueItems.gst_type,
         affects_inventory: materialIssueItems.affects_inventory,
+        stage_id: materialIssueItems.stage_id,
       })
       .from(materialIssueItems)
       .where(eq(materialIssueItems.issue_id, slipId));

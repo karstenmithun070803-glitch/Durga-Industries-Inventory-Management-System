@@ -206,6 +206,7 @@ export function MaterialIssuesClient({
   const [browseMode, setBrowseMode] = useState(!initialSelectedId);
   const [browseVehicleId, setBrowseVehicleId] = useState("");
   const [isSlipListOpen, setIsSlipListOpen] = useState(false);
+  const [browseDateFilter, setBrowseDateFilter] = useState("");
   const [allSlips, setAllSlips] = useState<SlipSummary[]>(initialSlips);
 
   const [vehicleId, setVehicleId] = useState("");
@@ -366,6 +367,7 @@ export function MaterialIssuesClient({
       clearForm();
       setBrowseMode(false);
       setIsSlipListOpen(false);
+      setBrowseDateFilter("");
     };
     if (isDirty) {
       setPendingAction(() => doNew);
@@ -519,7 +521,10 @@ export function MaterialIssuesClient({
   const hasFormContent = loadedSlip !== null || isDirty;
 
   const browsedSlips = browseVehicleId
-    ? allSlips.filter((s) => s.vehicleId === browseVehicleId)
+    ? allSlips.filter((s) =>
+        s.vehicleId === browseVehicleId &&
+        (browseDateFilter === "" || toISODate(s.date) === browseDateFilter)
+      )
     : [];
 
   const browseVehicleOptions = vehicles
@@ -565,6 +570,17 @@ export function MaterialIssuesClient({
                         value={browseVehicleId}
                         onChange={setBrowseVehicleId}
                         placeholder="Search vehicle…"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-500 w-28 shrink-0">Date</span>
+                    <div className="w-40">
+                      <Input
+                        type="date"
+                        value={browseDateFilter}
+                        onChange={(e) => { setBrowseDateFilter(e.target.value); setIsSlipListOpen(true); }}
+                        className="h-9 text-sm"
                       />
                     </div>
                   </div>

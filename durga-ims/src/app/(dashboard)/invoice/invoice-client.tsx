@@ -228,6 +228,8 @@ export function InvoiceClient({
 }: Props) {
   const { activeFY } = useFY();
   const identifierRef = useRef<HTMLButtonElement>(null);
+  const isSavingRef = useRef(false);
+  const loadGenRef = useRef(0);
 
   // ── Dropdown state ────────────────────────────────────────────────────────
   const [dropdownItems, setDropdownItems] = useState<InvoiceDropdownItem[]>(initialDropdownItems);
@@ -272,10 +274,7 @@ export function InvoiceClient({
   const [insuranceBill, setInsuranceBill] = useState<InsuranceBillWithItems | null>(null);
 
   // ── Dialog state ──────────────────────────────────────────────────────────
-  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const totals = calcRowTotals(rows);
@@ -336,11 +335,13 @@ export function InvoiceClient({
 
   // ── Load an invoice by ID ─────────────────────────────────────────────────
   async function loadInvoice(id: string) {
+    const gen = ++loadGenRef.current;
     setIsNewMode(false);
     setIsLoading(true);
     setActiveView("invoice");
     try {
       const inv = await getInvoiceById(id);
+      if (gen !== loadGenRef.current) return;
       if (!inv) throw new Error("Invoice not found.");
       setCurrentInvoice(inv);
       setCurrentInvoiceId(id);
@@ -363,6 +364,7 @@ export function InvoiceClient({
         getIssuedMIsForVehicle(inv.vehicle_id, id),
         getAllIssuedMIItemsForVehicle(inv.vehicle_id, id),
       ]);
+      if (gen !== loadGenRef.current) return;
 
       // Insurance
       if (insuranceBillData) {
@@ -384,9 +386,10 @@ export function InvoiceClient({
       // Don't auto-check — items already loaded from DB
       setSelectedSlipIds(new Set());
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
       toast.error(e instanceof Error ? e.message : "Failed to load invoice.");
     } finally {
-      setIsLoading(false);
+      if (gen === loadGenRef.current) setIsLoading(false);
     }
   }
 
@@ -535,16 +538,6 @@ export function InvoiceClient({
     };
   }
 
-  // ── Dirty-check gate ──────────────────────────────────────────────────────
-  function guardDirty(action: () => void) {
-    if (isDirty) {
-      setPendingAction(() => action);
-      setDiscardDialogOpen(true);
-    } else {
-      action();
-    }
-  }
-
   // ── Shared form reset (no new-mode flag) ─────────────────────────────────
   function resetForm() {
     setCurrentInvoiceId(null);
@@ -571,28 +564,25 @@ export function InvoiceClient({
 
   // ── New ───────────────────────────────────────────────────────────────────
   function handleNew() {
-    guardDirty(() => {
-      resetForm();
-      setIsNewMode(true);
-      // Peek next bill number
-      peekNextBillNumber(null, activeFY).then(setBillNumber).catch(() => setBillNumber("—"));
-      setTimeout(() => identifierRef.current?.focus(), 100);
-    });
+    resetForm();
+    setIsNewMode(true);
+    peekNextBillNumber(null, activeFY).then(setBillNumber).catch(() => setBillNumber("—"));
+    setTimeout(() => identifierRef.current?.focus(), 100);
   }
 
   // ── Go back to browsing screen ────────────────────────────────────────────
   function handleGoBack() {
-    guardDirty(() => {
-      resetForm();
-    });
+    resetForm();
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
   async function handleSave() {
+    if (isSavingRef.current) return;
     if (!isDateInFY(billDate, activeFY)) {
       toast.error(`Bill date is outside FY ${activeFY} (1 Apr – 31 Mar).`);
       return;
     }
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       const payload = buildPayload();
@@ -624,17 +614,19 @@ export function InvoiceClient({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save invoice.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   }
 
   // ── Finalize ──────────────────────────────────────────────────────────────
   async function handleFinalize() {
+    if (isSavingRef.current) return;
     if (!isDateInFY(billDate, activeFY)) {
       toast.error(`Bill date is outside FY ${activeFY} (1 Apr – 31 Mar).`);
-      setShowFinalizeDialog(false);
       return;
     }
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       const payload = buildPayload();
@@ -659,14 +651,16 @@ export function InvoiceClient({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to finalize invoice.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
-      setShowFinalizeDialog(false);
     }
   }
 
   // ── Revert invoice to Draft ───────────────────────────────────────────────
   async function handleRevertToDraft() {
+    if (isSavingRef.current) return;
     if (!currentInvoiceId) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       await revertInvoiceToDraft(currentInvoiceId);
@@ -680,13 +674,16 @@ export function InvoiceClient({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to revert.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
   async function handleDelete() {
+    if (isSavingRef.current) return;
     if (!currentInvoiceId) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       await deleteInvoice(currentInvoiceId);
@@ -697,6 +694,7 @@ export function InvoiceClient({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete invoice.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
       setShowDeleteDialog(false);
     }
@@ -704,7 +702,9 @@ export function InvoiceClient({
 
   // ── Create insurance bill ─────────────────────────────────────────────────
   async function handleCreateInsuranceBill() {
+    if (isSavingRef.current) return;
     if (!currentInvoiceId) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       await createInsuranceBill(currentInvoiceId);
@@ -719,6 +719,7 @@ export function InvoiceClient({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create insurance bill.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   }
@@ -743,7 +744,7 @@ export function InvoiceClient({
 
   // ── Hotkeys ───────────────────────────────────────────────────────────────
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); if (activeView === "invoice") void handleSave(); }, { enableOnFormTags: true });
-  useHotkeys("alt+n", (e) => { e.preventDefault(); handleNew(); }, { enableOnFormTags: true });
+  useHotkeys("alt+n", (e) => { e.preventDefault(); if (!isSavingRef.current) handleNew(); }, { enableOnFormTags: true });
   useHotkeys("escape", () => { if (activeView === "insurance") setActiveView("invoice"); }, { enableOnFormTags: true });
 
   // ── Dropdown options ──────────────────────────────────────────────────────
@@ -798,9 +799,9 @@ export function InvoiceClient({
   return (
     <div className="flex flex-col h-full">
       {/* Page header + identifier */}
-      <div className="px-6 pt-5 pb-3 flex items-center gap-3 flex-wrap">
+      <div className="px-6 pt-5 pb-3 flex items-center gap-3">
         <h1 className="text-lg font-semibold text-slate-800 shrink-0">Invoices</h1>
-        <div className="w-72">
+        <div className="flex-1 min-w-[220px] max-w-72">
           <Combobox
             options={identifierOptions}
             value={currentInvoiceId ?? ""}
@@ -810,12 +811,12 @@ export function InvoiceClient({
             openOnArrowDown
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-8 text-xs w-36"
+            className="h-8 text-xs w-32"
             title="Filter from date"
           />
           <span className="text-slate-400 text-xs">—</span>
@@ -823,20 +824,18 @@ export function InvoiceClient({
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-8 text-xs w-36"
+            className="h-8 text-xs w-32"
             title="Filter to date"
           />
-          {(dateFrom || dateTo) && (
-            <button
-              onClick={() => { setDateFrom(""); setDateTo(""); }}
-              className="text-xs text-slate-400 hover:text-slate-600"
-              title="Clear date filter"
-            >
-              ✕
-            </button>
-          )}
+          <button
+            onClick={() => { setDateFrom(""); setDateTo(""); }}
+            className={`text-xs text-slate-400 hover:text-slate-600 ${!dateFrom && !dateTo ? "invisible" : ""}`}
+            title="Clear date filter"
+          >
+            ✕
+          </button>
         </div>
-        {isLoading && <span className="text-sm text-slate-400 animate-pulse">Loading…</span>}
+        {isLoading && <span className="text-sm text-slate-400 animate-pulse shrink-0">Loading…</span>}
       </div>
 
       {/* Blank state */}
@@ -1044,8 +1043,8 @@ export function InvoiceClient({
                     type="checkbox"
                     id="include-tax"
                     checked={includeTax}
-                    onChange={(e) => { setIncludeTax(e.target.checked); setIsDirty(true); }}
-                    disabled={!isEditable}
+                    onChange={(e) => { setIncludeTax(e.target.checked); }}
+                    disabled={isCancelled}
                     className="w-4 h-4 accent-slate-700"
                   />
                   <label htmlFor="include-tax" className="text-sm text-slate-600 cursor-pointer select-none">
@@ -1148,7 +1147,7 @@ export function InvoiceClient({
                 {(isDraft || isNewMode) && (
                   <Button
                     size="sm"
-                    onClick={() => setShowFinalizeDialog(true)}
+                    onClick={handleFinalize}
                     disabled={isSaving}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
@@ -1224,33 +1223,12 @@ export function InvoiceClient({
 
       {/* Dialogs */}
       <ConfirmDialog
-        open={showFinalizeDialog}
-        onOpenChange={setShowFinalizeDialog}
-        title={`Finalize ${billNumber}?`}
-        description={`Mark this invoice as Finalized (Net: ₹${fmt2(netAmount)})? You can revert to Draft if needed.`}
-        confirmLabel="Finalize Invoice"
-        onConfirm={handleFinalize}
-      />
-
-      <ConfirmDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
         title={`Delete ${billNumber}?`}
         description="This will permanently delete the invoice and all its line items. This cannot be undone."
         confirmLabel="Delete Invoice"
         onConfirm={handleDelete}
-      />
-
-      <ConfirmDialog
-        open={discardDialogOpen}
-        onOpenChange={setDiscardDialogOpen}
-        title="Discard unsaved changes?"
-        description="You have unsaved changes that will be lost."
-        confirmLabel="Discard Changes"
-        onConfirm={() => {
-          setDiscardDialogOpen(false);
-          if (pendingAction) { pendingAction(); setPendingAction(null); }
-        }}
       />
     </div>
   );

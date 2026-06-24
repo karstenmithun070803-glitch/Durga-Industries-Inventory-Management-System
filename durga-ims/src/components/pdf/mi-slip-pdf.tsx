@@ -110,39 +110,78 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
           </View>
           <View style={styles.separator} />
 
-          {slip.items.map((item, idx) => {
-            const rate = parseFloat(item.rate || "0") * mf;
-            const lineBase = parseFloat(item.amount || "0") * mf;
-            const lineTax =
-              (parseFloat(item.cgst_amount || "0") +
+          {(() => {
+            // Build ordered stage groups; stageless items collected separately and appended last
+            const seenStages = new Set<string>();
+            const stageOrder: string[] = [];
+            const stagedGroups = new Map<string, typeof slip.items>();
+            const stageless: typeof slip.items = [];
+            for (const item of slip.items) {
+              if (item.stage_id) {
+                if (!seenStages.has(item.stage_id)) {
+                  seenStages.add(item.stage_id);
+                  stageOrder.push(item.stage_id);
+                  stagedGroups.set(item.stage_id, []);
+                }
+                stagedGroups.get(item.stage_id)!.push(item);
+              } else {
+                stageless.push(item);
+              }
+            }
+            const hasMultipleGroups = stageOrder.length > 1 || (stageOrder.length === 1 && stageless.length > 0);
+            const showHeaders = stageOrder.length > 0;
+            let sNo = 0;
+            const renderRow = (item: typeof slip.items[0]) => {
+              sNo++;
+              const rate = parseFloat(item.rate || "0") * mf;
+              const lineBase = parseFloat(item.amount || "0") * mf;
+              const lineTax = (
+                parseFloat(item.cgst_amount || "0") +
                 parseFloat(item.sgst_amount || "0") +
-                parseFloat(item.igst_amount || "0")) *
-              mf;
-            const lineTotal = lineBase + lineTax;
+                parseFloat(item.igst_amount || "0")
+              ) * mf;
+              const lineTotal = lineBase + lineTax;
+              return (
+                <View key={item.id} style={styles.plainTableRow}>
+                  <Text style={[styles.plainTableCell, { width: "6%" }]}>{sNo}</Text>
+                  <Text style={[styles.plainTableCell, { flex: 1, marginLeft: 4 }]}>{item.material_name}</Text>
+                  <Text style={[styles.plainTableCell, { width: "15%" }]}>{item.contractor_name ?? "—"}</Text>
+                  <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtQty(item.qty)}</Text>
+                  <Text style={[styles.plainTableCell, { width: "7%", marginLeft: 4 }]}>{item.unit_name ?? "—"}</Text>
+                  <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtAmt(String(rate))}</Text>
+                  <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>{fmtAmt(String(lineTotal))}</Text>
+                </View>
+              );
+            };
             return (
-              <View key={item.id} style={styles.plainTableRow}>
-                <Text style={[styles.plainTableCell, { width: "6%" }]}>{idx + 1}</Text>
-                <Text style={[styles.plainTableCell, { flex: 1, marginLeft: 4 }]}>
-                  {item.material_name}
-                </Text>
-                <Text style={[styles.plainTableCell, { width: "15%" }]}>
-                  {item.contractor_name ?? "—"}
-                </Text>
-                <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
-                  {fmtQty(item.qty)}
-                </Text>
-                <Text style={[styles.plainTableCell, { width: "7%", marginLeft: 4 }]}>
-                  {item.unit_name ?? "—"}
-                </Text>
-                <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
-                  {fmtAmt(String(rate))}
-                </Text>
-                <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
-                  {fmtAmt(String(lineTotal))}
-                </Text>
-              </View>
+              <>
+                {stageOrder.map((stageKey) => {
+                  const groupItems = stagedGroups.get(stageKey)!;
+                  const stageName = groupItems[0]?.stage_name;
+                  return (
+                    <React.Fragment key={stageKey}>
+                      {showHeaders && (
+                        <View style={styles.stageHeaderRow}>
+                          <Text style={styles.stageHeaderText}>{stageName ?? stageKey}</Text>
+                        </View>
+                      )}
+                      {groupItems.map(renderRow)}
+                    </React.Fragment>
+                  );
+                })}
+                {stageless.length > 0 && (
+                  <React.Fragment>
+                    {hasMultipleGroups && (
+                      <View style={styles.stageHeaderRow}>
+                        <Text style={styles.stageHeaderText}>— Other Materials —</Text>
+                      </View>
+                    )}
+                    {stageless.map(renderRow)}
+                  </React.Fragment>
+                )}
+              </>
             );
-          })}
+          })()}
 
           <View style={styles.separator} />
 

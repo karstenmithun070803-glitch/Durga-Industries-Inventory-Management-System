@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
@@ -114,6 +115,15 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
       tax:     active.reduce((s, r) => s + r.cgst_amount + r.sgst_amount + r.igst_amount, 0),
       total:   active.reduce((s, r) => s + r.total_amount, 0),
     };
+  }, [rows]);
+
+  const poGroups = useMemo(() => {
+    const map = new Map<string, PurchaseReportRow[]>();
+    for (const row of rows) {
+      if (!map.has(row.id)) map.set(row.id, []);
+      map.get(row.id)!.push(row);
+    }
+    return Array.from(map.values());
   }, [rows]);
 
   type MonthlyGroup = {
@@ -342,27 +352,50 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={r.item_id}
-                    className="border-t border-slate-100 hover:bg-slate-50/50"
-                  >
-                    <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">PO-{String(r.po_number).padStart(4, "0")}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.po_date}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">
-                      {r.supplier_bill_no ? (
-                        <span title={r.supplier_bill_date ?? undefined}>{r.supplier_bill_no}</span>
-                      ) : "—"}
-                    </td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.supplier_name ?? "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.material_name}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.unit_name ?? "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.rate)}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_amount)}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.cgst_amount + r.sgst_amount + r.igst_amount) > 0 ? fmtAmt(r.cgst_amount + r.sgst_amount + r.igst_amount) : "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.total_amount)}</td>
-                  </tr>
+                {poGroups.map((group) => (
+                  <Fragment key={group[0].id}>
+                    {group.map((r, itemIdx) => (
+                      <tr
+                        key={r.item_id}
+                        className={cn(
+                          "hover:bg-slate-50/50",
+                          itemIdx === 0 ? "border-t-2 border-slate-200" : "border-t border-slate-100"
+                        )}
+                      >
+                        {itemIdx === 0 && (
+                          <>
+                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800 align-top border-r border-slate-100">
+                              PO-{String(r.po_number).padStart(4, "0")}
+                            </td>
+                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-500 align-top border-r border-slate-100">
+                              {r.po_date}
+                            </td>
+                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-500 align-top border-r border-slate-100">
+                              {r.supplier_bill_no
+                                ? <span title={r.supplier_bill_date ?? undefined}>{r.supplier_bill_no}</span>
+                                : "—"}
+                            </td>
+                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-600 align-top border-r border-slate-100">
+                              {r.supplier_name ?? "—"}
+                            </td>
+                          </>
+                        )}
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.material_name}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.unit_name ?? "—"}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.rate)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_amount)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right">
+                          {(r.cgst_amount + r.sgst_amount + r.igst_amount) > 0
+                            ? fmtAmt(r.cgst_amount + r.sgst_amount + r.igst_amount)
+                            : "—"}
+                        </td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">
+                          {fmtAmt(r.total_amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot className="bg-slate-100 sticky bottom-0">

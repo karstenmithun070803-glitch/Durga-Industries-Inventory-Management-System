@@ -131,6 +131,9 @@ export interface LineItemDraft {
   affects_inventory: boolean;
   // Invoice mode: tracks which MI slip this row came from (client-only, not sent to server)
   _slip_id?: string;
+  // NEW VMI multi-stage: which stage this row belongs to (client-only display; stage_id sent to server via buildItemsPayload)
+  stage_id?: string;
+  stage_name?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +201,9 @@ export interface MaterialIssueItemWithDetails {
   amount: string;
   gst_type: string | null;
   affects_inventory: boolean;
+  // NEW VMI multi-stage: which stage this item belongs to
+  stage_id?: string | null;
+  stage_name?: string | null;
 }
 
 // Full detail type returned by getMaterialIssueById

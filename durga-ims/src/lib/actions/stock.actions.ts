@@ -55,6 +55,16 @@ export interface StockLedgerEntry {
   rate_at_time: string | null;
 }
 
+export interface DraftCommitment {
+  slip_number: number;
+  committed_qty: number;
+}
+
+export interface DraftCommitmentsResult {
+  totalCommitted: number;
+  slips: DraftCommitment[];
+}
+
 export interface VehicleSearchRow {
   id: string;
   job_ref_no: string;
@@ -249,6 +259,33 @@ export async function getStockMovementHistory(
 }
 
 // ---------------------------------------------------------------------------
+// getDraftCommitmentsForMaterial
+// ---------------------------------------------------------------------------
+
+export async function getDraftCommitmentsForMaterial(
+  materialId: string
+): Promise<DraftCommitmentsResult> {
+  const rows = await db.execute<{ slip_number: number; committed_qty: string }>(sql`
+    SELECT mi.slip_number, SUM(mii.qty) AS committed_qty
+    FROM material_issue_items mii
+    INNER JOIN material_issues mi ON mii.issue_id = mi.id
+    WHERE mii.material_id = ${materialId}
+      AND mi.status = 'Draft'
+      AND mii.affects_inventory = true
+    GROUP BY mi.id, mi.slip_number
+    ORDER BY mi.slip_number
+  `);
+  const slips = Array.from(rows).map((r) => ({
+    slip_number: r.slip_number,
+    committed_qty: parseFloat(r.committed_qty),
+  }));
+  return {
+    totalCommitted: slips.reduce((s, r) => s + r.committed_qty, 0),
+    slips,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // adjustStock
 // ---------------------------------------------------------------------------
 
@@ -256,7 +293,8 @@ export async function adjustStock(
   materialId: string,
   newQty: number,
   reason: string,
-  standardCost?: number
+  standardCost?: number,
+  adjustmentType?: string
 ): Promise<void> {
   if (newQty < 0) throw new Error("Stock cannot go below zero.");
   if (!reason || reason.trim().length < 10) throw new Error("Reason must be at least 10 characters.");
@@ -282,7 +320,7 @@ export async function adjustStock(
 
   const currentQty = parseFloat(mat.current_stock);
   const delta = newQty - currentQty;
-  const fullReason = `${reason.trim()} — Adjusted from ${currentQty} to ${newQty} by ${username}`;
+  const fullReason = `[${adjustmentType ?? "Adjustment"}] ${reason.trim()} — Adjusted from ${currentQty} to ${newQty} by ${username}`;
 
   // Fetch the most recent received PO rate for this material.
   // Falls back to standard_cost (existing or newly supplied) so rate_at_time is always
@@ -342,12 +380,14 @@ export async function adjustStock(
 
 export async function getStockForMaterial(
   materialId: string
-): Promise<{ current_stock: string; standard_cost: string | null } | null> {
+): Promise<{ current_stock: string; standard_cost: string | null; draftCommitments: DraftCommitmentsResult } | null> {
   const [row] = await db
     .select({ current_stock: materials.current_stock, standard_cost: materials.standard_cost })
     .from(materials)
     .where(eq(materials.id, materialId));
-  return row ?? null;
+  if (!row) return null;
+  const draftCommitments = await getDraftCommitmentsForMaterial(materialId);
+  return { ...row, draftCommitments };
 }
 
 // ---------------------------------------------------------------------------

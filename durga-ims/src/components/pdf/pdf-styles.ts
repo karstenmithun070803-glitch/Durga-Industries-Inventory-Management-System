@@ -106,6 +106,21 @@ export const styles = StyleSheet.create({
     color: "#000",
   },
 
+  // ── Stage sub-header row (VMI New multi-stage PDF) ────────────────────────
+  stageHeaderRow: {
+    backgroundColor: "#f1f5f9",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    marginTop: 4,
+    marginBottom: 1,
+  },
+  stageHeaderText: {
+    fontSize: 7,
+    fontFamily: "Helvetica-Bold",
+    color: "#475569",
+    textTransform: "uppercase",
+  },
+
   // ── Legacy styles kept for any future reuse ────────────────────────────────
   companyName: {
     fontSize: 14,

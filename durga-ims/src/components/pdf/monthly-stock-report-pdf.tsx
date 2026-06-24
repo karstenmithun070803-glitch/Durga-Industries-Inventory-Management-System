@@ -101,7 +101,8 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
 
         {/* Rows */}
         {rows.map((r, i) => {
-          const closingValue = r.last_po_rate != null ? r.closing_stock * r.last_po_rate : null;
+          const effectiveRate = r.last_po_rate ?? r.standard_cost;
+          const closingValue = effectiveRate !== null ? r.closing_stock * effectiveRate : null;
           return (
             <View key={r.material_id} style={styles.plainTableRow}>
               <Text style={[styles.plainTableCell, { width: "4%" }]}>{i + 1}</Text>
@@ -129,7 +130,7 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
               <Text style={[styles.plainTableCellBold, { width: "10%", textAlign: "right" }]}>{fmtQ(r.closing_stock)}</Text>
               {showPrices && (
                 <Text style={[styles.plainTableCell, { width: "8%", textAlign: "right" }]}>
-                  {r.last_po_rate != null ? fmtAmt(String(r.last_po_rate)) : "—"}
+                  {effectiveRate !== null ? fmtAmt(String(effectiveRate)) : "—"}
                 </Text>
               )}
               {showPrices && (
