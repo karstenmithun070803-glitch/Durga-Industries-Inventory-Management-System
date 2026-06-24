@@ -259,10 +259,10 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
               {groupByMonth ? "Monthly View" : "Group by Month"}
             </Button>
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadCsv}>
-              Export CSV ({groupByMonth ? monthlyRows.length : rows.length})
+              Export CSV
             </Button>
             <PrintButton
-              label={`Print (${groupByMonth ? monthlyRows.length : rows.length})`}
+              label="Print"
               getDocument={() => (
                 <PurchaseReportDocument
                   rows={rows}

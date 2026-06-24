@@ -257,10 +257,10 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
         <>
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadCsv}>
-              Export CSV ({rows.length})
+              Export CSV
             </Button>
             <PrintButton
-              label={`Print (${rows.length})`}
+              label="Print"
               getDocument={() => (
                 <MonthlyStockReportDocument
                   rows={rows}

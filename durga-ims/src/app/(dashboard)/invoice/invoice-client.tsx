@@ -10,7 +10,8 @@ import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TransactionGrid, newRow, calcRowTotals } from "@/components/forms/TransactionGrid";
 import { PrintButton } from "@/components/pdf/print-button";
-import dynamic from "next/dynamic";
+import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
+import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import { determineGstType } from "@/types";
@@ -39,15 +40,6 @@ import {
 } from "@/lib/actions/invoices.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { InsuranceForm } from "./insurance-form";
-
-const CustomerInvoiceDocument = dynamic(
-  () => import("@/components/pdf/customer-invoice-pdf").then((m) => ({ default: m.CustomerInvoiceDocument })),
-  { ssr: false }
-);
-const InsuranceInvoiceDocument = dynamic(
-  () => import("@/components/pdf/insurance-invoice-pdf").then((m) => ({ default: m.InsuranceInvoiceDocument })),
-  { ssr: false }
-);
 
 // ---------------------------------------------------------------------------
 // Types

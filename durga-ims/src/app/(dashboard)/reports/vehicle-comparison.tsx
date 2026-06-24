@@ -16,7 +16,7 @@ function buildFYOptions(defaultFY: string) {
   const [startYear] = defaultFY.split("-").map(Number);
   return Array.from({ length: 5 }, (_, i) => {
     const y = startYear - i;
-    const label = `${y}-${String(y + 1).slice(-2)}`;
+    const label = `${y}-${y + 1}`;
     return { value: label, label: `FY ${label}` };
   });
 }
@@ -71,7 +71,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
     setIsLoading(true);
     getVehicleComparisonData(v1Id, v2Id, fy, stageId || null)
       .then((rows) => { setAllRows(rows); setHasRun(true); })
-      .catch(() => toast.error("Failed to load comparison data."))
+      .catch((err) => { console.error("Vehicle comparison error:", err); toast.error("Failed to load comparison data."); })
       .finally(() => setIsLoading(false));
   }
 
@@ -193,10 +193,10 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
           {/* Actions */}
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadCsv} disabled={!hasData}>
-              Export CSV ({displayRows.length})
+              Export CSV
             </Button>
             <PrintButton
-              label={`Print (${displayRows.length})`}
+              label="Print"
               disabled={!hasData}
               getDocument={() => (
                 <VehicleComparisonDocument

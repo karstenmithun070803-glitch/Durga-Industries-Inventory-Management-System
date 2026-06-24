@@ -253,6 +253,7 @@ export function PurchaseOrdersClient({
   // Filter state — both inputs always visible simultaneously
   const [filterSupplier, setFilterSupplier] = useState("");
   const [filterDate, setFilterDate] = useState("");
+  const [isListOpen, setIsListOpen] = useState(false);
 
   // Auto-load on mount if deep-linked via ?id=
   useEffect(() => {
@@ -385,10 +386,11 @@ export function PurchaseOrdersClient({
   function handleSelect(id: string) {
     if (!id) { clearForm(); return; }
     if (isDirty) {
-      setPendingAction(() => () => void loadPO(id));
+      setPendingAction(() => () => { setIsListOpen(false); void loadPO(id); });
       setDiscardDialogOpen(true);
       return;
     }
+    setIsListOpen(false);
     void loadPO(id);
   }
 
@@ -397,6 +399,7 @@ export function PurchaseOrdersClient({
       clearForm();
       setFilterSupplier("");
       setFilterDate("");
+      setIsListOpen(false);
     };
     if (isDirty) {
       setPendingAction(() => doNew);
@@ -699,7 +702,7 @@ export function PurchaseOrdersClient({
               <div className="flex flex-wrap items-end gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 uppercase tracking-wide">Supplier</label>
-                  <div className="w-64">
+                  <div className="w-64" onClick={() => setIsListOpen(true)}>
                     <Combobox
                       options={supplierFilterOptions}
                       value={filterSupplier}
@@ -714,14 +717,14 @@ export function PurchaseOrdersClient({
                     <Input
                       type="date"
                       value={filterDate}
-                      onChange={(e) => setFilterDate(e.target.value)}
+                      onChange={(e) => { setFilterDate(e.target.value); setIsListOpen(true); }}
                       className="h-9 text-sm"
                     />
                   </div>
                 </div>
               </div>
 
-              {filteredPOs.length > 0 && (
+              {isListOpen && filteredPOs.length > 0 && (
                 <div className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100">
                   {filteredPOs.map((po) => (
                     <button
@@ -752,7 +755,7 @@ export function PurchaseOrdersClient({
                 </div>
               )}
 
-              {eitherFilterActive && filteredPOs.length === 0 && (
+              {isListOpen && eitherFilterActive && filteredPOs.length === 0 && (
                 <p className="mt-2 text-sm text-slate-400">No purchase orders found.</p>
               )}
 

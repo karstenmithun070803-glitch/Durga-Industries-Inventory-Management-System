@@ -754,64 +754,73 @@ export function NewVMIClient({
 
                   {/* Inline form — shown when a slip is loaded in browse mode */}
                   {loadedSlip && (
-                    <div className="flex items-start gap-3">
-                      <span className="w-28 shrink-0" />
-                      <div className="w-56 space-y-2 pt-2 border-t border-slate-100">
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-sm font-medium text-slate-800">
-                            {formatCode("MI-", loadedSlip.slip_number, 4)}
-                          </span>
-                          {miStatus && (
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                              miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
-                            }`}>
-                              {miStatus}
-                            </span>
-                          )}
+                    <div className="border-t border-slate-100 pt-3 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-slate-500 w-28 shrink-0">Slip No</span>
+                        <div className="w-56 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
+                          {formatCode("MI-", loadedSlip.slip_number, 4)}
                         </div>
-                        <div className="flex flex-wrap gap-3 items-end">
-                          <div className="space-y-1">
-                            <label className="text-xs text-slate-500">Stage</label>
-                            <div className="w-40">
-                              <Combobox
-                                options={stageOptions}
-                                value={stageId}
-                                onChange={handleStageChange}
-                                placeholder="Select stage…"
-                              />
-                            </div>
+                        {miStatus && (
+                          <span className={`px-2 py-0.5 rounded text-sm font-medium ${
+                            miStatus === "Issued" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {miStatus}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-end gap-4">
+                        <div className="space-y-1">
+                          <label className="text-sm text-slate-500">Stage</label>
+                          <div className="w-48">
+                            <Combobox
+                              options={stageOptions}
+                              value={stageId}
+                              onChange={handleStageChange}
+                              placeholder="Select stage…"
+                            />
                           </div>
-                          <div className="space-y-1">
-                            <label className="text-xs text-slate-500">Date</label>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm text-slate-500">Date</label>
+                          <div className="w-40">
                             <Input
                               type="date"
                               value={issueDate}
                               onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
-                              className="h-8 text-sm w-36"
+                              className="h-9 text-sm"
                             />
                           </div>
-                          <div className="space-y-1">
-                            <label className="text-xs text-slate-500">Margin %</label>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm text-slate-500">Job No</label>
+                          <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
+                            {selectedVehicle?.job_ref_no || "—"}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm text-slate-500">Margin %</label>
+                          <div className="w-24">
                             <Input
                               type="number"
                               value={marginPct}
                               onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
                               onFocus={(e) => e.target.select()}
-                              className="h-8 text-sm w-20"
+                              className="h-9 text-sm"
                               min="0"
                               step="0.01"
+                              placeholder="0"
                             />
                           </div>
                         </div>
-                        {miStatus === "Issued" && (
-                          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-800">
-                              <span className="font-medium">Issued.</span> Saving reverses and reapplies stock.
-                            </p>
-                          </div>
-                        )}
                       </div>
+                      {miStatus === "Issued" && (
+                        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <p className="text-sm text-amber-800">
+                            <span className="font-medium">This slip has been issued.</span> Saving will reverse the current stock deductions and reapply them atomically.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

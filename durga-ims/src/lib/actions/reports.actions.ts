@@ -515,7 +515,7 @@ export async function getVehicleComparisonData(
         SUM(mii.qty) AS qty,
         SUM(mii.amount) AS amt
       FROM material_issue_items mii
-      JOIN material_issues mi ON mi.id = mii.material_issue_id
+      JOIN material_issues mi ON mi.id = mii.issue_id
       JOIN materials m ON m.id = mii.material_id
       LEFT JOIN stages s ON s.id = mi.stage_id
       WHERE mi.vehicle_id = ${v1Id}::uuid
@@ -532,7 +532,7 @@ export async function getVehicleComparisonData(
         SUM(mii.qty) AS qty,
         SUM(mii.amount) AS amt
       FROM material_issue_items mii
-      JOIN material_issues mi ON mi.id = mii.material_issue_id
+      JOIN material_issues mi ON mi.id = mii.issue_id
       JOIN materials m ON m.id = mii.material_id
       LEFT JOIN stages s ON s.id = mi.stage_id
       WHERE mi.vehicle_id = ${v2Id}::uuid

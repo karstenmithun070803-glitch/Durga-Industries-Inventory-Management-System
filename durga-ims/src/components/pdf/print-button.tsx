@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { pdf } from "@react-pdf/renderer";
+import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReactElement } from "react";
@@ -26,6 +27,7 @@ export function PrintButton({ getDocument, disabled, label = "Print" }: PrintBut
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error("PDF generation failed", err);
+      toast.error("Failed to generate PDF. Please try again.");
     } finally {
       setIsGenerating(false);
     }

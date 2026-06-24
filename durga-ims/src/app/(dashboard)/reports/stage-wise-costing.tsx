@@ -200,10 +200,10 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
           {/* Actions */}
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadCsv} disabled={!hasData}>
-              Export CSV ({activeRows.length})
+              Export CSV
             </Button>
             <PrintButton
-              label={`Print (${activeRows.length})`}
+              label="Print"
               disabled={!hasData}
               getDocument={() => (
                 <StageWiseCostingDocument
