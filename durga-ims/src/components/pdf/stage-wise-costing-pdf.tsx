@@ -12,6 +12,7 @@ interface Props {
   fy: string;
   marginPct: number;
   companySetting?: CompanySetting;
+  asOfDate?: string;
 }
 
 function fmt(v: number) {
@@ -26,6 +27,7 @@ export function StageWiseCostingDocument({
   fy,
   marginPct,
   companySetting,
+  asOfDate,
 }: Props) {
   const coName    = companySetting?.company_name ?? COMPANY_NAME;
   const coAddress = companySetting?.address      ?? COMPANY_ADDRESS;
@@ -50,7 +52,7 @@ export function StageWiseCostingDocument({
   })();
 
   return (
-    <Document title={`${isStageWise ? "Stage" : "Material"} Wise Costing — ${vehicleName} — FY ${fy}`}>
+    <Document title={`${isStageWise ? "Stage" : "Material"} Wise Costing — ${vehicleName} — FY ${fy}${asOfDate ? ` — As Of ${asOfDate}` : ""}`}>
       <Page size="A4" style={styles.page}>
         {/* Company header */}
         <View>
@@ -61,7 +63,7 @@ export function StageWiseCostingDocument({
 
         <Text style={[styles.docTypeCentered, { fontSize: 10, marginTop: 4 }]}>{title}</Text>
         <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
-          {`Vehicle: ${vehicleName}   |   FY ${fy}${marginPct !== 0 ? `   |   Margin: ${marginPct}%` : ""}`}
+          {`Vehicle: ${vehicleName}   |   FY ${fy}${marginPct !== 0 ? `   |   Margin: ${marginPct}%` : ""}${asOfDate ? `   |   As Of: ${asOfDate.split("-").reverse().join("/")}` : ""}`}
         </Text>
         <Text style={{ fontSize: 7.5, color: "#9CA3AF", textAlign: "center", marginBottom: 4 }}>
           Amounts exclude tax (GST not included)

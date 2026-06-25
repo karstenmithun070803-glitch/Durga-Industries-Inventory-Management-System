@@ -31,6 +31,10 @@ function fmtAmt(v: number) {
   return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fmtDate(iso: string) {
+  return iso.split("-").reverse().join("/");
+}
+
 type RptType = "stage" | "material";
 
 interface Props {
@@ -43,6 +47,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
   const FY_OPTIONS = buildFYOptions(defaultFY);
   const [fy, setFy] = useState(defaultFY);
   const [vehicleId, setVehicleId] = useState("");
+  const [asOfDate, setAsOfDate] = useState("");
   const [rptType, setRptType] = useState<RptType>("stage");
   const [marginPct, setMarginPct] = useState(0);
   const [stageRows, setStageRows] = useState<StageWiseCostingRow[]>([]);
@@ -65,8 +70,8 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     setIsLoading(true);
     const multiplier = 1 + marginPct / 100;
     Promise.all([
-      getStageWiseCostingData(vehicleId, fy),
-      getMaterialWiseCostingData(vehicleId, fy),
+      getStageWiseCostingData(vehicleId, fy, asOfDate || undefined),
+      getMaterialWiseCostingData(vehicleId, fy, asOfDate || undefined),
     ])
       .then(([sw, mw]) => {
         setStageRows(sw);
@@ -133,7 +138,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `stage-wise-costing-${vehicleLabel.replace(/[^a-z0-9]/gi, "_")}-${fy}.csv`;
+    a.download = `stage-wise-costing-${vehicleLabel.replace(/[^a-z0-9]/gi, "_")}-${fy}${asOfDate ? `-as-of-${asOfDate}` : ""}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -163,6 +168,16 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
             onChange={setVehicleId}
             placeholder="Select vehicle"
             openOnArrowDown
+          />
+        </div>
+
+        <div className="space-y-1 w-36">
+          <label className="text-xs font-medium text-slate-600">As Of Date</label>
+          <Input
+            type="date"
+            value={asOfDate}
+            onChange={(e) => setAsOfDate(e.target.value)}
+            className="h-9 text-sm"
           />
         </div>
 
@@ -210,7 +225,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         </div>
       ) : activeRows.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-          No issued material slips found for {vehicleLabel} in FY {fy}
+          No issued material slips found for {vehicleLabel} in FY {fy}{asOfDate && ` as of ${fmtDate(asOfDate)}`}
         </div>
       ) : (
         <>
@@ -231,6 +246,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                   fy={fy}
                   marginPct={marginPct}
                   companySetting={companySetting}
+                  asOfDate={asOfDate || undefined}
                 />
               )}
             />

@@ -398,10 +398,11 @@ export interface MaterialWiseCostingRow {
   base_amount: number;
 }
 
-export async function getStageWiseCostingData(vehicleId: string, fy: string): Promise<StageWiseCostingRow[]> {
+export async function getStageWiseCostingData(vehicleId: string, fy: string, asOfDate?: string): Promise<StageWiseCostingRow[]> {
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!UUID_REGEX.test(vehicleId)) throw new Error("Invalid vehicleId");
   if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
+  if (asOfDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Invalid asOfDate");
 
   const rows = await db
     .select({
@@ -419,6 +420,7 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string): Pr
         eq(materialIssues.status, "Issued"),
         eq(materialIssues.financial_year, fy),
         eq(materialIssues.issue_type, "NEW"),
+        asOfDate ? lte(materialIssues.issue_date, new Date(asOfDate + "T23:59:59+05:30")) : undefined,
       )
     )
     .groupBy(
@@ -438,10 +440,11 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string): Pr
   }));
 }
 
-export async function getMaterialWiseCostingData(vehicleId: string, fy: string): Promise<MaterialWiseCostingRow[]> {
+export async function getMaterialWiseCostingData(vehicleId: string, fy: string, asOfDate?: string): Promise<MaterialWiseCostingRow[]> {
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!UUID_REGEX.test(vehicleId)) throw new Error("Invalid vehicleId");
   if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
+  if (asOfDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Invalid asOfDate");
 
   // No cache — must reflect latest issued slips
   const rows = await db
@@ -461,6 +464,7 @@ export async function getMaterialWiseCostingData(vehicleId: string, fy: string):
         eq(materialIssues.status, "Issued"),
         eq(materialIssues.financial_year, fy),
         eq(materialIssues.issue_type, "NEW"),
+        asOfDate ? lte(materialIssues.issue_date, new Date(asOfDate + "T23:59:59+05:30")) : undefined,
       )
     )
     .groupBy(materials.id, materials.material_no, materials.name)
