@@ -69,7 +69,7 @@ export const getStagesWithMaterials = unstable_cache(
         unit_name: units.unit_name,
       })
       .from(stageMaterials)
-      .innerJoin(materials, eq(stageMaterials.material_id, materials.id))
+      .innerJoin(materials, and(eq(stageMaterials.material_id, materials.id), eq(materials.is_active, true)))
       .innerJoin(units, eq(stageMaterials.unit_id, units.id));
 
     return stagesData.map((stage) => ({
@@ -249,10 +249,15 @@ export async function deleteStage(id: string): Promise<{ draftCount: number }> {
     .from(materialIssues)
     .where(and(eq(materialIssues.stage_id, id), eq(materialIssues.status, "Draft")));
 
+  if (draftCount > 0)
+    throw new Error(
+      `Stage has ${draftCount} Draft issue slip${draftCount === 1 ? "" : "s"} — complete or delete those slips before deactivating this stage.`
+    );
+
   await db.update(stages).set({ is_active: false }).where(eq(stages.id, id));
   revalidateTag(CACHE_TAGS.stages);
 
-  return { draftCount };
+  return { draftCount: 0 };
 }
 
 export async function reactivateStage(id: string): Promise<void> {

@@ -32,6 +32,7 @@ export async function updateUnit(id: string, name: string) {
   if (!name.trim()) throw new Error("Unit name is required");
   await db.update(units).set({ unit_name: name.trim().toUpperCase() }).where(eq(units.id, id));
   revalidateTag(CACHE_TAGS.units);
+  revalidateTag(CACHE_TAGS.stages);
 }
 
 export async function deleteUnit(id: string) {

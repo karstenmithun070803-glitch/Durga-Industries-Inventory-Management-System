@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { pdf } from "@react-pdf/renderer";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
@@ -15,9 +15,11 @@ interface PrintButtonProps {
 
 export function PrintButton({ getDocument, disabled, label = "Print" }: PrintButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const isGeneratingRef = useRef(false);
 
   async function handlePrint() {
-    if (isGenerating) return;
+    if (isGeneratingRef.current) return;
+    isGeneratingRef.current = true;
     setIsGenerating(true);
     try {
       const doc = getDocument();
@@ -29,6 +31,7 @@ export function PrintButton({ getDocument, disabled, label = "Print" }: PrintBut
       console.error("PDF generation failed", err);
       toast.error("Failed to generate PDF. Please try again.");
     } finally {
+      isGeneratingRef.current = false;
       setIsGenerating(false);
     }
   }

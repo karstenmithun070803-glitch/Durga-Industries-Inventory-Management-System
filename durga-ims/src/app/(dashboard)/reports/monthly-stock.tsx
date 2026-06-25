@@ -93,7 +93,10 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
 
   // Auto-run on mount and whenever filters change
   useEffect(() => {
-    if (fromMonth > toMonth) return;
+    if (fromMonth > toMonth) {
+      toast.error("From month cannot be after To month.");
+      return;
+    }
     const gen = ++fetchGenRef.current;
     const t = setTimeout(() => {
       if (gen !== fetchGenRef.current) return;
@@ -338,7 +341,10 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                           </td>
                         </>
                       )}
-                      <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-900">
+                      <td className={cn(
+                        "px-3 py-1.5 whitespace-nowrap text-right font-semibold",
+                        r.closing_stock < 0 ? "text-rose-600" : "text-slate-900"
+                      )}>
                         {fmtQty(r.closing_stock)}
                       </td>
                       {showPrices && (

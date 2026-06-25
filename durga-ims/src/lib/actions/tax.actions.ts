@@ -43,7 +43,7 @@ export async function createTaxRate(data: {
 }) {
   if (!data.tax_percentage) throw new Error("Tax percentage is required");
   const pct = parseFloat(data.tax_percentage);
-  if (isNaN(pct) || pct < 0) throw new Error("Enter a valid tax percentage");
+  if (isNaN(pct) || pct < 0 || pct > 100) throw new Error("Enter a valid tax percentage (0–100)");
   const description = pct === 0 ? "Exempt (0%)" : `GST ${pct}%`;
   const prefix = data.inv_prefix?.trim() || null;
   if (prefix) await checkInvPrefixUnique(prefix);

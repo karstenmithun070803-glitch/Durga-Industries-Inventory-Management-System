@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { createMaterial, updateMaterial, deleteMaterial, reactivateMaterial } fr
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Material, TaxRate, Unit } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { BulkImportDialog } from "@/components/masters/bulk-import-dialog";
 
@@ -34,18 +35,34 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef<typeof EMPTY>(EMPTY);
 
+  const router = useRouter();
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [router]);
+
+  const isDuplicateName = form.name.trim() !== "" &&
+    materials.some((m) =>
+      m.name.toLowerCase() === form.name.trim().toLowerCase() &&
+      m.id !== editing?.id
+    );
+
   const inactive = materials.filter((m) => !m.is_active);
   const activeUnits = units.filter((u) => u.is_active);
   const activeTaxRates = taxRates.filter((t) => t.is_active);
 
-  const visible = materials.filter((m) => showInactive ? !m.is_active : m.is_active).filter((m) => {
-    const q = search.toLowerCase();
-    return (
-      m.name.toLowerCase().includes(q) ||
-      (m.hsn_code ?? "").includes(q) ||
-      matchesCode(search, "M", m.material_no)
-    );
-  });
+  const visible = useMemo(() =>
+    materials.filter((m) => showInactive ? !m.is_active : m.is_active).filter((m) => {
+      const q = search.toLowerCase();
+      return (
+        m.name.toLowerCase().includes(q) ||
+        (m.hsn_code ?? "").includes(q) ||
+        matchesCode(search, "M", m.material_no)
+      );
+    }),
+    [materials, search, showInactive]
+  );
 
   function startEdit(m: Material) {
     setEditing(m);
@@ -104,6 +121,9 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Material Name *</label>
               <Input ref={firstFieldRef} placeholder="e.g. 25*3MM ANGLE" value={form.name} onChange={(e) => set("name", e.target.value)} />
+              {isDuplicateName && (
+                <p className="text-xs text-red-500 mt-0.5">A material named "{form.name.trim().toUpperCase()}" already exists.</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">HSN Code</label>
@@ -133,12 +153,12 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
               {!editing && (
                 <div className="space-y-1.5">
                   <label className="text-xs text-slate-500">Opening Stock</label>
-                  <Input type="number" value={form.opening_stock} onChange={(e) => set("opening_stock", e.target.value)} />
+                  <Input type="number" min="0" step="any" value={form.opening_stock} onChange={(e) => set("opening_stock", e.target.value)} />
                 </div>
               )}
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-500">Min Level</label>
-                <Input type="number" value={form.min_level} onChange={(e) => set("min_level", e.target.value)} />
+                <Input type="number" min="0" step="any" value={form.min_level} onChange={(e) => set("min_level", e.target.value)} />
               </div>
             </div>
             {editing && (
@@ -148,7 +168,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
               </div>
             )}
             <div className="flex gap-2 pt-1">
-              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
+              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending || isDuplicateName || !form.name.trim()} className="flex-1">{editing ? "Update" : "Add"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}
             </div>
             {editing && (
@@ -192,8 +212,8 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
               </Button>
             </div>
             <div className="overflow-auto flex-1">
-              <table className="min-w-max text-sm">
-                <thead className="bg-slate-700 text-white sticky top-0">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-700 text-white">
                   <tr>
                     <th className="px-3 py-1.5 text-left font-medium whitespace-nowrap sticky left-0 z-20 bg-slate-700 w-12">S.No</th>
                     <th className="px-3 py-1.5 text-left font-medium whitespace-nowrap sticky left-12 z-20 bg-slate-700 w-28">Material Code</th>

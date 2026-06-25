@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { createContractor, updateContractor, deleteContractor, reactivateContrac
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Contractor } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -29,15 +30,25 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef({ name: "", role: "", contact: "" });
 
+  const router = useRouter();
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [router]);
+
   const inactive = contractors.filter((c) => !c.is_active);
-  const visible = contractors.filter((c) => showInactive ? !c.is_active : c.is_active).filter((c) => {
-    const q = search.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      (c.role ?? "").toLowerCase().includes(q) ||
-      matchesCode(search, "CON", c.code_no, 2)
-    );
-  });
+  const visible = useMemo(() =>
+    contractors.filter((c) => showInactive ? !c.is_active : c.is_active).filter((c) => {
+      const q = search.toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (c.role ?? "").toLowerCase().includes(q) ||
+        matchesCode(search, "CON", c.code_no, 2)
+      );
+    }),
+    [contractors, search, showInactive]
+  );
 
   function startEdit(c: Contractor) {
     setEditing(c);
@@ -147,7 +158,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="bg-slate-700 text-white sticky top-0">
+                <thead className="bg-slate-700 text-white">
                   <tr>
                     {["S.No", "Contractor Code", "Contractor Name", "Role", "Contact"].map((h) => (
                       <th key={h} className="px-4 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>

@@ -290,7 +290,12 @@ export async function getMonthlyStockReport(params: {
     })
     .from(purchaseOrderItems)
     .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
-    .where(eq(purchaseOrders.status, "Received"))
+    .where(
+      and(
+        eq(purchaseOrders.status, "Received"),
+        lte(purchaseOrders.po_date, to),
+      )
+    )
     .orderBy(desc(purchaseOrders.po_date));
 
   const rateMap = new Map<string, number>();
@@ -420,6 +425,7 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string, asO
         eq(materialIssues.status, "Issued"),
         eq(materialIssues.financial_year, fy),
         eq(materialIssues.issue_type, "NEW"),
+        eq(materialIssueItems.affects_inventory, true),
         asOfDate ? lte(materialIssues.issue_date, new Date(asOfDate + "T23:59:59+05:30")) : undefined,
       )
     )
@@ -464,6 +470,7 @@ export async function getMaterialWiseCostingData(vehicleId: string, fy: string, 
         eq(materialIssues.status, "Issued"),
         eq(materialIssues.financial_year, fy),
         eq(materialIssues.issue_type, "NEW"),
+        eq(materialIssueItems.affects_inventory, true),
         asOfDate ? lte(materialIssues.issue_date, new Date(asOfDate + "T23:59:59+05:30")) : undefined,
       )
     )
@@ -532,11 +539,12 @@ export async function getVehicleComparisonData(
       FROM material_issue_items mii
       JOIN material_issues mi ON mi.id = mii.issue_id
       JOIN materials m ON m.id = mii.material_id
-      LEFT JOIN stages s ON s.id = mi.stage_id
+      LEFT JOIN stages s ON s.id = mii.stage_id
       WHERE mi.vehicle_id = ${v1Id}::uuid
         AND mi.status = 'Issued'
         AND mi.financial_year = ${fy}
-        AND (${stageParam}::uuid IS NULL OR mi.stage_id = ${stageParam}::uuid)
+        AND mii.affects_inventory = true
+        AND (${stageParam}::uuid IS NULL OR mii.stage_id = ${stageParam}::uuid)
       GROUP BY m.id, m.material_no, m.name, s.id, s.stage_name
     ),
     v2 AS (
@@ -549,11 +557,12 @@ export async function getVehicleComparisonData(
       FROM material_issue_items mii
       JOIN material_issues mi ON mi.id = mii.issue_id
       JOIN materials m ON m.id = mii.material_id
-      LEFT JOIN stages s ON s.id = mi.stage_id
+      LEFT JOIN stages s ON s.id = mii.stage_id
       WHERE mi.vehicle_id = ${v2Id}::uuid
         AND mi.status = 'Issued'
         AND mi.financial_year = ${fy}
-        AND (${stageParam}::uuid IS NULL OR mi.stage_id = ${stageParam}::uuid)
+        AND mii.affects_inventory = true
+        AND (${stageParam}::uuid IS NULL OR mii.stage_id = ${stageParam}::uuid)
       GROUP BY m.id, m.material_no, m.name, s.id, s.stage_name
     )
     SELECT

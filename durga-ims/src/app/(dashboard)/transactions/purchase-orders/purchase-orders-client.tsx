@@ -556,6 +556,7 @@ export function PurchaseOrdersClient({
   function handleFilterSupplierChange(val: string) {
     if (val !== "") {
       setFilterSupplier(val);
+      setIsListOpen(true);
       return;
     }
     if (loadedPO) {
@@ -702,7 +703,7 @@ export function PurchaseOrdersClient({
               <div className="flex flex-wrap items-end gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 uppercase tracking-wide">Supplier</label>
-                  <div className="w-64" onClick={() => setIsListOpen(true)}>
+                  <div className="w-64">
                     <Combobox
                       options={supplierFilterOptions}
                       value={filterSupplier}

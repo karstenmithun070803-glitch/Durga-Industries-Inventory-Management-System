@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PrintButton } from "@/components/pdf/print-button";
-import dynamic from "next/dynamic";
+import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
 import type { InsuranceBillWithItems } from "@/types";
 import {
   saveInsuranceBill,
@@ -20,11 +20,6 @@ import {
 } from "@/lib/actions/invoices.actions";
 import { insuranceBillToInvoiceRows } from "@/lib/utils/insurance-pdf-adapter";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
-
-const InsuranceInvoiceDocument = dynamic(
-  () => import("@/components/pdf/insurance-invoice-pdf").then((m) => ({ default: m.InsuranceInvoiceDocument })),
-  { ssr: false }
-);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -309,6 +304,11 @@ export function InsuranceForm({
   // ── Actions ───────────────────────────────────────────────────────────────
   async function handleSave() {
     if (isSavingRef.current) return;
+    const filledRows = rows.filter(r => r.material_id || r.material_name_override);
+    if (filledRows.length === 0) {
+      toast.error("Add at least one material item.");
+      return;
+    }
     isSavingRef.current = true;
     setIsSaving(true);
     try {
@@ -325,6 +325,11 @@ export function InsuranceForm({
 
   async function handleFinalize() {
     if (isSavingRef.current) return;
+    const filledRows = rows.filter(r => r.material_id || r.material_name_override);
+    if (filledRows.length === 0) {
+      toast.error("Add at least one material item.");
+      return;
+    }
     isSavingRef.current = true;
     setIsSaving(true);
     try {

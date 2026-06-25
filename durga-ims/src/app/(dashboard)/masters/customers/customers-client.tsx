@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { INDIAN_STATES } from "@/lib/constants";
 import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Customer } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -33,16 +34,32 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef<typeof EMPTY>(EMPTY);
 
-  const inactive = customers.filter((c) => !c.is_active);
-  const visible = customers.filter((c) => showInactive ? !c.is_active : c.is_active).filter((c) => {
-    const s = search.toLowerCase();
-    return (
-      c.customer_name.toLowerCase().includes(s) ||
-      (c.city ?? "").toLowerCase().includes(s) ||
-      (c.gstin ?? "").toLowerCase().includes(s) ||
-      matchesCode(search, "C", c.customer_no)
+  const router = useRouter();
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [router]);
+
+  const isDuplicateName = form.customer_name.trim() !== "" &&
+    customers.some((c) =>
+      c.customer_name.toLowerCase() === form.customer_name.trim().toLowerCase() &&
+      c.id !== editing?.id
     );
-  });
+
+  const inactive = customers.filter((c) => !c.is_active);
+  const visible = useMemo(() =>
+    customers.filter((c) => showInactive ? !c.is_active : c.is_active).filter((c) => {
+      const s = search.toLowerCase();
+      return (
+        c.customer_name.toLowerCase().includes(s) ||
+        (c.city ?? "").toLowerCase().includes(s) ||
+        (c.gstin ?? "").toLowerCase().includes(s) ||
+        matchesCode(search, "C", c.customer_no)
+      );
+    }),
+    [customers, search, showInactive]
+  );
 
   function startEdit(c: Customer) {
     setEditing(c);
@@ -101,6 +118,9 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Customer Name *</label>
               <Input ref={firstFieldRef} placeholder="Full name" value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
+              {isDuplicateName && (
+                <p className="text-xs text-red-500 mt-0.5">A customer named "{form.customer_name.trim()}" already exists.</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Address Line 1</label>
@@ -139,7 +159,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
               />
             </div>
             <div className="flex gap-2 pt-1">
-              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
+              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending || isDuplicateName || !form.customer_name.trim()} className="flex-1">{editing ? "Update" : "Add"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}
             </div>
             {editing && (
@@ -183,8 +203,8 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
               </Button>
             </div>
             <div className="overflow-auto flex-1">
-              <table className="min-w-max text-sm">
-                <thead className="bg-slate-700 text-white sticky top-0">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-700 text-white">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium whitespace-nowrap sticky left-0 z-20 bg-slate-700 w-12">S.No</th>
                     <th className="px-3 py-2 text-left font-medium whitespace-nowrap sticky left-12 z-20 bg-slate-700 w-28">Customer Code</th>

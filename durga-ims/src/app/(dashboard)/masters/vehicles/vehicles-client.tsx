@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { createVehicle, updateVehicle, deleteVehicle, reactivateVehicle, bulkImp
 import { formatCode } from "@/lib/utils";
 import type { Customer } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -36,15 +37,25 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef<typeof EMPTY>(EMPTY);
 
+  const router = useRouter();
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [router]);
+
   const inactive = vehicles.filter((v) => !v.is_active);
-  const visible = vehicles.filter((v) => showInactive ? !v.is_active : v.is_active).filter((v) => {
-    const q = search.toLowerCase();
-    return (
-      (v.vehicle_name ?? "").toLowerCase().includes(q) ||
-      (v.customer_name ?? "").toLowerCase().includes(q) ||
-      (v.job_ref_no ?? "").toLowerCase().includes(q)
-    );
-  });
+  const visible = useMemo(() =>
+    vehicles.filter((v) => showInactive ? !v.is_active : v.is_active).filter((v) => {
+      const q = search.toLowerCase();
+      return (
+        (v.vehicle_name ?? "").toLowerCase().includes(q) ||
+        (v.customer_name ?? "").toLowerCase().includes(q) ||
+        (v.job_ref_no ?? "").toLowerCase().includes(q)
+      );
+    }),
+    [vehicles, search, showInactive]
+  );
 
   function startEdit(v: VehicleRow) {
     setEditing(v);
@@ -137,6 +148,9 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                 placeholder="Select customer..."
                 searchPlaceholder="Search by name or C001..."
               />
+              {editing && form.customer_id !== editing.customer_id && (
+                <p className="text-xs text-amber-600 mt-0.5">Changing the customer only affects future issue slips. Historical records are preserved.</p>
+              )}
             </div>
             <div className="flex gap-2 pt-1">
               <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
@@ -184,7 +198,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="bg-slate-700 text-white sticky top-0">
+                <thead className="bg-slate-700 text-white">
                   <tr>
                     {["S.No", "Job No.", "Vehicle Name", "Type", "Customer"].map((h) => (
                       <th key={h} className="px-4 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>

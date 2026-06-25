@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { createTaxRate, updateTaxRate, deleteTaxRate, reactivateTaxRate } from "
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { TaxRate } from "@/types";
 import { RotateCcw, UserX } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
@@ -27,15 +28,25 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef({ tax_percentage: "" });
 
+  const router = useRouter();
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [router]);
+
   const inactive = taxRates.filter((t) => !t.is_active);
-  const visible = taxRates.filter((t) => showInactive ? !t.is_active : t.is_active).filter((t) => {
-    const q = search.toLowerCase();
-    return (
-      t.description.toLowerCase().includes(q) ||
-      t.tax_percentage.toString().includes(q) ||
-      matchesCode(search, "T", t.vat_code, 2)
-    );
-  });
+  const visible = useMemo(() =>
+    taxRates.filter((t) => showInactive ? !t.is_active : t.is_active).filter((t) => {
+      const q = search.toLowerCase();
+      return (
+        t.description.toLowerCase().includes(q) ||
+        t.tax_percentage.toString().includes(q) ||
+        matchesCode(search, "T", t.vat_code, 2)
+      );
+    }),
+    [taxRates, search, showInactive]
+  );
 
   function startEdit(t: TaxRate) {
     setEditing(t);
@@ -147,7 +158,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="bg-slate-700 text-white sticky top-0">
+                <thead className="bg-slate-700 text-white">
                   <tr>
                     {["S.No", "Tax Code", "Tax %"].map((h) => (
                       <th key={h} className="px-4 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>

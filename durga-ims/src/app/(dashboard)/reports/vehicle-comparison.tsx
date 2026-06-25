@@ -68,6 +68,10 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
 
   function runCompare() {
     if (!v1Id || !v2Id) return;
+    if (v1Id === v2Id) {
+      toast.error("Please select two different vehicles to compare.");
+      return;
+    }
     setIsLoading(true);
     getVehicleComparisonData(v1Id, v2Id, fy, stageId || null)
       .then((rows) => { setAllRows(rows); setHasRun(true); })
@@ -103,7 +107,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
     URL.revokeObjectURL(url);
   }
 
-  const canCompare = !!v1Id && !!v2Id;
+  const canCompare = !!v1Id && !!v2Id && v1Id !== v2Id;
   const hasData = displayRows.length > 0;
 
   return (
@@ -190,6 +194,14 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
         </div>
       ) : (
         <>
+          {/* Vehicle labels */}
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <span className="font-medium text-slate-700">{v1Label}</span>
+            <span className="text-slate-300">vs</span>
+            <span className="font-medium text-slate-700">{v2Label}</span>
+            <span className="text-slate-400 ml-1">— FY {fy}</span>
+          </div>
+
           {/* Actions */}
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={downloadCsv} disabled={!hasData}>

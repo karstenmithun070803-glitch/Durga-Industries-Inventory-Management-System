@@ -145,8 +145,14 @@ export async function bulkImportVehicles(
   const existing = await db.select({ job_ref_no: vehicles.job_ref_no }).from(vehicles);
   const existingRefs = new Set(existing.map((v) => v.job_ref_no.toUpperCase()));
 
-  const toInsert = rows.filter((r) => !existingRefs.has(r.job_ref_no.toUpperCase()));
-  const skipped = rows.length - toInsert.length;
+  let skipped = 0;
+  const batchSeen = new Set<string>();
+  const toInsert = rows.filter((r) => {
+    const key = r.job_ref_no.toUpperCase();
+    if (existingRefs.has(key) || batchSeen.has(key)) { skipped++; return false; }
+    batchSeen.add(key);
+    return true;
+  });
 
   if (toInsert.length === 0) return { imported: 0, skipped };
 

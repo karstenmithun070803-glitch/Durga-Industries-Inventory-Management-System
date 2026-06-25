@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { INDIAN_STATES } from "@/lib/constants";
 import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Supplier } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -34,16 +35,32 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef<typeof EMPTY>(EMPTY);
 
-  const inactive = suppliers.filter((s) => !s.is_active);
-  const visible = suppliers.filter((s) => showInactive ? !s.is_active : s.is_active).filter((s) => {
-    const q = search.toLowerCase();
-    return (
-      s.name.toLowerCase().includes(q) ||
-      (s.gstin ?? "").toLowerCase().includes(q) ||
-      (s.state ?? "").toLowerCase().includes(q) ||
-      matchesCode(search, "S", s.code_no)
+  const router = useRouter();
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [router]);
+
+  const isDuplicateName = form.name.trim() !== "" &&
+    suppliers.some((s) =>
+      s.name.toLowerCase() === form.name.trim().toLowerCase() &&
+      s.id !== editing?.id
     );
-  });
+
+  const inactive = suppliers.filter((s) => !s.is_active);
+  const visible = useMemo(() =>
+    suppliers.filter((s) => showInactive ? !s.is_active : s.is_active).filter((s) => {
+      const q = search.toLowerCase();
+      return (
+        s.name.toLowerCase().includes(q) ||
+        (s.gstin ?? "").toLowerCase().includes(q) ||
+        (s.state ?? "").toLowerCase().includes(q) ||
+        matchesCode(search, "S", s.code_no)
+      );
+    }),
+    [suppliers, search, showInactive]
+  );
 
   function startEdit(s: Supplier) {
     setEditing(s);
@@ -99,15 +116,17 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
         formPanel={
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Supplier" : "Add Supplier"}</p>
-            {[
-              { label: "Supplier Name *", key: "name", placeholder: "Company name" },
-              { label: "Address", key: "address", placeholder: "Full address" },
-            ].map(({ label, key, placeholder }) => (
-              <div key={key} className="space-y-1.5">
-                <label className="text-xs text-slate-500">{label}</label>
-                <Input ref={key === "name" ? firstFieldRef : undefined} placeholder={placeholder} value={form[key as keyof typeof form]} onChange={(e) => set(key, e.target.value)} />
-              </div>
-            ))}
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Supplier Name *</label>
+              <Input ref={firstFieldRef} placeholder="Company name" value={form.name} onChange={(e) => set("name", e.target.value)} />
+              {isDuplicateName && (
+                <p className="text-xs text-red-500 mt-0.5">A supplier named "{form.name.trim()}" already exists.</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Address</label>
+              <Input placeholder="Full address" value={form.address} onChange={(e) => set("address", e.target.value)} />
+            </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">GSTIN</label>
               <Input
@@ -127,7 +146,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
               <Combobox options={INDIAN_STATES.map((s) => ({ value: s, label: s }))} value={form.state} onChange={(v) => set("state", v)} placeholder="Select state..." searchPlaceholder="Search states..." />
             </div>
             <div className="flex gap-2 pt-1">
-              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
+              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending || isDuplicateName || !form.name.trim()} className="flex-1">{editing ? "Update" : "Add"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}
             </div>
             {editing && (
@@ -171,8 +190,8 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
               </Button>
             </div>
             <div className="overflow-auto flex-1">
-              <table className="min-w-max text-sm">
-                <thead className="bg-slate-700 text-white sticky top-0">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-700 text-white">
                   <tr>
                     <th className="px-3 py-1.5 text-left font-medium whitespace-nowrap sticky left-0 z-20 bg-slate-700 w-12">S.No</th>
                     <th className="px-3 py-1.5 text-left font-medium whitespace-nowrap sticky left-12 z-20 bg-slate-700 w-28">Supplier Code</th>

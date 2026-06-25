@@ -4,7 +4,7 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { customers, vehicles } from "@/lib/db/schema";
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, ilike, ne } from "drizzle-orm";
 
 // ─── Reads (cached) ──────────────────────────────────────────────────────────
 
@@ -32,6 +32,10 @@ export async function createCustomer(data: {
   gstin?: string;
 }) {
   if (!data.customer_name.trim()) throw new Error("Customer name is required");
+  const [dup] = await db.select({ id: customers.id }).from(customers)
+    .where(ilike(customers.customer_name, data.customer_name.trim()));
+  if (dup) throw new Error(`A customer named "${data.customer_name.trim()}" already exists.`);
+
   await db.insert(customers).values({
     customer_name: data.customer_name.trim(),
     address_1: data.address_1?.trim() || null,
@@ -53,6 +57,11 @@ export async function updateCustomer(id: string, data: {
   state?: string;
   gstin?: string;
 }) {
+  if (!data.customer_name.trim()) throw new Error("Customer name is required");
+  const [dup] = await db.select({ id: customers.id }).from(customers)
+    .where(and(ilike(customers.customer_name, data.customer_name.trim()), ne(customers.id, id)));
+  if (dup) throw new Error(`A customer named "${data.customer_name.trim()}" already exists.`);
+
   await db.update(customers).set({
     customer_name: data.customer_name.trim(),
     address_1: data.address_1?.trim() || null,
@@ -63,6 +72,7 @@ export async function updateCustomer(id: string, data: {
     gstin: data.gstin?.trim().toUpperCase() || null,
   }).where(eq(customers.id, id));
   revalidateTag(CACHE_TAGS.customers);
+  revalidateTag(CACHE_TAGS.vehicles);
 }
 
 export async function deleteCustomer(id: string) {
@@ -79,11 +89,13 @@ export async function deleteCustomer(id: string) {
 
   await db.update(customers).set({ is_active: false }).where(eq(customers.id, id));
   revalidateTag(CACHE_TAGS.customers);
+  revalidateTag(CACHE_TAGS.vehicles);
 }
 
 export async function reactivateCustomer(id: string) {
   await db.update(customers).set({ is_active: true }).where(eq(customers.id, id));
   revalidateTag(CACHE_TAGS.customers);
+  revalidateTag(CACHE_TAGS.vehicles);
 }
 
 export async function bulkImportCustomers(
@@ -102,8 +114,14 @@ export async function bulkImportCustomers(
   const existing = await db.select({ customer_name: customers.customer_name }).from(customers);
   const existingNames = new Set(existing.map((c) => c.customer_name.toUpperCase()));
 
-  const toInsert = rows.filter((r) => !existingNames.has(r.customer_name.toUpperCase()));
-  const skipped = rows.length - toInsert.length;
+  let skipped = 0;
+  const batchSeen = new Set<string>();
+  const toInsert = rows.filter((r) => {
+    const key = r.customer_name.toUpperCase();
+    if (existingNames.has(key) || batchSeen.has(key)) { skipped++; return false; }
+    batchSeen.add(key);
+    return true;
+  });
 
   if (toInsert.length === 0) return { imported: 0, skipped };
 

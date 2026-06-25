@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { createUnit, updateUnit, deleteUnit, reactivateUnit } from "@/lib/action
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Unit } from "@/types";
 import { RotateCcw, UserX } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export function UnitsClient({ units }: { units: Unit[] }) {
@@ -27,10 +28,20 @@ export function UnitsClient({ units }: { units: Unit[] }) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalNameRef = useRef("");
 
+  const router = useRouter();
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [router]);
+
   const inactive = units.filter((u) => !u.is_active);
-  const visible = units.filter((u) => showInactive ? !u.is_active : u.is_active).filter((u) =>
-    u.unit_name.toLowerCase().includes(search.toLowerCase()) ||
-    matchesCode(search, "U", u.unit_code, 2)
+  const visible = useMemo(() =>
+    units.filter((u) => showInactive ? !u.is_active : u.is_active).filter((u) =>
+      u.unit_name.toLowerCase().includes(search.toLowerCase()) ||
+      matchesCode(search, "U", u.unit_code, 2)
+    ),
+    [units, search, showInactive]
   );
 
   function startEdit(unit: Unit) { setEditing(unit); setFocusedIdx(-1); setName(unit.unit_name); originalNameRef.current = unit.unit_name; }
@@ -127,17 +138,16 @@ export function UnitsClient({ units }: { units: Unit[] }) {
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="bg-slate-700 text-white sticky top-0">
+                <thead className="bg-slate-700 text-white">
                   <tr>
                     <th className="px-4 py-1.5 text-left font-medium w-16">S.No</th>
                     <th className="px-4 py-1.5 text-left font-medium w-28">Unit Code</th>
                     <th className="px-4 py-1.5 text-left font-medium">Unit Name</th>
-                    <th className="px-4 py-1.5 text-left font-medium w-28"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400 text-sm">No units found</td></tr>
+                    <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400 text-sm">No units found</td></tr>
                   )}
                   {visible.map((unit, i) => (
                     <tr
@@ -148,7 +158,6 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                       <td className="px-4 py-1.5 text-slate-500">{i + 1}</td>
                       <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{formatCode("U", unit.unit_code, 2)}</td>
                       <td className="px-4 py-1.5 font-medium text-slate-800">{unit.unit_name}</td>
-                      <td></td>
                     </tr>
                   ))}
                 </tbody>

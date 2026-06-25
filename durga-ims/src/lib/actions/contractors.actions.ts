@@ -87,8 +87,14 @@ export async function bulkImportContractors(
   const existing = await db.select({ name: contractors.name }).from(contractors);
   const existingNames = new Set(existing.map((c) => c.name.toUpperCase()));
 
-  const toInsert = rows.filter((r) => !existingNames.has(r.name.toUpperCase()));
-  const skipped = rows.length - toInsert.length;
+  let skipped = 0;
+  const batchSeen = new Set<string>();
+  const toInsert = rows.filter((r) => {
+    const key = r.name.toUpperCase();
+    if (existingNames.has(key) || batchSeen.has(key)) { skipped++; return false; }
+    batchSeen.add(key);
+    return true;
+  });
 
   if (toInsert.length === 0) return { imported: 0, skipped };
 

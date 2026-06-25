@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/actions/stages.actions";
 import { formatCode } from "@/lib/utils";
 import { Trash2, RotateCcw, Layers } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
@@ -98,14 +99,24 @@ export function StagesClient({ stages, materials, units }: Props) {
     rows: [],
   });
 
+  const router = useRouter();
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [router]);
+
   // ── Derived ───────────────────────────────────────────────────────────────
   const inactive = stages.filter((s) => !s.is_active);
-  const visible = stages
-    .filter((s) => (showInactive ? !s.is_active : s.is_active))
-    .filter((s) => {
-      const q = search.toLowerCase();
-      return s.stage_name.toLowerCase().includes(q) || s.stage_code.toLowerCase().includes(q);
-    });
+  const visible = useMemo(() =>
+    stages
+      .filter((s) => (showInactive ? !s.is_active : s.is_active))
+      .filter((s) => {
+        const q = search.toLowerCase();
+        return s.stage_name.toLowerCase().includes(q) || s.stage_code.toLowerCase().includes(q);
+      }),
+    [stages, search, showInactive]
+  );
 
   const materialOptions = materials.map((m) => ({
     value: m.id,
@@ -520,7 +531,7 @@ export function StagesClient({ stages, materials, units }: Props) {
             {/* Table */}
             <div className="overflow-auto flex-1">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-700 text-white sticky top-0">
+                <thead className="bg-slate-700 text-white">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium w-12">S.No</th>
                     <th className="px-3 py-2 text-left font-medium w-28">Code</th>

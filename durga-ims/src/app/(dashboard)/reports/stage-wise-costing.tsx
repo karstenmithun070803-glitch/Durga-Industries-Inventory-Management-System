@@ -225,7 +225,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         </div>
       ) : activeRows.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-          No issued material slips found for {vehicleLabel} in FY {fy}{asOfDate && ` as of ${fmtDate(asOfDate)}`}
+          No stage-based (VMI New) material slips found for {vehicleLabel} in FY {fy}{asOfDate && ` as of ${fmtDate(asOfDate)}`}
         </div>
       ) : (
         <>

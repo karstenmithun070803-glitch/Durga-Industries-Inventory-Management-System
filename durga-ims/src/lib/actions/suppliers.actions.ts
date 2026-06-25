@@ -4,7 +4,7 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { suppliers, purchaseOrderItems, purchaseOrders } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ilike, ne } from "drizzle-orm";
 
 // ─── Reads (cached) ──────────────────────────────────────────────────────────
 
@@ -31,6 +31,10 @@ export async function createSupplier(data: {
   state?: string;
 }) {
   if (!data.name.trim()) throw new Error("Supplier name is required");
+  const [dup] = await db.select({ id: suppliers.id }).from(suppliers)
+    .where(ilike(suppliers.name, data.name.trim()));
+  if (dup) throw new Error(`A supplier named "${data.name.trim()}" already exists.`);
+
   await db.insert(suppliers).values({
     name: data.name.trim(),
     tin_no: data.tin_no?.trim() || null,
@@ -50,6 +54,11 @@ export async function updateSupplier(id: string, data: {
   address?: string;
   state?: string;
 }) {
+  if (!data.name.trim()) throw new Error("Supplier name is required");
+  const [dup] = await db.select({ id: suppliers.id }).from(suppliers)
+    .where(and(ilike(suppliers.name, data.name.trim()), ne(suppliers.id, id)));
+  if (dup) throw new Error(`A supplier named "${data.name.trim()}" already exists.`);
+
   await db.update(suppliers).set({
     name: data.name.trim(),
     tin_no: data.tin_no?.trim() || null,
@@ -100,8 +109,14 @@ export async function bulkImportSuppliers(
   const existing = await db.select({ name: suppliers.name }).from(suppliers);
   const existingNames = new Set(existing.map((s) => s.name.toUpperCase()));
 
-  const toInsert = rows.filter((r) => !existingNames.has(r.name.toUpperCase()));
-  const skipped = rows.length - toInsert.length;
+  let skipped = 0;
+  const batchSeen = new Set<string>();
+  const toInsert = rows.filter((r) => {
+    const key = r.name.toUpperCase();
+    if (existingNames.has(key) || batchSeen.has(key)) { skipped++; return false; }
+    batchSeen.add(key);
+    return true;
+  });
 
   if (toInsert.length === 0) return { imported: 0, skipped };
 

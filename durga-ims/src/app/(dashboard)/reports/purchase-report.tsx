@@ -69,6 +69,10 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   }));
 
   function runReport() {
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      toast.error("From date cannot be after To date.");
+      return;
+    }
     setGroupByMonth(false);
     const gen = ++fetchGenRef.current;
     setIsLoading(true);
@@ -87,6 +91,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
 
   // Auto-run on mount and whenever filters change
   useEffect(() => {
+    if (dateFrom && dateTo && dateFrom > dateTo) return;
     const gen = ++fetchGenRef.current;
     const t = setTimeout(() => {
       if (gen !== fetchGenRef.current) return;

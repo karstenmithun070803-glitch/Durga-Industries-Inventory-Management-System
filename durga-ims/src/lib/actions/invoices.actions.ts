@@ -564,6 +564,10 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
 // ---------------------------------------------------------------------------
 
 export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
   // Validate
   if (!data.vehicle_id) throw new Error("Vehicle is required.");
   validateInvoiceItems(data.items);
@@ -657,6 +661,15 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
 }
 
 export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const [existing] = await db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, id));
+  if (!existing) throw new Error("Invoice not found.");
+  if (existing.status !== INVOICE_STATUS.DRAFT)
+    throw new Error(`Invoice is ${existing.status} — only Draft invoices can be edited.`);
+
   if (!data.vehicle_id) throw new Error("Vehicle is required.");
   validateInvoiceItems(data.items);
 
@@ -737,30 +750,37 @@ export async function updateInvoice(id: string, data: InvoiceHeaderInput): Promi
 }
 
 export async function finalizeInvoice(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const [inv] = await db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, id));
+  if (!inv) throw new Error("Invoice not found.");
+  if (inv.status !== INVOICE_STATUS.DRAFT)
+    throw new Error(`Invoice is ${inv.status} — only Draft invoices can be finalized.`);
+
   await db.update(invoices).set({ status: INVOICE_STATUS.FINALIZED }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
 }
 
 export async function revertInvoiceToDraft(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
   const [inv] = await db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, id));
   if (!inv) throw new Error("Invoice not found.");
   if (inv.status === INVOICE_STATUS.CANCELLED) throw new Error("Cancelled invoices cannot be reverted to Draft.");
-
-  const [finInsurance] = await db
-    .select({ id: invoiceInsurance.id })
-    .from(invoiceInsurance)
-    .where(and(eq(invoiceInsurance.invoice_id, id), eq(invoiceInsurance.status, "Finalized")));
-  if (finInsurance) {
-    throw new Error(
-      "Cannot revert — this invoice has a finalized insurance bill. Revert the insurance bill to Draft first."
-    );
-  }
 
   await db.update(invoices).set({ status: INVOICE_STATUS.DRAFT }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
 }
 
 export async function deleteInvoice(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
   const inv = await db
     .select({ status: invoices.status, bill_number: invoices.bill_number })
     .from(invoices)
@@ -826,6 +846,10 @@ export async function markInvoicePayment(
   id: string,
   data: { payment_status: string; payment_date: string | null; payment_notes: string | null }
 ): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
   const [inv] = await db
     .select({ status: invoices.status, bill_number: invoices.bill_number })
     .from(invoices)

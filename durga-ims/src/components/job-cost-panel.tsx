@@ -8,6 +8,7 @@ import { getJobCostData } from "@/lib/actions/stock.actions";
 import type { VehicleSearchRow, JobCostResult } from "@/lib/actions/stock.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface Props {
   vehicles: VehicleSearchRow[];
@@ -41,9 +42,14 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
     setSelectedVehicleId(vehicleId);
     setResult(null);
     setLoading(true);
-    const data = await getJobCostData(vehicleId);
-    setResult(data);
-    setLoading(false);
+    try {
+      const data = await getJobCostData(vehicleId);
+      setResult(data);
+    } catch {
+      toast.error("Failed to load job cost data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

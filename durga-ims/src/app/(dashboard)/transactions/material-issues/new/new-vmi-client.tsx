@@ -642,12 +642,20 @@ export function NewVMIClient({
 
   function handleCancel() {
     if (isDirty) {
-      setPendingAction(() => () => setBrowseMode(true));
+      setPendingAction(() => () => {
+        setBrowseMode(true);
+        setBrowseVehicleId("");
+        setIsSlipListOpen(false);
+        setBrowseDateFilter("");
+      });
       setDiscardDialogOpen(true);
       return;
     }
     clearForm();
     setBrowseMode(true);
+    setBrowseVehicleId("");
+    setIsSlipListOpen(false);
+    setBrowseDateFilter("");
   }
 
   function confirmDiscard() {

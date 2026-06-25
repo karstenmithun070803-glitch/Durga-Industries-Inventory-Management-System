@@ -578,8 +578,17 @@ export function InvoiceClient({
   // ── Save ──────────────────────────────────────────────────────────────────
   async function handleSave() {
     if (isSavingRef.current) return;
+    if (!isEditable) return;
     if (!isDateInFY(billDate, activeFY)) {
       toast.error(`Bill date is outside FY ${activeFY} (1 Apr – 31 Mar).`);
+      return;
+    }
+    if (!vehicleId) {
+      toast.error("Select a vehicle / job before saving.");
+      return;
+    }
+    if (!rows.some(r => r.material_id)) {
+      toast.error("Add at least one material item.");
       return;
     }
     isSavingRef.current = true;
@@ -624,6 +633,14 @@ export function InvoiceClient({
     if (isSavingRef.current) return;
     if (!isDateInFY(billDate, activeFY)) {
       toast.error(`Bill date is outside FY ${activeFY} (1 Apr – 31 Mar).`);
+      return;
+    }
+    if (!vehicleId) {
+      toast.error("Select a vehicle / job before saving.");
+      return;
+    }
+    if (!rows.some(r => r.material_id)) {
+      toast.error("Add at least one material item.");
       return;
     }
     isSavingRef.current = true;

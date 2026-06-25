@@ -127,7 +127,7 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
                   {r.adjustments !== 0 ? fmtSigned(r.adjustments) : "—"}
                 </Text>
               )}
-              <Text style={[styles.plainTableCellBold, { width: "10%", textAlign: "right" }]}>{fmtQ(r.closing_stock)}</Text>
+              <Text style={[styles.plainTableCellBold, { width: "10%", textAlign: "right", color: r.closing_stock < 0 ? "#DC2626" : undefined }]}>{fmtQ(r.closing_stock)}</Text>
               {showPrices && (
                 <Text style={[styles.plainTableCell, { width: "8%", textAlign: "right" }]}>
                   {effectiveRate !== null ? fmtAmt(String(effectiveRate)) : "—"}
