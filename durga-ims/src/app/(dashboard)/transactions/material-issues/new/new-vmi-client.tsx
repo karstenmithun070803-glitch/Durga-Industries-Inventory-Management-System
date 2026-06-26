@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
@@ -29,12 +29,21 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
-import { formatCode, formatActionError } from "@/lib/utils";
+import { formatCode, formatActionError, cn } from "@/lib/utils";
 
 const todayISO = new Date().toISOString().split("T")[0];
-import { AlertTriangle, Copy } from "lucide-react";
+import { AlertTriangle, Copy, ChevronLeft, ChevronRight, Trash2, ChevronsUpDown, Plus } from "lucide-react";
 import { determineGstType } from "@/types";
 import type { MaterialIssueWithDetails, LineItemDraft, GstType } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
@@ -250,6 +259,8 @@ export function NewVMIClient({
 
   const [vehicleId, setVehicleId] = useState("");
   const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
+  const [activeStageId, setActiveStageId] = useState<string | null>(null);
+  const [stageDropOpen, setStageDropOpen] = useState(false);
   const [loadingStageIds, setLoadingStageIds] = useState<Set<string>>(new Set());
   const [issueDate, setIssueDate] = useState(todayISO);
   const [marginPct, setMarginPct] = useState("0");
@@ -324,6 +335,7 @@ export function NewVMIClient({
     setLoadedSlip(null);
     setVehicleId("");
     setSelectedStageIds([]);
+    setActiveStageId(null);
     setIssueDate(todayISO);
     setMarginPct("0");
     setRows([newRow()]);
@@ -342,6 +354,7 @@ export function NewVMIClient({
       }
     }
     setSelectedStageIds(stageIds);
+    setActiveStageId(stageIds[0] ?? null);
     setIssueDate(toISODate(slip.issue_date));
     setMarginPct(slip.margin_percentage ?? "0");
     setRows(miItemsToRows(slip, slip.margin_percentage ?? "0"));
@@ -413,9 +426,12 @@ export function NewVMIClient({
         setRows((prev) => {
           const cleaned = prev.filter((r) => r.material_id);
           const combined = [...cleaned, ...newRows];
-          return combined.length > 0 ? combined : [newRow()];
+          return combined.length > 0
+            ? combined
+            : [{ ...newRow(), stage_id: stageId, stage_name: stage?.stage_name ?? "" }];
         });
         setSelectedStageIds((prev) => [...prev, stageId]);
+        setActiveStageId(stageId);
         setIsDirty(true);
       } catch {
         toast.error("Failed to load stage materials");
@@ -429,6 +445,89 @@ export function NewVMIClient({
       });
       setSelectedStageIds((prev) => prev.filter((id) => id !== stageId));
       setIsDirty(true);
+    }
+  }
+
+  function navigateStage(dir: -1 | 1) {
+    if (!activeStageId) return;
+    const idx = orderedStageIds.indexOf(activeStageId);
+    const next = idx + dir;
+    if (next >= 0 && next < orderedStageIds.length)
+      setActiveStageId(orderedStageIds[next]);
+  }
+
+  function handleStageNavChange(val: string) {
+    if (!val) return;
+    if (selectedStageIds.includes(val)) {
+      setActiveStageId(val);
+    } else {
+      void handleStageToggle(val, true);
+    }
+  }
+
+  function handleRemoveCurrentStage() {
+    if (!activeStageId) return;
+    const idx = orderedStageIds.indexOf(activeStageId);
+    const remaining = orderedStageIds.filter((id) => id !== activeStageId);
+    const nextId = remaining[idx - 1] ?? remaining[0] ?? null;
+    void handleStageToggle(activeStageId, false);
+    setActiveStageId(nextId);
+  }
+
+  async function handleSelectAllStages() {
+    const unchecked = stages.filter((s) => !selectedStageIds.includes(s.id));
+    if (unchecked.length === 0) return;
+    setLoadingStageIds((prev) => { const s = new Set(prev); unchecked.forEach((st) => s.add(st.id)); return s; });
+    try {
+      const results = await Promise.all(
+        unchecked.map((st) => getStageMaterials(st.id).then((mats) => ({ stage: st, mats })))
+      );
+      const factor = 1 + parseFloat(marginPct || "0") / 100;
+      const newRows: LineItemDraft[] = results.flatMap(({ stage, mats }) =>
+        mats.map((m) => {
+          const baseRate = m.last_po_rate ?? "0";
+          const displayRate = factor > 1 ? (parseFloat(baseRate) * factor).toFixed(4) : baseRate;
+          const taxPct = m.tax_percentage ?? "0";
+          return {
+            _key: crypto.randomUUID(),
+            stage_id: stage.id,
+            stage_name: stage.stage_name,
+            material_id: m.material_id,
+            material_name: m.material_name,
+            material_no: m.material_no,
+            hsn_code: m.hsn_code ?? "",
+            supplier_id: "",
+            supplier_name: "",
+            gst_type: gstType,
+            qty: m.default_qty,
+            unit_id: m.unit_id,
+            unit_name: m.unit_name,
+            rate: displayRate,
+            baseRate: baseRate,
+            tax_percentage: taxPct,
+            rateBlank: m.last_po_rate === null,
+            zeroRateConfirmed: false,
+            contractor_id: "",
+            contractor_name: "",
+            affects_inventory: true,
+            ...computeRowAmounts(m.default_qty, displayRate, taxPct, gstType),
+          };
+        })
+      );
+      setRows((prev) => {
+        const cleaned = prev.filter((r) => r.material_id);
+        const combined = [...cleaned, ...newRows];
+        return combined.length > 0
+          ? combined
+          : [{ ...newRow(), stage_id: unchecked[0].id, stage_name: unchecked[0].stage_name }];
+      });
+      setSelectedStageIds((prev) => [...prev, ...unchecked.map((s) => s.id)]);
+      setActiveStageId((prev) => prev ?? unchecked[0].id);
+      setIsDirty(true);
+    } catch {
+      toast.error("Failed to load stage materials");
+    } finally {
+      setLoadingStageIds((prev) => { const s = new Set(prev); unchecked.forEach((st) => s.delete(st.id)); return s; });
     }
   }
 
@@ -459,6 +558,9 @@ export function NewVMIClient({
     if (val !== "") {
       setVehicleId(val);
       setIsDirty(true);
+      if (!loadedSlip) {
+        void handleSelectAllStages();
+      }
       return;
     }
     if (loadedSlip) {
@@ -711,6 +813,12 @@ export function NewVMIClient({
 
   const isAnyStageLoading = loadingStageIds.size > 0;
 
+  // Stages in master list order — stable navigation regardless of insertion order
+  const orderedStageIds = useMemo(
+    () => stages.filter((s) => selectedStageIds.includes(s.id)).map((s) => s.id),
+    [stages, selectedStageIds]
+  );
+
   const hasNoRate = rows.some((r) => r.rateBlank && r.material_id);
 
   return (
@@ -813,33 +921,103 @@ export function NewVMIClient({
                           </span>
                         )}
                       </div>
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-slate-500 w-28 shrink-0 pt-1">Stages</span>
-                        <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
-                          {stages.length === 0 && <p className="text-xs text-slate-400">No stages configured.</p>}
-                          {stages.map((stage) => {
-                            const isChecked = selectedStageIds.includes(stage.id);
-                            const isThisLoading = loadingStageIds.has(stage.id);
-                            const isIssued = miStatus === "Issued";
-                            return (
-                              <label key={stage.id}
-                                className={`flex items-center gap-2 text-sm select-none ${
-                                  isIssued || isThisLoading ? "opacity-60 cursor-default" : "cursor-pointer"
-                                }`}
-                              >
-                                <input type="checkbox"
-                                  checked={isChecked}
-                                  disabled={isIssued || isThisLoading}
-                                  onChange={(e) => void handleStageToggle(stage.id, e.target.checked)}
-                                  className="h-4 w-4 rounded border-slate-300 shrink-0"
-                                />
-                                <span className="font-mono text-xs text-slate-400 w-12 shrink-0">{stage.stage_code}</span>
-                                <span className="text-slate-700 truncate">{stage.stage_name}</span>
-                                {isThisLoading && <span className="text-xs text-slate-400 shrink-0">loading…</span>}
-                              </label>
-                            );
-                          })}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-500 w-28 shrink-0">Stage</span>
+                        <button
+                          onClick={() => navigateStage(-1)}
+                          disabled={isAnyStageLoading || !activeStageId || orderedStageIds.indexOf(activeStageId) === 0}
+                          className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4 text-slate-600" />
+                        </button>
+                        <Popover open={stageDropOpen} onOpenChange={setStageDropOpen}>
+                          <PopoverTrigger
+                            disabled={isAnyStageLoading}
+                            className="w-52 flex items-center justify-between rounded-md border border-input bg-background px-3 h-9 text-sm hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <span className="truncate text-left text-muted-foreground">
+                              {activeStageId
+                                ? (() => { const s = stages.find((st) => st.id === activeStageId); return s ? `${s.stage_code} — ${s.stage_name}` : "Select stage"; })()
+                                : "Select stage"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </PopoverTrigger>
+                          <PopoverContent className="w-52 p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search stage..." />
+                              <CommandList>
+                                <CommandEmpty>No stages found.</CommandEmpty>
+                                {orderedStageIds.length > 0 && (
+                                  <CommandGroup heading="In this slip">
+                                    {orderedStageIds.map((id) => {
+                                      const s = stages.find((st) => st.id === id);
+                                      if (!s) return null;
+                                      return (
+                                        <CommandItem
+                                          key={id}
+                                          value={`${s.stage_code} ${s.stage_name}`}
+                                          onSelect={() => { handleStageNavChange(id); setStageDropOpen(false); }}
+                                          data-checked={id === activeStageId}
+                                          className={cn(id === activeStageId ? "font-medium" : "")}
+                                        >
+                                          {s.stage_code} — {s.stage_name}
+                                        </CommandItem>
+                                      );
+                                    })}
+                                  </CommandGroup>
+                                )}
+                                {stages.filter((s) => !selectedStageIds.includes(s.id)).length > 0 && (
+                                  <CommandGroup heading="Add stage">
+                                    {stages.filter((s) => !selectedStageIds.includes(s.id)).map((s) => (
+                                      <CommandItem
+                                        key={s.id}
+                                        value={`${s.stage_code} ${s.stage_name}`}
+                                        onSelect={() => { handleStageNavChange(s.id); setStageDropOpen(false); }}
+                                      >
+                                        <Plus className="mr-2 h-4 w-4 opacity-40" />
+                                        {s.stage_code} — {s.stage_name}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <button
+                          onClick={() => navigateStage(1)}
+                          disabled={isAnyStageLoading || !activeStageId || orderedStageIds.indexOf(activeStageId) === orderedStageIds.length - 1}
+                          className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4 text-slate-600" />
+                        </button>
+                        {orderedStageIds.length > 0 && activeStageId && (
+                          <span className="text-xs text-slate-400 tabular-nums shrink-0">
+                            {orderedStageIds.indexOf(activeStageId) + 1} / {orderedStageIds.length}
+                          </span>
+                        )}
+                        {activeStageId && (
+                          <button
+                            onClick={handleRemoveCurrentStage}
+                            disabled={isAnyStageLoading}
+                            title="Remove this stage and its materials"
+                            className="p-1.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 disabled:opacity-30 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {stages.length > 0 && selectedStageIds.length < stages.length && (
+                          <button
+                            onClick={() => void handleSelectAllStages()}
+                            disabled={isAnyStageLoading}
+                            className="text-xs text-slate-400 hover:text-slate-600 shrink-0 transition-colors"
+                          >
+                            Add all
+                          </button>
+                        )}
+                        {isAnyStageLoading && (
+                          <span className="text-xs text-slate-400 shrink-0">loading…</span>
+                        )}
                       </div>
                       <div className="flex flex-wrap items-end gap-4">
                         <div className="space-y-1">
@@ -925,33 +1103,103 @@ export function NewVMIClient({
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3">
-                    <span className="text-sm text-slate-500 w-28 shrink-0 pt-1">Stages</span>
-                    <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
-                      {stages.length === 0 && <p className="text-xs text-slate-400">No stages configured.</p>}
-                      {stages.map((stage) => {
-                        const isChecked = selectedStageIds.includes(stage.id);
-                        const isThisLoading = loadingStageIds.has(stage.id);
-                        const isIssued = miStatus === "Issued";
-                        return (
-                          <label key={stage.id}
-                            className={`flex items-center gap-2 text-sm select-none ${
-                              isIssued || isThisLoading ? "opacity-60 cursor-default" : "cursor-pointer"
-                            }`}
-                          >
-                            <input type="checkbox"
-                              checked={isChecked}
-                              disabled={isIssued || isThisLoading}
-                              onChange={(e) => void handleStageToggle(stage.id, e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-300 shrink-0"
-                            />
-                            <span className="font-mono text-xs text-slate-400 w-12 shrink-0">{stage.stage_code}</span>
-                            <span className="text-slate-700 truncate">{stage.stage_name}</span>
-                            {isThisLoading && <span className="text-xs text-slate-400 shrink-0">loading…</span>}
-                          </label>
-                        );
-                      })}
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500 w-28 shrink-0">Stage</span>
+                    <button
+                      onClick={() => navigateStage(-1)}
+                      disabled={isAnyStageLoading || !activeStageId || orderedStageIds.indexOf(activeStageId) === 0}
+                      className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-slate-600" />
+                    </button>
+                    <Popover open={stageDropOpen} onOpenChange={setStageDropOpen}>
+                      <PopoverTrigger
+                        disabled={isAnyStageLoading}
+                        className="w-52 flex items-center justify-between rounded-md border border-input bg-background px-3 h-9 text-sm hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <span className="truncate text-left text-muted-foreground">
+                          {activeStageId
+                            ? (() => { const s = stages.find((st) => st.id === activeStageId); return s ? `${s.stage_code} — ${s.stage_name}` : "Select stage"; })()
+                            : "Select stage"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </PopoverTrigger>
+                      <PopoverContent className="w-52 p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search stage..." />
+                          <CommandList>
+                            <CommandEmpty>No stages found.</CommandEmpty>
+                            {orderedStageIds.length > 0 && (
+                              <CommandGroup heading="In this slip">
+                                {orderedStageIds.map((id) => {
+                                  const s = stages.find((st) => st.id === id);
+                                  if (!s) return null;
+                                  return (
+                                    <CommandItem
+                                      key={id}
+                                      value={`${s.stage_code} ${s.stage_name}`}
+                                      onSelect={() => { handleStageNavChange(id); setStageDropOpen(false); }}
+                                      data-checked={id === activeStageId}
+                                      className={cn(id === activeStageId ? "font-medium" : "")}
+                                    >
+                                      {s.stage_code} — {s.stage_name}
+                                    </CommandItem>
+                                  );
+                                })}
+                              </CommandGroup>
+                            )}
+                            {stages.filter((s) => !selectedStageIds.includes(s.id)).length > 0 && (
+                              <CommandGroup heading="Add stage">
+                                {stages.filter((s) => !selectedStageIds.includes(s.id)).map((s) => (
+                                  <CommandItem
+                                    key={s.id}
+                                    value={`${s.stage_code} ${s.stage_name}`}
+                                    onSelect={() => { handleStageNavChange(s.id); setStageDropOpen(false); }}
+                                  >
+                                    <Plus className="mr-2 h-4 w-4 opacity-40" />
+                                    {s.stage_code} — {s.stage_name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <button
+                      onClick={() => navigateStage(1)}
+                      disabled={isAnyStageLoading || !activeStageId || orderedStageIds.indexOf(activeStageId) === orderedStageIds.length - 1}
+                      className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4 text-slate-600" />
+                    </button>
+                    {orderedStageIds.length > 0 && activeStageId && (
+                      <span className="text-xs text-slate-400 tabular-nums shrink-0">
+                        {orderedStageIds.indexOf(activeStageId) + 1} / {orderedStageIds.length}
+                      </span>
+                    )}
+                    {activeStageId && (
+                      <button
+                        onClick={handleRemoveCurrentStage}
+                        disabled={isAnyStageLoading}
+                        title="Remove this stage and its materials"
+                        className="p-1.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 disabled:opacity-30 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {stages.length > 0 && selectedStageIds.length < stages.length && (
+                      <button
+                        onClick={() => void handleSelectAllStages()}
+                        disabled={isAnyStageLoading}
+                        className="text-xs text-slate-400 hover:text-slate-600 shrink-0 transition-colors"
+                      >
+                        Add all
+                      </button>
+                    )}
+                    {isAnyStageLoading && (
+                      <span className="text-xs text-slate-400 shrink-0">loading…</span>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-end gap-4">
@@ -1036,12 +1284,27 @@ export function NewVMIClient({
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
             {!hasFormContent && (
               <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-400">
-                Select a vehicle and stages above to pre-populate materials, or add them manually.
+                Select a vehicle above to pre-populate materials, or add them manually.
               </div>
             )}
             <TransactionGrid
-              rows={rows}
-              onChange={(r) => { setRows(r); setIsDirty(true); }}
+              rows={activeStageId !== null ? rows.filter((r) => r.stage_id === activeStageId) : rows}
+              onChange={(updatedRows) => {
+                if (activeStageId !== null) {
+                  const tagged = updatedRows.map((r) =>
+                    r.stage_id
+                      ? r
+                      : { ...r, stage_id: activeStageId, stage_name: stages.find((s) => s.id === activeStageId)?.stage_name ?? "" }
+                  );
+                  setRows((prev) => [
+                    ...prev.filter((r) => r.stage_id !== activeStageId),
+                    ...tagged,
+                  ]);
+                } else {
+                  setRows(updatedRows);
+                }
+                setIsDirty(true);
+              }}
               suppliers={[]}
               materials={materials}
               taxRates={taxRates}
@@ -1049,7 +1312,7 @@ export function NewVMIClient({
               contractors={contractors}
               gstType={gstType}
               mode="material-issue"
-              showStageColumn={true}
+              showStageColumn={false}
             />
           </div>
         )}
