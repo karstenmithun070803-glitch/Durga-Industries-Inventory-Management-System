@@ -233,17 +233,6 @@ export async function saveStage(params: {
 }
 
 export async function deleteStage(id: string): Promise<{ draftCount: number }> {
-  const [{ issuedCount }] = await db
-    .select({ issuedCount: count() })
-    .from(materialIssues)
-    .where(and(eq(materialIssues.stage_id, id), eq(materialIssues.status, "Issued")));
-
-  if (issuedCount > 0) {
-    throw new Error(
-      `Stage used in ${issuedCount} issued slip${issuedCount === 1 ? "" : "s"} — cannot delete`
-    );
-  }
-
   const [{ draftCount }] = await db
     .select({ draftCount: count() })
     .from(materialIssues)
