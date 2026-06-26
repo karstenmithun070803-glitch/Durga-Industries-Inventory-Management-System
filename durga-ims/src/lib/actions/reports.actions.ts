@@ -414,7 +414,7 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string, asO
       slip_number: materialIssues.slip_number,
       code: sql<string>`COALESCE(${stages.stage_code}, 'MANUAL')`,
       name: sql<string>`COALESCE(${stages.stage_name}, 'Manual Entry')`,
-      base_amount: sql<string>`SUM(${materialIssueItems.amount})`,
+      base_amount: sql<string>`SUM(${materialIssueItems.amount} + ${materialIssueItems.cgst_amount} + ${materialIssueItems.sgst_amount} + ${materialIssueItems.igst_amount})`,
     })
     .from(materialIssueItems)
     .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
@@ -458,7 +458,7 @@ export async function getMaterialWiseCostingData(vehicleId: string, fy: string, 
       code: sql<string>`${materials.material_no}::text`,
       name: materials.name,
       stages: sql<string>`STRING_AGG(DISTINCT COALESCE(${stages.stage_name}, 'Direct Issue'), ', ' ORDER BY COALESCE(${stages.stage_name}, 'Direct Issue'))`,
-      base_amount: sql<string>`SUM(${materialIssueItems.amount})`,
+      base_amount: sql<string>`SUM(${materialIssueItems.amount} + ${materialIssueItems.cgst_amount} + ${materialIssueItems.sgst_amount} + ${materialIssueItems.igst_amount})`,
     })
     .from(materialIssueItems)
     .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))

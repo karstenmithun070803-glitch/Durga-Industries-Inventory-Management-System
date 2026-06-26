@@ -910,14 +910,11 @@ export async function createInsuranceBill(invoiceId: string): Promise<{ insuranc
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
 
-  // Verify parent invoice is Finalized
   const [inv] = await db
     .select({ status: invoices.status, bill_number: invoices.bill_number })
     .from(invoices)
     .where(eq(invoices.id, invoiceId));
   if (!inv) throw new Error("Invoice not found.");
-  if (inv.status !== INVOICE_STATUS.FINALIZED)
-    throw new Error("Insurance bill can only be created for a Finalized invoice.");
 
   // Fetch invoice items to copy
   const items = await db

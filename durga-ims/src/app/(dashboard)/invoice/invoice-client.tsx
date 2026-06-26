@@ -867,7 +867,7 @@ export function InvoiceClient({
       {(currentInvoiceId || isLoading || isNewMode) && (
         <>
           {/* Amber warning: insurance is finalized and user has edits */}
-          {isFinalized && isDirty && insuranceBillStatus === "Finalized" && (
+          {isDirty && insuranceBillStatus === "Finalized" && (
             <div className="mx-6 mb-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-4 py-3 text-sm text-amber-800">
               <span className="mt-0.5">⚠</span>
               <span>
@@ -945,7 +945,7 @@ export function InvoiceClient({
                     </span>
                   )}
                   {/* Insurance status badge */}
-                  {isFinalized && (
+                  {currentInvoice && (
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
                       !hasInsurance ? "bg-slate-50 text-slate-500 border-slate-200" :
                       insuranceBillStatus === "Finalized" ? "bg-purple-50 text-purple-700 border-purple-200" :
@@ -1198,7 +1198,7 @@ export function InvoiceClient({
                 )}
 
                 {/* Insurance bill actions */}
-                {isFinalized && !hasInsurance && (
+                {!!currentInvoiceId && !hasInsurance && !isCancelled && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -1209,7 +1209,7 @@ export function InvoiceClient({
                   </Button>
                 )}
 
-                {isFinalized && hasInsurance && (
+                {hasInsurance && (
                   <>
                     <Button
                       size="sm"

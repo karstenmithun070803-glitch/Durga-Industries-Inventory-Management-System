@@ -66,7 +66,7 @@ export function StageWiseCostingDocument({
           {`Vehicle: ${vehicleName}   |   FY ${fy}${marginPct !== 0 ? `   |   Margin: ${marginPct}%` : ""}${asOfDate ? `   |   As Of: ${asOfDate.split("-").reverse().join("/")}` : ""}`}
         </Text>
         <Text style={{ fontSize: 7.5, color: "#9CA3AF", textAlign: "center", marginBottom: 4 }}>
-          Amounts exclude tax (GST not included)
+          Amounts include tax (GST included)
         </Text>
 
         <View style={styles.separator} />

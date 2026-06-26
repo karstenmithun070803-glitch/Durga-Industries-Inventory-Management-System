@@ -113,7 +113,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     let headers: string[];
     let csvRows: string[][];
     if (rptType === "stage") {
-      headers = ["Slip No", "Code", "Stage Name", "Amount (Excl. Tax)"];
+      headers = ["Slip No", "Code", "Stage Name", "Amount (Incl. Tax)"];
       csvRows = slipGroups.flatMap(([slipNum, { rows }]) =>
         rows.map((r) => [
           formatCode("MI-", slipNum, 4),
@@ -123,7 +123,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         ])
       );
     } else {
-      headers = ["S.No", "Material No", "Name", "Stages", "Amount (Excl. Tax)"];
+      headers = ["S.No", "Material No", "Name", "Stages", "Amount (Incl. Tax)"];
       csvRows = displayMaterialRows.map((r, i) => [
         String(i + 1), safeVal(r.code), safeVal(r.name), safeVal(r.stages), r.amount.toFixed(2),
       ]);
@@ -260,7 +260,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                   <tr>
                     <th className="px-3 py-2.5 text-left font-medium w-24">Code</th>
                     <th className="px-3 py-2.5 text-left font-medium">Stage Name</th>
-                    <th className="px-3 py-2.5 text-right font-medium w-40">Amount (Excl. Tax)</th>
+                    <th className="px-3 py-2.5 text-right font-medium w-40">Amount (Incl. Tax)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -310,7 +310,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                     <th className="px-3 py-2.5 text-left font-medium w-20">Mat. No</th>
                     <th className="px-3 py-2.5 text-left font-medium">Material Name</th>
                     <th className="px-3 py-2.5 text-left font-medium w-48">Stages</th>
-                    <th className="px-3 py-2.5 text-right font-medium w-40">Amount (Excl. Tax)</th>
+                    <th className="px-3 py-2.5 text-right font-medium w-40">Amount (Incl. Tax)</th>
                   </tr>
                 </thead>
                 <tbody>
