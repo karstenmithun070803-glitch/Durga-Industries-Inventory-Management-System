@@ -42,14 +42,6 @@ export function StageWiseCostingDocument({
     ? { code: "14%", name: "68%", amount: "18%" }
     : { sno: "5%", code: "10%", name: "40%", stages: "27%", amount: "18%" };
 
-  const slipGroups = (() => {
-    const map = new Map<number, typeof stageRows>();
-    for (const r of stageRows) {
-      if (!map.has(r.slip_number)) map.set(r.slip_number, []);
-      map.get(r.slip_number)!.push(r);
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a - b);
-  })();
 
   return (
     <Document title={`${isStageWise ? "Stage" : "Material"} Wise Costing — ${vehicleName} — FY ${fy}${asOfDate ? ` — As Of ${asOfDate}` : ""}`}>
@@ -92,22 +84,15 @@ export function StageWiseCostingDocument({
 
         {/* Rows */}
         {isStageWise
-          ? slipGroups.map(([slipNum, slipRows]) => (
-              <React.Fragment key={slipNum}>
-                <View style={styles.stageHeaderRow}>
-                  <Text style={styles.stageHeaderText}>{`MI-${String(slipNum).padStart(4, "0")}`}</Text>
-                </View>
-                {slipRows.map((r) => (
-                  <View
-                    key={`${slipNum}-${r.code}`}
-                    style={[styles.plainTableRow, r.is_direct ? { backgroundColor: "#FFFBEB" } : {}]}
-                  >
-                    <Text style={[styles.plainTableCell, { width: W.code, paddingLeft: 8, fontFamily: "Helvetica-Oblique" }]}>{r.code}</Text>
-                    <Text style={[styles.plainTableCell, { width: W.name, fontFamily: r.is_direct ? "Helvetica-Oblique" : "Helvetica" }]}>{r.name}</Text>
-                    <Text style={[styles.plainTableCellBold, { width: W.amount, textAlign: "right" }]}>{fmt(r.amount)}</Text>
-                  </View>
-                ))}
-              </React.Fragment>
+          ? stageRows.map((r) => (
+              <View
+                key={r.code}
+                style={[styles.plainTableRow, r.is_direct ? { backgroundColor: "#FFFBEB" } : {}]}
+              >
+                <Text style={[styles.plainTableCell, { width: W.code, fontFamily: "Helvetica-Oblique" }]}>{r.code}</Text>
+                <Text style={[styles.plainTableCell, { width: W.name, fontFamily: r.is_direct ? "Helvetica-Oblique" : "Helvetica" }]}>{r.name}</Text>
+                <Text style={[styles.plainTableCellBold, { width: W.amount, textAlign: "right" }]}>{fmt(r.amount)}</Text>
+              </View>
             ))
           : (materialRows as (MaterialWiseCostingRow & { amount: number })[]).map((r, i) => (
               <View key={r.code + i} style={styles.plainTableRow}>

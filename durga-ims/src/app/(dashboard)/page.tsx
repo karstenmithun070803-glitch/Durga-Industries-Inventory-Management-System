@@ -50,7 +50,7 @@ function RecentTable({
   rows: React.ReactNode[][];
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-lg overflow-x-auto">
       <table className="w-full text-xs">
         <thead className="bg-slate-50">
           <tr>
@@ -138,10 +138,10 @@ export default async function HomePage() {
         <div>
           <SectionTitle>Recent Material Issues</SectionTitle>
           <RecentTable
-            headers={["Slip #", "Date", "Vehicle", "Status"]}
+            headers={["Job No", "Date", "Vehicle", "Status"]}
             rows={stats.recentMIs.map((r) => [
-              <Link key={r.id} href={r.issue_type === "NEW" ? `/transactions/material-issues/new?id=${r.id}` : `/transactions/material-issues?id=${r.id}`} className="font-mono text-blue-600 hover:underline">
-                MI-{String(r.slip_number).padStart(4, "0")}
+              <Link key={r.id} href={r.issue_type === "NEW" ? `/transactions/material-issues/new?vehicleId=${r.vehicle_id}` : `/transactions/material-issues?vehicleId=${r.vehicle_id}`} className="font-mono text-blue-600 hover:underline">
+                {r.job_ref_no ?? "—"}
               </Link>,
               r.issue_date,
               r.vehicle_name ?? "—",

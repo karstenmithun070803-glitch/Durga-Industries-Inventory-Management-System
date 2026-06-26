@@ -389,7 +389,6 @@ export async function getMonthlyStockReport(params: {
 // ---------------------------------------------------------------------------
 
 export interface StageWiseCostingRow {
-  slip_number: number;
   code: string;
   name: string;
   base_amount: number;
@@ -411,7 +410,6 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string, asO
 
   const rows = await db
     .select({
-      slip_number: materialIssues.slip_number,
       code: sql<string>`COALESCE(${stages.stage_code}, 'MANUAL')`,
       name: sql<string>`COALESCE(${stages.stage_name}, 'Manual Entry')`,
       base_amount: sql<string>`SUM(${materialIssueItems.amount} + ${materialIssueItems.cgst_amount} + ${materialIssueItems.sgst_amount} + ${materialIssueItems.igst_amount})`,
@@ -430,15 +428,13 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string, asO
       )
     )
     .groupBy(
-      materialIssues.slip_number,
       materialIssueItems.stage_id,
       stages.stage_code,
       stages.stage_name,
     )
-    .orderBy(materialIssues.slip_number, sql`${stages.stage_code} NULLS LAST`);
+    .orderBy(sql`${stages.stage_code} NULLS LAST`);
 
   return rows.map((r) => ({
-    slip_number: r.slip_number,
     code: r.code,
     name: r.name,
     base_amount: parseFloat(r.base_amount ?? "0"),

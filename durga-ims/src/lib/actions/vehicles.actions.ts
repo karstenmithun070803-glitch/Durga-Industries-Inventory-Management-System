@@ -5,6 +5,7 @@ import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { vehicles, customers, materialIssues, invoices } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { getCurrentFY } from "@/lib/fy";
 
 const vehicleSelect = {
   id: vehicles.id,
@@ -91,17 +92,24 @@ export async function updateVehicle(id: string, data: {
   revalidateTag(CACHE_TAGS.vehicles);
 }
 
-export async function deleteVehicle(id: string) {
+export async function deleteVehicle(id: string, force = false) {
   const [veh] = await db.select({ vehicle_name: vehicles.vehicle_name }).from(vehicles).where(eq(vehicles.id, id));
-  const inUse = await db
-    .select({ slip_number: materialIssues.slip_number })
-    .from(materialIssues)
-    .where(and(eq(materialIssues.vehicle_id, id), eq(materialIssues.status, "Draft")))
-    .limit(1);
-  if (inUse.length > 0)
-    throw new Error(
-      `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": referenced in a Draft issue slip. Complete or delete that slip first.`
-    );
+
+  if (!force) {
+    // Soft warning: vehicle has material issue records in the current FY
+    // Caller catches this, shows a confirmation dialog, then calls deleteVehicle(id, true)
+    const currentFY = getCurrentFY();
+    const currentFYIssue = await db
+      .select({ id: materialIssues.id })
+      .from(materialIssues)
+      .where(and(eq(materialIssues.vehicle_id, id), eq(materialIssues.financial_year, currentFY)))
+      .limit(1);
+    if (currentFYIssue.length > 0) {
+      throw new Error(
+        `WARN:This vehicle has material issue records in FY ${currentFY}. Deactivating will hide it from new issue forms.`
+      );
+    }
+  }
 
   const draftInvoice = await db
     .select({ bill_number: invoices.bill_number })
@@ -169,4 +177,70 @@ export async function bulkImportVehicles(
 
   revalidateTag(CACHE_TAGS.vehicles);
   return { imported: toInsert.length, skipped };
+}
+
+// ---------------------------------------------------------------------------
+// Create vehicle + customer atomically (used by CloneVehicleDialog)
+// ---------------------------------------------------------------------------
+
+export async function createVehicleWithCustomer(data: {
+  job_ref_no: string;
+  vehicle_name?: string;
+  type: "Old" | "New";
+  // Provide customer_id to use an existing customer, OR customer_name to create a new one
+  customer_id?: string;
+  customer_name?: string;
+  customer_gstin?: string;
+  customer_state?: string;
+  customer_address_1?: string;
+  customer_address_2?: string;
+  customer_street?: string;
+  customer_city?: string;
+}): Promise<{ vehicleId: string; customerId: string | null }> {
+  if (!data.job_ref_no.trim()) throw new Error("Job number is required.");
+  if (!data.customer_id && !data.customer_name?.trim())
+    throw new Error("Customer is required.");
+
+  return await db.transaction(async (tx) => {
+    let customerId: string | null = data.customer_id ?? null;
+
+    if (!customerId && data.customer_name?.trim()) {
+      const [newCustomer] = await tx
+        .insert(customers)
+        .values({
+          customer_name: data.customer_name.trim(),
+          gstin: data.customer_gstin?.trim().toUpperCase() || null,
+          state: data.customer_state || null,
+          address_1: data.customer_address_1?.trim() || null,
+          address_2: data.customer_address_2?.trim() || null,
+          street: data.customer_street?.trim() || null,
+          city: data.customer_city?.trim() || null,
+        })
+        .returning({ id: customers.id });
+      customerId = newCustomer.id;
+    }
+
+    let vehicleId: string;
+    try {
+      const [newVehicle] = await tx
+        .insert(vehicles)
+        .values({
+          job_ref_no: data.job_ref_no.trim(),
+          vehicle_name: data.vehicle_name?.trim().toUpperCase() || null,
+          type: data.type,
+          customer_id: customerId,
+        })
+        .returning({ id: vehicles.id });
+      vehicleId = newVehicle.id;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.includes("vehicles_job_ref_no_unique"))
+        throw new Error(`DUPLICATE_JOB_REF:Job number "${data.job_ref_no.trim()}" already exists.`);
+      throw e;
+    }
+
+    revalidateTag(CACHE_TAGS.vehicles);
+    revalidateTag(CACHE_TAGS.customers);
+    return { vehicleId, customerId };
+  });
 }

@@ -253,7 +253,7 @@ export async function getMIItemsForInvoice(issueId: string): Promise<InvoiceItem
 // Returns all issued MI items for a vehicle, grouped by slip
 // currentInvoiceId: if editing, exclude slips linked to other invoices (but not this one)
 export async function getAllIssuedMIItemsForVehicle(vehicleId: string, currentInvoiceId?: string): Promise<
-  { slip_id: string; slip_number: number; issue_date: string; items: InvoiceItemWithDetails[] }[]
+  { slip_id: string; slip_number: number | null; issue_date: string; items: InvoiceItemWithDetails[] }[]
 > {
   const slips = await db
     .select({
@@ -1195,7 +1195,7 @@ export async function deleteInsuranceBill(id: string): Promise<void> {
   revalidatePath("/invoice");
 }
 
-export async function getLinkedSlipsForInvoice(invoiceId: string): Promise<{ id: string; slip_number: number; issue_date: string; item_count: number }[]> {
+export async function getLinkedSlipsForInvoice(invoiceId: string): Promise<{ id: string; slip_number: number | null; issue_date: string; item_count: number }[]> {
   const rows = await db
     .select({
       id: materialIssues.id,

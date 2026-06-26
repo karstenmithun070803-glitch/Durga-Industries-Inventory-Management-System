@@ -42,7 +42,7 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
     <Document title="Vehicle Material Issue Slip">
       {slipGroups.map(([slipId, items]) => {
         const first = items[0];
-        const slipLabel = formatCode("MI-", first.slip_number, 4);
+        const slipLabel = first.slip_number != null ? formatCode("MI-", first.slip_number, 4) : null;
         const jobLabel = first.job_ref_no;
 
         const slipTotal   = items.reduce((s, r) => s + parseFloat(r.amount ?? "0"), 0);
@@ -68,10 +68,12 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
             <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
               {/* Left — slip identifiers */}
               <View style={{ flex: 1 }}>
-                <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabel}>SLIP NO.</Text>
-                  <Text style={styles.infoLineValue}>: {slipLabel}</Text>
-                </View>
+                {slipLabel && (
+                  <View style={styles.infoLine}>
+                    <Text style={styles.infoLineLabel}>SLIP NO.</Text>
+                    <Text style={styles.infoLineValue}>: {slipLabel}</Text>
+                  </View>
+                )}
                 <View style={styles.infoLine}>
                   <Text style={styles.infoLineLabel}>DATE</Text>
                   <Text style={styles.infoLineValue}>: {fmtDate(first.issue_date)}</Text>

@@ -575,8 +575,8 @@ export function InsuranceForm({
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-20">Qty</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-28">Unit</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-24">Rate</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-16">Tax %</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500 w-24">Tax Amt</th>
+                  {includeTax && <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-16">Tax %</th>}
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500 w-24">{includeTax ? "Tax Amt" : "Tax"}</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-slate-500 w-28">Amount</th>
                   {!isFinalized && <th className="px-3 py-2 w-8" />}
                 </tr>
@@ -684,21 +684,23 @@ export function InsuranceForm({
                           />
                         )}
                       </td>
-                      <td className="px-3 py-1.5">
-                        {isFinalized ? (
-                          <span className="text-slate-800">{row.tax_percentage}</span>
-                        ) : (
-                          <Input
-                            type="number"
-                            value={row.tax_percentage}
-                            onChange={(e) => updateRow(row._key, { tax_percentage: e.target.value })}
-                            className="h-8 text-sm w-14"
-                            min="0"
-                            max="100"
-                            step="any"
-                          />
-                        )}
-                      </td>
+                      {includeTax && (
+                        <td className="px-3 py-1.5">
+                          {isFinalized ? (
+                            <span className="text-slate-800">{row.tax_percentage}</span>
+                          ) : (
+                            <Input
+                              type="number"
+                              value={row.tax_percentage}
+                              onChange={(e) => updateRow(row._key, { tax_percentage: e.target.value })}
+                              className="h-8 text-sm w-14"
+                              min="0"
+                              max="100"
+                              step="any"
+                            />
+                          )}
+                        </td>
+                      )}
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
                         {fmt2(taxAmt)}
                       </td>
@@ -805,6 +807,7 @@ export function InsuranceForm({
                 groups={[pdfRows]}
                 fy={fy}
                 companySetting={companySetting}
+                showTaxColumns={includeTax}
               />
             )}
           />

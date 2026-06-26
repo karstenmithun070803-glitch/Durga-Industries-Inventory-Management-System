@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
-import { cn, formatCode } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   getStageWiseCostingData,
@@ -54,6 +54,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
   const [materialRows, setMaterialRows] = useState<MaterialWiseCostingRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);
+  const fetchGenRef = useRef(0);
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
@@ -67,21 +68,35 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
 
   function runReport() {
     if (!vehicleId) return;
+    const gen = ++fetchGenRef.current;
     setIsLoading(true);
-    const multiplier = 1 + marginPct / 100;
     Promise.all([
       getStageWiseCostingData(vehicleId, fy, asOfDate || undefined),
       getMaterialWiseCostingData(vehicleId, fy, asOfDate || undefined),
     ])
-      .then(([sw, mw]) => {
-        setStageRows(sw);
-        setMaterialRows(mw);
-        setHasRun(true);
-        void multiplier; // margin applied in displayRows
-      })
-      .catch(() => toast.error("Failed to load report data."))
-      .finally(() => setIsLoading(false));
+      .then(([sw, mw]) => { if (gen === fetchGenRef.current) { setStageRows(sw); setMaterialRows(mw); setHasRun(true); } })
+      .catch(() => { if (gen === fetchGenRef.current) toast.error("Failed to load report data."); })
+      .finally(() => { if (gen === fetchGenRef.current) setIsLoading(false); });
   }
+
+  // Auto-run on filter change — skips silently if no vehicle selected
+  useEffect(() => {
+    if (!vehicleId) return;
+    const gen = ++fetchGenRef.current;
+    const t = setTimeout(() => {
+      if (gen !== fetchGenRef.current) return;
+      setIsLoading(true);
+      Promise.all([
+        getStageWiseCostingData(vehicleId, fy, asOfDate || undefined),
+        getMaterialWiseCostingData(vehicleId, fy, asOfDate || undefined),
+      ])
+        .then(([sw, mw]) => { if (gen === fetchGenRef.current) { setStageRows(sw); setMaterialRows(mw); setHasRun(true); } })
+        .catch(() => { if (gen === fetchGenRef.current) toast.error("Failed to load report data."); })
+        .finally(() => { if (gen === fetchGenRef.current) setIsLoading(false); });
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicleId, fy, asOfDate]);
 
   // Apply margin client-side — no re-fetch needed
   const displayStageRows = useMemo(
@@ -93,16 +108,6 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     [materialRows, marginPct]
   );
 
-  const slipGroups = useMemo(() => {
-    const map = new Map<number, { rows: typeof displayStageRows; slipTotal: number }>();
-    for (const r of displayStageRows) {
-      if (!map.has(r.slip_number)) map.set(r.slip_number, { rows: [], slipTotal: 0 });
-      const g = map.get(r.slip_number)!;
-      g.rows.push(r);
-      g.slipTotal += r.amount;
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a - b);
-  }, [displayStageRows]);
 
   const activeRows = rptType === "stage" ? displayStageRows : displayMaterialRows;
   const grandTotal = activeRows.reduce((s, r) => s + r.amount, 0);
@@ -113,15 +118,12 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     let headers: string[];
     let csvRows: string[][];
     if (rptType === "stage") {
-      headers = ["Slip No", "Code", "Stage Name", "Amount (Incl. Tax)"];
-      csvRows = slipGroups.flatMap(([slipNum, { rows }]) =>
-        rows.map((r) => [
-          formatCode("MI-", slipNum, 4),
-          safeVal(r.code),
-          safeVal(r.name),
-          r.amount.toFixed(2),
-        ])
-      );
+      headers = ["Code", "Stage Name", "Amount (Incl. Tax)"];
+      csvRows = displayStageRows.map((r) => [
+        safeVal(r.code),
+        safeVal(r.name),
+        r.amount.toFixed(2),
+      ]);
     } else {
       headers = ["S.No", "Material No", "Name", "Stages", "Amount (Incl. Tax)"];
       csvRows = displayMaterialRows.map((r, i) => [
@@ -214,7 +216,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         </div>
 
         <Button onClick={runReport} disabled={!canRun || isLoading} className="h-9">
-          {isLoading ? "Loading…" : "Show"}
+          {isLoading ? "Loading…" : "Refresh"}
         </Button>
       </div>
 
@@ -264,35 +266,18 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                   </tr>
                 </thead>
                 <tbody>
-                  {slipGroups.map(([slipNum, { rows, slipTotal }]) => (
-                    <>
-                      <tr key={`hdr-${slipNum}`} className="bg-slate-100 border-t-2 border-slate-300">
-                        <td colSpan={3} className="px-3 py-1.5 font-mono font-semibold text-slate-700">
-                          {formatCode("MI-", slipNum, 4)}
-                        </td>
-                      </tr>
-                      {rows.map((r) => (
-                        <tr
-                          key={`${slipNum}-${r.code}`}
-                          className={cn(
-                            "border-t border-slate-100 hover:bg-slate-50/50",
-                            r.is_direct && "bg-amber-50/60 italic"
-                          )}
-                        >
-                          <td className="px-3 py-1.5 pl-8 font-mono text-slate-500">{r.code}</td>
-                          <td className="px-3 py-1.5 text-slate-700">{r.name}</td>
-                          <td className="px-3 py-1.5 text-right font-medium text-slate-800">{fmtAmt(r.amount)}</td>
-                        </tr>
-                      ))}
-                      {slipGroups.length > 1 && (
-                        <tr key={`sub-${slipNum}`} className="border-t border-slate-200 bg-slate-50">
-                          <td colSpan={2} className="px-3 py-1 text-right text-slate-400 italic">
-                            {formatCode("MI-", slipNum, 4)} subtotal
-                          </td>
-                          <td className="px-3 py-1 text-right font-semibold text-slate-600">{fmtAmt(slipTotal)}</td>
-                        </tr>
+                  {displayStageRows.map((r) => (
+                    <tr
+                      key={r.code}
+                      className={cn(
+                        "border-t border-slate-100 hover:bg-slate-50/50",
+                        r.is_direct && "bg-amber-50/60 italic"
                       )}
-                    </>
+                    >
+                      <td className="px-3 py-1.5 font-mono text-slate-500">{r.code}</td>
+                      <td className="px-3 py-1.5 text-slate-700">{r.name}</td>
+                      <td className="px-3 py-1.5 text-right font-medium text-slate-800">{fmtAmt(r.amount)}</td>
+                    </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-slate-100 sticky bottom-0">

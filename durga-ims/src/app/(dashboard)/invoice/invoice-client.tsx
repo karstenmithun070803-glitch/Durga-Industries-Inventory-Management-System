@@ -81,14 +81,14 @@ interface UnitOption {
 
 interface MISlipMeta {
   id: string;
-  slip_number: number;
+  slip_number: number | null;
   issue_date: string;
   item_count: number;
 }
 
 interface MISlipWithItems {
   slip_id: string;
-  slip_number: number;
+  slip_number: number | null;
   issue_date: string;
   items: InvoiceItemWithDetails[];
 }
@@ -1192,6 +1192,7 @@ export function InvoiceClient({
                         groups={[buildPdfRows(currentInvoice)]}
                         fy={activeFY}
                         companySetting={companySetting}
+                        showTaxColumns={includeTax}
                       />
                     )}
                   />
@@ -1226,6 +1227,7 @@ export function InvoiceClient({
                             groups={[buildPdfRows(currentInvoice)]}
                             fy={activeFY}
                             companySetting={companySetting}
+                            showTaxColumns={includeTax}
                           />
                         )}
                       />

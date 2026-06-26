@@ -216,7 +216,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                       <td className={`px-3 py-1.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
                       <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("S", s.code_no)}</td>
                       <td className={`px-3 py-1.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{s.name}</td>
-                      <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{s.address ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-500"><div className="min-w-[180px] max-w-sm break-words">{s.address ?? "—"}</div></td>
                       <td className="px-3 py-1.5 text-slate-500">{s.state ?? "—"}</td>
                       <td className="px-3 py-1.5 text-slate-500 font-mono text-xs">{s.gstin ?? "—"}</td>
                     </tr>

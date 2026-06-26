@@ -26,7 +26,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
   const margin = parseFloat(slip.margin_percentage || "0");
   const mf = showAdvRate ? 1 + margin / 100 : 1;
 
-  const slipLabel = `MI-${String(slip.slip_number).padStart(4, "0")}`;
+  const docLabel = `Job: ${slip.job_ref_no}${slip.vehicle_name ? ` — ${slip.vehicle_name}` : ""}`;
 
   const subtotal = slip.items.reduce((s, r) => s + parseFloat(r.amount || "0") * mf, 0);
   const cgstTotal = slip.items.reduce((s, r) => s + parseFloat(r.cgst_amount || "0") * mf, 0);
@@ -35,7 +35,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
   const grandTotal = subtotal + cgstTotal + sgstTotal + igstTotal;
 
   return (
-    <Document title={`${slipLabel} — Material Issue`}>
+    <Document title={`${docLabel} — Material Issue`}>
       <Page size="A4" style={styles.page}>
         {showAdvRate && (
           <Text style={{ fontSize: 8, color: "#555", textAlign: "right", marginBottom: 3 }}>
@@ -55,10 +55,6 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
         {/* Slip info */}
         <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
           <View style={{ flex: 1 }}>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>SLIP NO.</Text>
-              <Text style={styles.infoLineValue}>: {slipLabel}</Text>
-            </View>
             <View style={styles.infoLine}>
               <Text style={styles.infoLineLabel}>DATE</Text>
               <Text style={styles.infoLineValue}>: {fmtDate(slip.issue_date)}</Text>

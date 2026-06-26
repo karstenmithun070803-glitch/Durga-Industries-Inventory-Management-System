@@ -224,7 +224,7 @@ export async function getStockMovementHistory(
   const miIds = ledger.filter((e) => e.reference_type === "material_issue" && e.reference_id).map((e) => e.reference_id!);
 
   const poMap = new Map<string, number>();
-  const miMap = new Map<string, number>();
+  const miMap = new Map<string, number | null>();
 
   if (poIds.length > 0) {
     const pos = await db.select({ id: purchaseOrders.id, po_number: purchaseOrders.po_number }).from(purchaseOrders).where(inArray(purchaseOrders.id, poIds));
@@ -242,7 +242,7 @@ export async function getStockMovementHistory(
       reference_label = num ? `PO-${String(num).padStart(4, "0")}` : "PO";
     } else if (e.reference_type === "material_issue" && e.reference_id) {
       const num = miMap.get(e.reference_id);
-      reference_label = num ? `MI-${String(num).padStart(4, "0")}` : "MI Slip";
+      reference_label = (num != null) ? `MI-${String(num).padStart(4, "0")}` : "MI Issue";
     }
     return {
       id: e.id,

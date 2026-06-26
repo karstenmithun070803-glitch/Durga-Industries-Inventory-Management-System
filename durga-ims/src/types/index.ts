@@ -144,7 +144,7 @@ export interface LineItemDraft {
 export interface MaterialIssueRow {
   // header
   id: string;
-  slip_number: number;
+  slip_number: number | null;
   issue_date: string;
   financial_year: string;
   status: string;
@@ -209,7 +209,7 @@ export interface MaterialIssueItemWithDetails {
 // Full detail type returned by getMaterialIssueById
 export interface MaterialIssueWithDetails {
   id: string;
-  slip_number: number;
+  slip_number: number | null;
   issue_date: string;
   financial_year: string;
   status: string;

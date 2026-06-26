@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 
 import { getCurrentFY } from "@/lib/fy";
 import {
-  getSlipsForDropdown,
   getActiveVehicles,
   getActiveContractors,
   getActiveIssueMaterials,
@@ -11,20 +10,21 @@ import {
 import { getStagesForDropdown } from "@/lib/actions/stages.actions";
 import { getAllTaxRates } from "@/lib/actions/tax.actions";
 import { getCompanySettings } from "@/lib/actions/settings.actions";
+import { getCustomers } from "@/lib/actions/customers.actions";
 import { NewVMIClient } from "./new-vmi-client";
 
 export default async function NewVMIPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ vehicleId?: string }>;
 }) {
   const fy = getCurrentFY();
-  const { id } = await searchParams;
+  const { vehicleId } = await searchParams;
 
-  const [slips, vehicles, stages, contractors, materials, taxRates, units, companySetting] =
+  const [vehicles, customers, stages, contractors, materials, taxRates, units, companySetting] =
     await Promise.all([
-      getSlipsForDropdown(fy, "NEW"),
       getActiveVehicles(),
+      getCustomers(),
       getStagesForDropdown(),
       getActiveContractors(),
       getActiveIssueMaterials(),
@@ -35,15 +35,15 @@ export default async function NewVMIPage({
 
   return (
     <NewVMIClient
-      initialSlips={slips}
       vehicles={vehicles}
+      customers={customers}
       stages={stages}
       contractors={contractors}
       materials={materials}
       taxRates={taxRates as { id: string; tax_percentage: string }[]}
       units={units}
       companySetting={companySetting ?? undefined}
-      initialSelectedId={id}
+      initialVehicleId={vehicleId}
       initialFY={fy}
     />
   );

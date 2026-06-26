@@ -15,11 +15,12 @@ import {
   invoices,
   stages,
 } from "@/lib/db/schema";
-import { eq, and, sql, desc, max } from "drizzle-orm";
+import { eq, and, sql, desc, max, asc } from "drizzle-orm";
 import { revalidatePath, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { fyDateRange } from "@/lib/fy";
 import type { MaterialIssueWithDetails, MaterialIssueItemWithDetails, MaterialIssueRow } from "@/types";
+import { determineGstType } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Input interfaces
@@ -242,7 +243,7 @@ export async function getLastMaterialRate(materialId: string): Promise<string | 
 export async function getSlipsForDropdown(
   financialYear: string,
   issueType: "OLD" | "NEW"
-): Promise<{ id: string; slipNumber: number; vehicleId: string; vehicleName: string | null; date: string; status: string }[]> {
+): Promise<{ id: string; slipNumber: number | null; vehicleId: string; vehicleName: string | null; date: string; status: string }[]> {
   const rows = await db
     .select({
       id: materialIssues.id,
@@ -489,6 +490,7 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
 // Write — create (advisory lock inside transaction)
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use saveVehicleMaterialIssue instead */
 export async function createMaterialIssue(data: IssueHeaderInput): Promise<string> {
   if (!data.vehicle_id) throw new Error("Vehicle is required.");
   if (data.issue_type && !["OLD", "NEW"].includes(data.issue_type))
@@ -594,7 +596,8 @@ export async function updateMaterialIssue(id: string, data: IssueHeaderInput): P
 // Write — issue (Draft → Issued, stock deduction)
 // ---------------------------------------------------------------------------
 
-export async function issueMaterialIssue(id: string): Promise<number> {
+/** @deprecated Use saveVehicleMaterialIssue instead */
+export async function issueMaterialIssue(id: string): Promise<number | null> {
   const [issue] = await db
     .select({ status: materialIssues.status, slip_number: materialIssues.slip_number })
     .from(materialIssues)
@@ -837,6 +840,7 @@ export async function deleteMaterialIssue(id: string): Promise<void> {
 // Write — clone
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use cloneVehicleMaterialIssue instead */
 export async function cloneOldMaterialIssue(
   slipId: string
 ): Promise<{ newSlipId: string; newSlipNumber: number }> {
@@ -918,6 +922,403 @@ export async function cloneOldMaterialIssue(
   return { newSlipId, newSlipNumber };
 }
 
+// ---------------------------------------------------------------------------
+// Read — vehicle's single material issue record for a FY (no-slip model)
+// ---------------------------------------------------------------------------
+
+export async function getVehicleMaterialIssue(
+  vehicleId: string,
+  issueType: "OLD" | "NEW",
+  financialYear: string
+): Promise<MaterialIssueWithDetails | null> {
+  const [header] = await db
+    .select({
+      id: materialIssues.id,
+      slip_number: materialIssues.slip_number,
+      issue_date: materialIssues.issue_date,
+      financial_year: materialIssues.financial_year,
+      status: materialIssues.status,
+      issue_type: materialIssues.issue_type,
+      stage_id: materialIssues.stage_id,
+      margin_percentage: materialIssues.margin_percentage,
+      total_amount: materialIssues.total_amount,
+      vehicle_id: materialIssues.vehicle_id,
+      vehicle_name: vehicles.vehicle_name,
+      job_ref_no: vehicles.job_ref_no,
+      customer_id: customers.id,
+      customer_name: customers.customer_name,
+      customer_gstin: customers.gstin,
+      customer_state: customers.state,
+      customer_address_1: customers.address_1,
+      customer_address_2: customers.address_2,
+      customer_street: customers.street,
+      customer_city: customers.city,
+    })
+    .from(materialIssues)
+    .innerJoin(vehicles, eq(materialIssues.vehicle_id, vehicles.id))
+    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.issue_type, issueType),
+        eq(materialIssues.financial_year, financialYear)
+      )
+    );
+
+  if (!header) return null;
+
+  const itemRows = await db
+    .select({
+      id: materialIssueItems.id,
+      issue_id: materialIssueItems.issue_id,
+      material_id: materialIssueItems.material_id,
+      material_name: materials.name,
+      material_no: materials.material_no,
+      hsn_code: materialIssueItems.hsn_code,
+      contractor_id: contractors.id,
+      contractor_name: contractors.name,
+      qty: materialIssueItems.qty,
+      unit_id: materialIssueItems.unit_id,
+      unit_name: units.unit_name,
+      rate: materialIssueItems.rate,
+      tax_percentage: materialIssueItems.tax_percentage,
+      cgst_amount: materialIssueItems.cgst_amount,
+      sgst_amount: materialIssueItems.sgst_amount,
+      igst_amount: materialIssueItems.igst_amount,
+      amount: materialIssueItems.amount,
+      gst_type: materialIssueItems.gst_type,
+      affects_inventory: materialIssueItems.affects_inventory,
+      stage_id: materialIssueItems.stage_id,
+      stage_name: stages.stage_name,
+    })
+    .from(materialIssueItems)
+    .innerJoin(materials, eq(materialIssueItems.material_id, materials.id))
+    .leftJoin(contractors, eq(materialIssueItems.contractor_id, contractors.id))
+    .leftJoin(units, eq(materialIssueItems.unit_id, units.id))
+    .leftJoin(stages, eq(materialIssueItems.stage_id, stages.id))
+    .where(eq(materialIssueItems.issue_id, header.id))
+    .orderBy(asc(materialIssueItems.created_at));
+
+  const items: MaterialIssueItemWithDetails[] = itemRows.map((r) => ({
+    id: r.id,
+    issue_id: r.issue_id,
+    material_id: r.material_id,
+    material_name: r.material_name,
+    material_no: r.material_no,
+    hsn_code: r.hsn_code ?? null,
+    contractor_id: r.contractor_id ?? null,
+    contractor_name: r.contractor_name ?? null,
+    qty: r.qty,
+    unit_id: r.unit_id ?? null,
+    unit_name: r.unit_name ?? null,
+    rate: r.rate,
+    tax_percentage: r.tax_percentage,
+    cgst_amount: r.cgst_amount,
+    sgst_amount: r.sgst_amount,
+    igst_amount: r.igst_amount,
+    amount: r.amount,
+    gst_type: r.gst_type ?? null,
+    affects_inventory: r.affects_inventory,
+    stage_id: r.stage_id ?? null,
+    stage_name: r.stage_name ?? null,
+  }));
+
+  return {
+    id: header.id,
+    slip_number: header.slip_number,
+    issue_date:
+      header.issue_date instanceof Date
+        ? header.issue_date.toISOString()
+        : String(header.issue_date),
+    financial_year: header.financial_year,
+    status: header.status,
+    issue_type: header.issue_type,
+    stage_id: header.stage_id ?? null,
+    margin_percentage: header.margin_percentage ?? "0",
+    total_amount: header.total_amount,
+    vehicle_id: header.vehicle_id,
+    vehicle_name: header.vehicle_name,
+    job_ref_no: header.job_ref_no,
+    customer_id: header.customer_id ?? null,
+    customer_name: header.customer_name ?? null,
+    customer_gstin: header.customer_gstin ?? null,
+    customer_state: header.customer_state ?? null,
+    customer_address:
+      [
+        header.customer_address_1,
+        header.customer_address_2,
+        header.customer_street,
+        header.customer_city,
+      ]
+        .filter(Boolean)
+        .join(", ") || null,
+    items,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Write — save vehicle material issue (create+issue OR reverse+reapply)
+// ---------------------------------------------------------------------------
+
+export async function saveVehicleMaterialIssue(
+  vehicleId: string,
+  issueType: "OLD" | "NEW",
+  data: IssueHeaderInput
+): Promise<{ id: string; isNew: boolean }> {
+  if (!vehicleId) throw new Error("Vehicle is required.");
+  validateIssueItems(data.items);
+
+  const issueDate = new Date(data.issue_date);
+  const fyRange = fyDateRange(data.financial_year);
+  if (issueDate < fyRange.start || issueDate > fyRange.end)
+    throw new Error("Issue date must fall within the active financial year.");
+
+  const [existing] = await db
+    .select({ id: materialIssues.id, status: materialIssues.status })
+    .from(materialIssues)
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.issue_type, issueType),
+        eq(materialIssues.financial_year, data.financial_year)
+      )
+    );
+
+  if (!existing) {
+    // First save: create record and issue immediately (atomic)
+    const newId = await db.transaction(async (tx) => {
+      const [issue] = await tx
+        .insert(materialIssues)
+        .values({
+          slip_number: null,
+          issue_date: issueDate,
+          vehicle_id: vehicleId,
+          issue_type: issueType,
+          stage_id: null,
+          margin_percentage: data.margin_percentage || "0",
+          total_amount: data.total_amount || "0",
+          financial_year: data.financial_year,
+          status: "Draft",
+        })
+        .returning({ id: materialIssues.id });
+
+      await tx
+        .insert(materialIssueItems)
+        .values(data.items.map((item) => itemValues(issue.id, item)));
+
+      // Issue: deduct stock
+      const qtyByMaterial = new Map<string, number>();
+      for (const item of data.items) {
+        if (!item.affects_inventory) continue;
+        qtyByMaterial.set(
+          item.material_id,
+          (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
+        );
+      }
+      for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
+        const [mat] = await tx
+          .select({ name: materials.name, current_stock: materials.current_stock })
+          .from(materials)
+          .where(eq(materials.id, materialId));
+        if (!mat) throw new Error("Material not found.");
+        if (parseFloat(mat.current_stock) < requestedQty)
+          throw new Error(
+            `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
+          );
+      }
+
+      await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, issue.id));
+
+      for (const item of data.items) {
+        if (!item.affects_inventory) continue;
+        const [mat] = await tx
+          .select({ current_stock: materials.current_stock })
+          .from(materials)
+          .where(eq(materials.id, item.material_id));
+        const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
+        await tx.update(materials).set({ current_stock: newStock }).where(eq(materials.id, item.material_id));
+        await tx.insert(stockLedger).values({
+          material_id: item.material_id,
+          transaction_type: "ISSUE",
+          reference_id: issue.id,
+          reference_type: "material_issue",
+          qty_change: (-parseFloat(item.qty)).toString(),
+          stock_after: newStock,
+        });
+      }
+
+      return issue.id;
+    });
+
+    revalidatePath("/transactions/material-issues");
+    revalidatePath("/transactions/material-issues/new");
+    return { id: newId, isNew: true };
+  }
+
+  // Existing record: reverse + reapply (delegates to existing atomic helper)
+  await updateIssuedMaterialIssue(existing.id, { ...data, vehicle_id: vehicleId });
+  return { id: existing.id, isNew: false };
+}
+
+// ---------------------------------------------------------------------------
+// Write — clone vehicle's material issue to a new vehicle
+// ---------------------------------------------------------------------------
+
+export async function cloneVehicleMaterialIssue(
+  sourceVehicleId: string,
+  issueType: "OLD" | "NEW",
+  financialYear: string,
+  newVehicleId: string
+): Promise<{ newIssueId: string }> {
+  // Fetch source issue + items
+  const [srcIssue] = await db
+    .select({
+      id: materialIssues.id,
+      margin_percentage: materialIssues.margin_percentage,
+    })
+    .from(materialIssues)
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, sourceVehicleId),
+        eq(materialIssues.issue_type, issueType),
+        eq(materialIssues.financial_year, financialYear)
+      )
+    );
+  if (!srcIssue) throw new Error("Source vehicle has no material issue record for this FY.");
+
+  const srcItems = await db
+    .select({
+      material_id: materialIssueItems.material_id,
+      contractor_id: materialIssueItems.contractor_id,
+      hsn_code: materialIssueItems.hsn_code,
+      qty: materialIssueItems.qty,
+      unit_id: materialIssueItems.unit_id,
+      rate: materialIssueItems.rate,
+      tax_percentage: materialIssueItems.tax_percentage,
+      cgst_amount: materialIssueItems.cgst_amount,
+      sgst_amount: materialIssueItems.sgst_amount,
+      igst_amount: materialIssueItems.igst_amount,
+      amount: materialIssueItems.amount,
+      gst_type: materialIssueItems.gst_type,
+      affects_inventory: materialIssueItems.affects_inventory,
+      stage_id: materialIssueItems.stage_id,
+    })
+    .from(materialIssueItems)
+    .where(eq(materialIssueItems.issue_id, srcIssue.id));
+
+  // Determine new vehicle's GST type
+  const [newVehicleRow] = await db
+    .select({ customer_gstin: customers.gstin, customer_state: customers.state })
+    .from(vehicles)
+    .leftJoin(customers, eq(vehicles.customer_id, customers.id))
+    .where(eq(vehicles.id, newVehicleId));
+  if (!newVehicleRow) throw new Error("New vehicle not found.");
+
+  const newGstType = determineGstType(newVehicleRow.customer_gstin, newVehicleRow.customer_state);
+
+  // Recalculate tax amounts for each item if GST type differs from source
+  const recalcItem = (item: typeof srcItems[0]) => {
+    const srcGst = item.gst_type ?? "CGST_SGST";
+    if (srcGst === newGstType) return item;
+    const base = parseFloat(item.qty) * parseFloat(item.rate);
+    const taxAmt = base * (parseFloat(item.tax_percentage) / 100);
+    if (newGstType === "CGST_SGST") {
+      return {
+        ...item,
+        gst_type: "CGST_SGST",
+        cgst_amount: (taxAmt / 2).toFixed(2),
+        sgst_amount: (taxAmt / 2).toFixed(2),
+        igst_amount: "0.00",
+        amount: (base + taxAmt).toFixed(2),
+      };
+    }
+    return {
+      ...item,
+      gst_type: "IGST",
+      cgst_amount: "0.00",
+      sgst_amount: "0.00",
+      igst_amount: taxAmt.toFixed(2),
+      amount: (base + taxAmt).toFixed(2),
+    };
+  };
+
+  const cloneDate = clampDateToFY(financialYear);
+  const recalcItems = srcItems.map(recalcItem);
+  const totalAmount = recalcItems.reduce((sum, i) => sum + parseFloat(i.amount), 0).toFixed(2);
+
+  let newIssueId = "";
+  await db.transaction(async (tx) => {
+    const [issue] = await tx
+      .insert(materialIssues)
+      .values({
+        slip_number: null,
+        issue_date: cloneDate,
+        vehicle_id: newVehicleId,
+        issue_type: issueType,
+        stage_id: null,
+        margin_percentage: srcIssue.margin_percentage ?? "0",
+        total_amount: totalAmount,
+        financial_year: financialYear,
+        status: "Draft",
+      })
+      .returning({ id: materialIssues.id });
+
+    if (recalcItems.length > 0) {
+      await tx
+        .insert(materialIssueItems)
+        .values(recalcItems.map((item) => ({ ...item, issue_id: issue.id })));
+    }
+
+    // Stock check
+    const qtyByMaterial = new Map<string, number>();
+    for (const item of recalcItems) {
+      if (!item.affects_inventory) continue;
+      qtyByMaterial.set(
+        item.material_id,
+        (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
+      );
+    }
+    for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
+      const [mat] = await tx
+        .select({ name: materials.name, current_stock: materials.current_stock })
+        .from(materials)
+        .where(eq(materials.id, materialId));
+      if (!mat) throw new Error("Material not found.");
+      if (parseFloat(mat.current_stock) < requestedQty)
+        throw new Error(
+          `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
+        );
+    }
+
+    await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, issue.id));
+
+    for (const item of recalcItems) {
+      if (!item.affects_inventory) continue;
+      const [mat] = await tx
+        .select({ current_stock: materials.current_stock })
+        .from(materials)
+        .where(eq(materials.id, item.material_id));
+      const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
+      await tx.update(materials).set({ current_stock: newStock }).where(eq(materials.id, item.material_id));
+      await tx.insert(stockLedger).values({
+        material_id: item.material_id,
+        transaction_type: "ISSUE",
+        reference_id: issue.id,
+        reference_type: "material_issue",
+        qty_change: (-parseFloat(item.qty)).toString(),
+        stock_after: newStock,
+      });
+    }
+
+    newIssueId = issue.id;
+  });
+
+  revalidatePath("/transactions/material-issues");
+  revalidatePath("/transactions/material-issues/new");
+  return { newIssueId };
+}
+
+/** @deprecated Use saveVehicleMaterialIssue instead */
 export async function cloneNewMaterialIssue(
   slipId: string
 ): Promise<{ newSlipId: string; newSlipNumber: number }> {

@@ -17,10 +17,11 @@ interface Props {
   groups: InvoiceRow[][];
   fy: string;
   companySetting?: CompanySetting;
+  showTaxColumns?: boolean;
 }
 
 
-export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
+export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns = true }: Props) {
   const coName = companySetting?.company_name ?? COMPANY_NAME;
   const coAddress = companySetting?.address ?? COMPANY_ADDRESS;
   const coGstin = companySetting?.gstin ?? COMPANY_GSTIN;
@@ -110,8 +111,14 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
                 <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>Qty</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "7%", marginLeft: 4 }]}>Unit</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Rate</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "7%", textAlign: "right" }]}>Tax%</Text>
-                <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax Amt</Text>
+                {showTaxColumns ? (
+                  <>
+                    <Text style={[styles.plainTableHeadCell, { width: "7%", textAlign: "right" }]}>Tax%</Text>
+                    <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax Amt</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax</Text>
+                )}
                 <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Amount</Text>
               </View>
 
@@ -127,12 +134,20 @@ export function CustomerInvoiceDocument({ groups, companySetting }: Props) {
                     <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQty(r.qty)}</Text>
                     <Text style={[styles.plainTableCell, { width: "7%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
                     <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
-                    <Text style={[styles.plainTableCell, { width: "7%", textAlign: "right" }]}>
-                      {r.tax_percentage_item ? `${parseFloat(r.tax_percentage_item)}%` : "—"}
-                    </Text>
-                    <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
-                      {fmtAmt(taxAmt.toFixed(2))}
-                    </Text>
+                    {showTaxColumns ? (
+                      <>
+                        <Text style={[styles.plainTableCell, { width: "7%", textAlign: "right" }]}>
+                          {r.tax_percentage_item ? `${parseFloat(r.tax_percentage_item)}%` : "—"}
+                        </Text>
+                        <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
+                          {fmtAmt(taxAmt.toFixed(2))}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
+                        {fmtAmt(taxAmt.toFixed(2))}
+                      </Text>
+                    )}
                     <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
                       {fmtAmt(grossAmt.toFixed(2))}
                     </Text>

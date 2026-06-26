@@ -240,8 +240,8 @@ export const stageMaterials = pgTable("stage_materials", {
 
 export const materialIssues = pgTable("material_issues", {
   id: uuid("id").primaryKey().defaultRandom(),
-  // integer (not serial) — resets to 1 each FY; backend calculates next number
-  slip_number: integer("slip_number").notNull(),
+  // Legacy: old records retain their slip_number; new records have NULL
+  slip_number: integer("slip_number"),
   issue_date: timestamp("issue_date", { withTimezone: true }).notNull().defaultNow(),
   vehicle_id: uuid("vehicle_id")
     .notNull()
@@ -249,7 +249,7 @@ export const materialIssues = pgTable("material_issues", {
   margin_percentage: numeric("margin_percentage", { precision: 5, scale: 2 }).default("0"),
   total_amount: numeric("total_amount", { precision: 14, scale: 2 }).notNull().default("0"),
   financial_year: text("financial_year").notNull(),
-  // 'Draft' = editable, 'Issued' = triggers stock deduction
+  // 'Issued' = stock deducted (only status used going forward)
   status: text("status").notNull().default("Draft"),
   // 'OLD' = standard VMI; 'NEW' = stage-based VMI
   issue_type: text("issue_type").notNull().default("OLD"),
@@ -257,7 +257,8 @@ export const materialIssues = pgTable("material_issues", {
   stage_id: uuid("stage_id").references(() => stages.id),
   ...timestamps,
 }, (t) => [
-  unique("slip_number_fy_unique").on(t.slip_number, t.financial_year),
+  // One record per vehicle per issue_type per financial_year
+  unique("mi_vehicle_type_fy_unique").on(t.vehicle_id, t.issue_type, t.financial_year),
   index("idx_mi_financial_year").on(t.financial_year),
   index("idx_mi_vehicle_id").on(t.vehicle_id),
   index("idx_mi_fy_status").on(t.financial_year, t.status),

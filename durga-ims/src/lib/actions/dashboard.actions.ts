@@ -21,7 +21,7 @@ export interface DashboardStats {
   fyTotalSales: number;
   fyTotalPurchases: number;
   recentPOs: { id: string; po_number: number; po_date: string; status: string; supplier_name: string | null }[];
-  recentMIs: { id: string; slip_number: number; vehicle_name: string | null; issue_date: string; status: string; issue_type: string }[];
+  recentMIs: { id: string; vehicle_id: string; vehicle_name: string | null; job_ref_no: string | null; issue_date: string; status: string; issue_type: string }[];
   recentInvoices: { id: string; bill_number: string; customer_name: string | null; bill_date: string }[];
 }
 
@@ -75,19 +75,21 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .orderBy(desc(purchaseOrders.po_date), desc(purchaseOrders.po_number))
       .limit(5),
 
-    // Recent 5 MI slips
+    // Recent 5 MI records
     db
       .select({
         id: materialIssues.id,
         slip_number: materialIssues.slip_number,
+        vehicle_id: materialIssues.vehicle_id,
         issue_date: materialIssues.issue_date,
         status: materialIssues.status,
         issue_type: materialIssues.issue_type,
         vehicle_name: vehicles.vehicle_name,
+        job_ref_no: vehicles.job_ref_no,
       })
       .from(materialIssues)
       .leftJoin(vehicles, eq(materialIssues.vehicle_id, vehicles.id))
-      .orderBy(desc(materialIssues.issue_date), desc(materialIssues.slip_number))
+      .orderBy(desc(materialIssues.issue_date))
       .limit(5),
 
     // Recent 5 invoices
@@ -155,11 +157,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     })),
     recentMIs: recentMIRows.map((r) => ({
       id: r.id,
-      slip_number: r.slip_number,
+      vehicle_id: r.vehicle_id,
       issue_date: new Date(r.issue_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
       status: r.status,
       issue_type: r.issue_type,
       vehicle_name: r.vehicle_name,
+      job_ref_no: r.job_ref_no,
     })),
     recentInvoices: recentInvoiceRows.map((r) => ({
       id: r.id,
