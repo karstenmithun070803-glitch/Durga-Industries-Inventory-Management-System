@@ -1057,6 +1057,33 @@ export async function getVehicleMaterialIssue(
 }
 
 // ---------------------------------------------------------------------------
+// Read — issue dates per vehicle for the current FY (used for dropdown labels)
+// ---------------------------------------------------------------------------
+
+export async function getVehicleIssueDatesForFY(
+  fy: string,
+  issueType: "OLD" | "NEW"
+): Promise<{ vehicleId: string; issue_date: string }[]> {
+  const rows = await db
+    .select({
+      vehicleId: materialIssues.vehicle_id,
+      issue_date: materialIssues.issue_date,
+    })
+    .from(materialIssues)
+    .where(
+      and(
+        eq(materialIssues.financial_year, fy),
+        eq(materialIssues.issue_type, issueType)
+      )
+    );
+  return rows.map((r) => ({
+    vehicleId: r.vehicleId,
+    issue_date: typeof r.issue_date === "string"
+      ? r.issue_date
+      : (r.issue_date as Date).toISOString().split("T")[0],
+  }));
+}
+
 // Write — save vehicle material issue (create+issue OR reverse+reapply)
 // ---------------------------------------------------------------------------
 

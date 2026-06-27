@@ -6,6 +6,7 @@ import {
   getActiveContractors,
   getActiveIssueMaterials,
   getActiveSalesUnits,
+  getVehicleIssueDatesForFY,
 } from "@/lib/actions/material-issues.actions";
 import { getAllTaxRates } from "@/lib/actions/tax.actions";
 import { getCompanySettings } from "@/lib/actions/settings.actions";
@@ -20,7 +21,7 @@ export default async function MaterialIssuesPage({
   const fy = getCurrentFY();
   const { vehicleId } = await searchParams;
 
-  const [vehicles, customers, contractors, materials, taxRates, units, companySetting] =
+  const [vehicles, customers, contractors, materials, taxRates, units, companySetting, vehicleIssueDates] =
     await Promise.all([
       getActiveVehicles(),
       getCustomers(),
@@ -29,6 +30,7 @@ export default async function MaterialIssuesPage({
       getAllTaxRates(),
       getActiveSalesUnits(),
       getCompanySettings(),
+      getVehicleIssueDatesForFY(fy, "OLD"),
     ]);
 
   return (
@@ -42,6 +44,7 @@ export default async function MaterialIssuesPage({
       companySetting={companySetting ?? undefined}
       initialVehicleId={vehicleId}
       initialFY={fy}
+      initialVehicleIssueDates={vehicleIssueDates}
     />
   );
 }

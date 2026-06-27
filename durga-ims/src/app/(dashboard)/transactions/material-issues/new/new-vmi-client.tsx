@@ -7,6 +7,7 @@ import {
   getVehicleMaterialIssue,
   saveVehicleMaterialIssue,
   deleteMaterialIssue,
+  getVehicleIssueDatesForFY,
 } from "@/lib/actions/material-issues.actions";
 import { useDebounce } from "@/hooks/use-debounce";
 import { getStageMaterials } from "@/lib/actions/stages.actions";
@@ -116,11 +117,17 @@ interface Props {
   companySetting?: CompanySetting;
   initialVehicleId?: string;
   initialFY: string;
+  initialVehicleIssueDates: { vehicleId: string; issue_date: string }[];
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function formatIssueDateShort(iso: string): string {
+  const [y, m, d] = iso.split("T")[0].split("-");
+  return `${d}.${m}.${y.slice(2)}`;
+}
 
 function toISODate(d: Date | string): string {
   const date = typeof d === "string" ? new Date(d) : d;
@@ -240,11 +247,13 @@ export function NewVMIClient({
   companySetting,
   initialVehicleId,
   initialFY,
+  initialVehicleIssueDates,
 }: Props) {
   const { activeFY } = useFY();
   const [isPending, startTransition] = useTransition();
 
   const [loadedFY, setLoadedFY] = useState(initialFY);
+  const [vehicleIssueDates, setVehicleIssueDates] = useState(initialVehicleIssueDates);
   const [loadedRecord, setLoadedRecord] = useState<MaterialIssueWithDetails | null>(null);
   const [hasExistingRecord, setHasExistingRecord] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -330,6 +339,7 @@ export function NewVMIClient({
   function switchFY(fy: string) {
     setLoadedFY(fy);
     clearForm();
+    void getVehicleIssueDatesForFY(fy, "NEW").then(setVehicleIssueDates).catch(() => {});
   }
 
   function clearForm() {
@@ -362,6 +372,10 @@ export function NewVMIClient({
     setMarginPct(record.margin_percentage ?? "0");
     setRows(miItemsToRows(record, record.margin_percentage ?? "0"));
     setIsDirty(false);
+    setVehicleIssueDates((prev) => [
+      ...prev.filter((d) => d.vehicleId !== record.vehicle_id),
+      { vehicleId: record.vehicle_id, issue_date: toISODate(record.issue_date) },
+    ]);
   }
 
   async function loadVehicleRecord(vehId: string, fy: string) {
@@ -677,11 +691,13 @@ export function NewVMIClient({
 
   function confirmDelete() {
     if (!loadedRecord) return;
+    const deletedVehicleId = loadedRecord.vehicle_id;
     startTransition(async () => {
       try {
         await deleteMaterialIssue(loadedRecord.id);
         toast.success("Record deleted — stock fully reversed");
         setDeleteDialogOpen(false);
+        setVehicleIssueDates((prev) => prev.filter((d) => d.vehicleId !== deletedVehicleId));
         clearForm();
       } catch (e: unknown) {
         toast.error(formatActionError(e, "Delete failed"));
@@ -717,13 +733,21 @@ export function NewVMIClient({
   const { subtotal, cgst, sgst, igst, grand } = calcTotals(rows);
   const hasFormContent = !!vehicleId;
 
-  const vehicleOptions = vehicles
-    .filter((v) => v.type === "New")
-    .map((v) => ({
-      value: v.id,
-      label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}`,
-      displayLabel: v.vehicle_name ?? v.job_ref_no,
-    }));
+  const vehicleOptions = useMemo(() => {
+    const dateMap = new Map(vehicleIssueDates.map((d) => [d.vehicleId, d.issue_date]));
+    return vehicles
+      .filter((v) => v.type === "New")
+      .map((v) => {
+        const dateSuffix = dateMap.has(v.id)
+          ? ` — ${formatIssueDateShort(dateMap.get(v.id)!)}`
+          : "";
+        return {
+          value: v.id,
+          label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}${dateSuffix}`,
+          displayLabel: (v.vehicle_name ?? v.job_ref_no) + dateSuffix,
+        };
+      });
+  }, [vehicles, vehicleIssueDates]);
 
   return (
     <div className="flex h-full flex-col">

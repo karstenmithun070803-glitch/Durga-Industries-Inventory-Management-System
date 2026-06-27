@@ -6,6 +6,7 @@ import {
   getActiveContractors,
   getActiveIssueMaterials,
   getActiveSalesUnits,
+  getVehicleIssueDatesForFY,
 } from "@/lib/actions/material-issues.actions";
 import { getStagesForDropdown } from "@/lib/actions/stages.actions";
 import { getAllTaxRates } from "@/lib/actions/tax.actions";
@@ -21,7 +22,7 @@ export default async function NewVMIPage({
   const fy = getCurrentFY();
   const { vehicleId } = await searchParams;
 
-  const [vehicles, customers, stages, contractors, materials, taxRates, units, companySetting] =
+  const [vehicles, customers, stages, contractors, materials, taxRates, units, companySetting, vehicleIssueDates] =
     await Promise.all([
       getActiveVehicles(),
       getCustomers(),
@@ -31,6 +32,7 @@ export default async function NewVMIPage({
       getAllTaxRates(),
       getActiveSalesUnits(),
       getCompanySettings(),
+      getVehicleIssueDatesForFY(fy, "NEW"),
     ]);
 
   return (
@@ -45,6 +47,7 @@ export default async function NewVMIPage({
       companySetting={companySetting ?? undefined}
       initialVehicleId={vehicleId}
       initialFY={fy}
+      initialVehicleIssueDates={vehicleIssueDates}
     />
   );
 }
