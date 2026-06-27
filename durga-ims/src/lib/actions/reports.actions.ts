@@ -402,83 +402,120 @@ export interface MaterialWiseCostingRow {
   base_amount: number;
 }
 
-export async function getStageWiseCostingData(vehicleId: string, fy: string, asOfDate?: string): Promise<StageWiseCostingRow[]> {
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!UUID_REGEX.test(vehicleId)) throw new Error("Invalid vehicleId");
-  if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
-  if (asOfDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Invalid asOfDate");
-
-  const rows = await db
-    .select({
-      code: sql<string>`COALESCE(${stages.stage_code}, 'MANUAL')`,
-      name: sql<string>`COALESCE(${stages.stage_name}, 'Manual Entry')`,
-      base_amount: sql<string>`SUM(${materialIssueItems.amount} + ${materialIssueItems.cgst_amount} + ${materialIssueItems.sgst_amount} + ${materialIssueItems.igst_amount})`,
-    })
-    .from(materialIssueItems)
-    .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
-    .leftJoin(stages, eq(materialIssueItems.stage_id, stages.id))
-    .where(
-      and(
-        eq(materialIssues.vehicle_id, vehicleId),
-        eq(materialIssues.status, "Issued"),
-        eq(materialIssues.financial_year, fy),
-        eq(materialIssues.issue_type, "NEW"),
-        eq(materialIssueItems.affects_inventory, true),
-        asOfDate ? lte(materialIssues.issue_date, new Date(asOfDate + "T23:59:59+05:30")) : undefined,
-      )
-    )
-    .groupBy(
-      materialIssueItems.stage_id,
-      stages.stage_code,
-      stages.stage_name,
-    )
-    .orderBy(sql`${stages.stage_code} NULLS LAST`);
-
-  return rows.map((r) => ({
-    code: r.code,
-    name: r.name,
-    base_amount: parseFloat(r.base_amount ?? "0"),
-    is_direct: r.code === "MANUAL",
-  }));
+export interface StageWiseCostingResult {
+  rows: StageWiseCostingRow[];
+  storedMargin: number;
 }
 
-export async function getMaterialWiseCostingData(vehicleId: string, fy: string, asOfDate?: string): Promise<MaterialWiseCostingRow[]> {
+export interface MaterialWiseCostingResult {
+  rows: MaterialWiseCostingRow[];
+  storedMargin: number;
+}
+
+async function fetchStoredMargin(vehicleId: string, fy: string): Promise<number> {
+  const [header] = await db
+    .select({ margin_percentage: materialIssues.margin_percentage })
+    .from(materialIssues)
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.financial_year, fy),
+        eq(materialIssues.issue_type, "NEW"),
+        eq(materialIssues.status, "Issued"),
+      )
+    )
+    .limit(1);
+  return parseFloat(header?.margin_percentage ?? "0");
+}
+
+export async function getStageWiseCostingData(vehicleId: string, fy: string, asOfDate?: string): Promise<StageWiseCostingResult> {
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!UUID_REGEX.test(vehicleId)) throw new Error("Invalid vehicleId");
   if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
   if (asOfDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Invalid asOfDate");
 
-  // No cache — must reflect latest issued slips
-  const rows = await db
-    .select({
-      code: sql<string>`${materials.material_no}::text`,
-      name: materials.name,
-      stages: sql<string>`STRING_AGG(DISTINCT COALESCE(${stages.stage_name}, 'Direct Issue'), ', ' ORDER BY COALESCE(${stages.stage_name}, 'Direct Issue'))`,
-      base_amount: sql<string>`SUM(${materialIssueItems.amount} + ${materialIssueItems.cgst_amount} + ${materialIssueItems.sgst_amount} + ${materialIssueItems.igst_amount})`,
-    })
-    .from(materialIssueItems)
-    .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
-    .innerJoin(materials, eq(materialIssueItems.material_id, materials.id))
-    .leftJoin(stages, eq(materialIssueItems.stage_id, stages.id))
-    .where(
-      and(
-        eq(materialIssues.vehicle_id, vehicleId),
-        eq(materialIssues.status, "Issued"),
-        eq(materialIssues.financial_year, fy),
-        eq(materialIssues.issue_type, "NEW"),
-        eq(materialIssueItems.affects_inventory, true),
-        asOfDate ? lte(materialIssues.issue_date, new Date(asOfDate + "T23:59:59+05:30")) : undefined,
+  const [rows, storedMargin] = await Promise.all([
+    db
+      .select({
+        code: sql<string>`COALESCE(${stages.stage_code}, 'MANUAL')`,
+        name: sql<string>`COALESCE(${stages.stage_name}, 'Manual Entry')`,
+        base_amount: sql<string>`SUM(${materialIssueItems.amount} + ${materialIssueItems.cgst_amount} + ${materialIssueItems.sgst_amount} + ${materialIssueItems.igst_amount})`,
+      })
+      .from(materialIssueItems)
+      .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
+      .leftJoin(stages, eq(materialIssueItems.stage_id, stages.id))
+      .where(
+        and(
+          eq(materialIssues.vehicle_id, vehicleId),
+          eq(materialIssues.status, "Issued"),
+          eq(materialIssues.financial_year, fy),
+          eq(materialIssues.issue_type, "NEW"),
+          eq(materialIssueItems.affects_inventory, true),
+          asOfDate ? lte(materialIssues.issue_date, new Date(asOfDate + "T23:59:59+05:30")) : undefined,
+        )
       )
-    )
-    .groupBy(materials.id, materials.material_no, materials.name)
-    .orderBy(materials.name);
+      .groupBy(
+        materialIssueItems.stage_id,
+        stages.stage_code,
+        stages.stage_name,
+      )
+      .orderBy(sql`${stages.stage_code} NULLS LAST`),
+    fetchStoredMargin(vehicleId, fy),
+  ]);
 
-  return rows.map((r) => ({
-    code: r.code,
-    name: r.name,
-    stages: r.stages ?? "",
-    base_amount: parseFloat(r.base_amount ?? "0"),
-  }));
+  return {
+    rows: rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      base_amount: parseFloat(r.base_amount ?? "0"),
+      is_direct: r.code === "MANUAL",
+    })),
+    storedMargin,
+  };
+}
+
+export async function getMaterialWiseCostingData(vehicleId: string, fy: string, asOfDate?: string): Promise<MaterialWiseCostingResult> {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(vehicleId)) throw new Error("Invalid vehicleId");
+  if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
+  if (asOfDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Invalid asOfDate");
+
+  const [rows, storedMargin] = await Promise.all([
+    db
+      .select({
+        code: sql<string>`${materials.material_no}::text`,
+        name: materials.name,
+        stages: sql<string>`STRING_AGG(DISTINCT COALESCE(${stages.stage_name}, 'Direct Issue'), ', ' ORDER BY COALESCE(${stages.stage_name}, 'Direct Issue'))`,
+        base_amount: sql<string>`SUM(${materialIssueItems.amount} + ${materialIssueItems.cgst_amount} + ${materialIssueItems.sgst_amount} + ${materialIssueItems.igst_amount})`,
+      })
+      .from(materialIssueItems)
+      .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
+      .innerJoin(materials, eq(materialIssueItems.material_id, materials.id))
+      .leftJoin(stages, eq(materialIssueItems.stage_id, stages.id))
+      .where(
+        and(
+          eq(materialIssues.vehicle_id, vehicleId),
+          eq(materialIssues.status, "Issued"),
+          eq(materialIssues.financial_year, fy),
+          eq(materialIssues.issue_type, "NEW"),
+          eq(materialIssueItems.affects_inventory, true),
+          asOfDate ? lte(materialIssues.issue_date, new Date(asOfDate + "T23:59:59+05:30")) : undefined,
+        )
+      )
+      .groupBy(materials.id, materials.material_no, materials.name)
+      .orderBy(materials.name),
+    fetchStoredMargin(vehicleId, fy),
+  ]);
+
+  return {
+    rows: rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      stages: r.stages ?? "",
+      base_amount: parseFloat(r.base_amount ?? "0"),
+    })),
+    storedMargin,
+  };
 }
 
 // ---------------------------------------------------------------------------

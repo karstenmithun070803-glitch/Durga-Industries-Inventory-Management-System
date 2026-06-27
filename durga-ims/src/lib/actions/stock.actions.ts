@@ -132,11 +132,17 @@ export async function getStockDashboardMaterials(): Promise<{
   const unitRows = await db.select({ id: units.id, unit_name: units.unit_name }).from(units);
   const unitMap = new Map(unitRows.map((u) => [u.id, u.unit_name]));
 
-  // DISTINCT ON returns exactly one row per material (the most recent received PO rate).
+  // DISTINCT ON returns exactly one row per material (the most recent received PO rate, tax-inclusive).
+  // Tax-inclusive = (base amount + cgst + sgst + igst) / qty so the rate matches what the PO tab totals show.
   const latestRates = await db.execute<{ material_id: string; rate: string }>(sql`
     SELECT DISTINCT ON (poi.material_id)
       poi.material_id,
-      poi.rate
+      (
+        poi.amount
+        + COALESCE(poi.cgst_amount, 0)
+        + COALESCE(poi.sgst_amount, 0)
+        + COALESCE(poi.igst_amount, 0)
+      ) / NULLIF(poi.qty, 0) AS rate
     FROM purchase_order_items poi
     INNER JOIN purchase_orders po ON poi.po_id = po.id
     WHERE po.status = 'Received'
@@ -452,6 +458,9 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
       qty: materialIssueItems.qty,
       rate: materialIssueItems.rate,
       amount: materialIssueItems.amount,
+      cgst_amount: materialIssueItems.cgst_amount,
+      sgst_amount: materialIssueItems.sgst_amount,
+      igst_amount: materialIssueItems.igst_amount,
     })
     .from(materialIssueItems)
     .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
@@ -507,7 +516,10 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
     }
     const g = groupMap.get(key)!;
     g.total_qty += qty;
-    g.total_amount += amount;
+    g.total_amount += amount
+      + parseFloat(item.cgst_amount || "0")
+      + parseFloat(item.sgst_amount || "0")
+      + parseFloat(item.igst_amount || "0");
   }
 
   const rows: JobCostRow[] = Array.from(groupMap.values()).map((g) => ({

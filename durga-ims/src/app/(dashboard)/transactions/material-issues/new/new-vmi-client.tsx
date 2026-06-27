@@ -166,14 +166,14 @@ function computeRowAmounts(
       cgst_amount: (taxAmt / 2).toFixed(2),
       sgst_amount: (taxAmt / 2).toFixed(2),
       igst_amount: "0.00",
-      amount: (base + taxAmt).toFixed(2),
+      amount: base.toFixed(2),
     };
   }
   return {
     cgst_amount: "0.00",
     sgst_amount: "0.00",
     igst_amount: taxAmt.toFixed(2),
-    amount: (base + taxAmt).toFixed(2),
+    amount: base.toFixed(2),
   };
 }
 

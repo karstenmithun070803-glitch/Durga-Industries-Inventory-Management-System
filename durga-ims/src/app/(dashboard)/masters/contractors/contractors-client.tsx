@@ -10,7 +10,6 @@ import { createContractor, updateContractor, deleteContractor, reactivateContrac
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Contractor } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -29,13 +28,6 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
   const searchRef = useRef<HTMLInputElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef({ name: "", role: "", contact: "" });
-
-  const router = useRouter();
-  useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [router]);
 
   const inactive = contractors.filter((c) => !c.is_active);
   const visible = useMemo(() =>

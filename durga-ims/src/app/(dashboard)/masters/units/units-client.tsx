@@ -10,7 +10,6 @@ import { createUnit, updateUnit, deleteUnit, reactivateUnit } from "@/lib/action
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Unit } from "@/types";
 import { RotateCcw, UserX } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export function UnitsClient({ units }: { units: Unit[] }) {
@@ -27,13 +26,6 @@ export function UnitsClient({ units }: { units: Unit[] }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalNameRef = useRef("");
-
-  const router = useRouter();
-  useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [router]);
 
   const inactive = units.filter((u) => !u.is_active);
   const visible = useMemo(() =>

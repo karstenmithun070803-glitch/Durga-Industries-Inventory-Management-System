@@ -104,12 +104,17 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .orderBy(desc(invoices.bill_date), desc(invoices.bill_number))
       .limit(5),
 
-    // Most recent received PO rate per material — identical query to getStockDashboardMaterials()
+    // Most recent received PO rate per material (tax-inclusive) — identical formula to getStockDashboardMaterials()
     // so Home tab totalStockValue matches Stock tab totalStockValue exactly.
     db.execute<{ material_id: string; rate: string }>(sql`
       SELECT DISTINCT ON (poi.material_id)
         poi.material_id,
-        poi.rate
+        (
+          poi.amount
+          + COALESCE(poi.cgst_amount, 0)
+          + COALESCE(poi.sgst_amount, 0)
+          + COALESCE(poi.igst_amount, 0)
+        ) / NULLIF(poi.qty, 0) AS rate
       FROM purchase_order_items poi
       INNER JOIN purchase_orders po ON poi.po_id = po.id
       WHERE po.status = 'Received'

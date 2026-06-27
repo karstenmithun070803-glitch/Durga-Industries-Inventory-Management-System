@@ -1256,7 +1256,7 @@ export async function cloneVehicleMaterialIssue(
         cgst_amount: (taxAmt / 2).toFixed(2),
         sgst_amount: (taxAmt / 2).toFixed(2),
         igst_amount: "0.00",
-        amount: (base + taxAmt).toFixed(2),
+        amount: base.toFixed(2),
       };
     }
     return {
@@ -1265,13 +1265,18 @@ export async function cloneVehicleMaterialIssue(
       cgst_amount: "0.00",
       sgst_amount: "0.00",
       igst_amount: taxAmt.toFixed(2),
-      amount: (base + taxAmt).toFixed(2),
+      amount: base.toFixed(2),
     };
   };
 
   const cloneDate = clampDateToFY(financialYear);
   const recalcItems = srcItems.map(recalcItem);
-  const totalAmount = recalcItems.reduce((sum, i) => sum + parseFloat(i.amount), 0).toFixed(2);
+  const totalAmount = recalcItems.reduce((sum, i) =>
+    sum + parseFloat(i.amount)
+        + parseFloat(i.cgst_amount || "0")
+        + parseFloat(i.sgst_amount || "0")
+        + parseFloat(i.igst_amount || "0"),
+  0).toFixed(2);
 
   let newIssueId = "";
   await db.transaction(async (tx) => {
@@ -1427,4 +1432,94 @@ export async function cloneNewMaterialIssue(
   revalidatePath("/transactions/material-issues");
   revalidatePath("/transactions/material-issues/new");
   return { newSlipId, newSlipNumber };
+}
+
+// ---------------------------------------------------------------------------
+// Update Margin — syncs margin_percentage and item rates across ALL issued NEW
+// VMI records for a vehicle+FY. No stock ledger changes (qty unchanged).
+// ---------------------------------------------------------------------------
+
+export async function updateVehicleMargin(
+  vehicleId: string,
+  fy: string,
+  newMarginStr: string
+): Promise<void> {
+  const newMargin = parseFloat(newMarginStr) || 0;
+
+  const issueRecords = await db
+    .select({ id: materialIssues.id, margin_percentage: materialIssues.margin_percentage })
+    .from(materialIssues)
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.financial_year, fy),
+        eq(materialIssues.issue_type, "NEW"),
+        eq(materialIssues.status, "Issued"),
+      )
+    );
+
+  if (issueRecords.length === 0) return;
+
+  const oldMargin = parseFloat(issueRecords[0].margin_percentage ?? "0");
+  const oldFactor = 1 + oldMargin / 100;
+  const newFactor = 1 + newMargin / 100;
+  const factor = newFactor / oldFactor;
+
+  if (Math.abs(factor - 1) < 0.0001) return;
+
+  await db.transaction(async (tx) => {
+    for (const issue of issueRecords) {
+      const items = await tx
+        .select({
+          id: materialIssueItems.id,
+          qty: materialIssueItems.qty,
+          rate: materialIssueItems.rate,
+          tax_percentage: materialIssueItems.tax_percentage,
+          gst_type: materialIssueItems.gst_type,
+        })
+        .from(materialIssueItems)
+        .where(eq(materialIssueItems.issue_id, issue.id));
+
+      let issueTotal = 0;
+
+      for (const item of items) {
+        const qty = parseFloat(item.qty) || 0;
+        const oldRate = parseFloat(item.rate) || 0;
+        const taxPct = parseFloat(item.tax_percentage ?? "0") || 0;
+        const gstType = item.gst_type ?? "CGST_SGST";
+
+        const newRate = oldRate * factor;
+        const newAmount = qty * newRate;
+        const taxAmt = newAmount * (taxPct / 100);
+
+        const cgst = gstType === "CGST_SGST" ? taxAmt / 2 : 0;
+        const sgst = gstType === "CGST_SGST" ? taxAmt / 2 : 0;
+        const igst = gstType === "IGST" ? taxAmt : 0;
+
+        issueTotal += newAmount + cgst + sgst + igst;
+
+        await tx
+          .update(materialIssueItems)
+          .set({
+            rate: newRate.toFixed(4),
+            amount: newAmount.toFixed(2),
+            cgst_amount: cgst.toFixed(2),
+            sgst_amount: sgst.toFixed(2),
+            igst_amount: igst.toFixed(2),
+          })
+          .where(eq(materialIssueItems.id, item.id));
+      }
+
+      await tx
+        .update(materialIssues)
+        .set({
+          margin_percentage: newMarginStr,
+          total_amount: issueTotal.toFixed(2),
+        })
+        .where(eq(materialIssues.id, issue.id));
+    }
+  });
+
+  revalidatePath("/transactions/material-issues/new");
+  revalidatePath("/reports");
 }

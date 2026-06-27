@@ -10,7 +10,6 @@ import { createTaxRate, updateTaxRate, deleteTaxRate, reactivateTaxRate } from "
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { TaxRate } from "@/types";
 import { RotateCcw, UserX } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
@@ -27,13 +26,6 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef({ tax_percentage: "" });
-
-  const router = useRouter();
-  useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [router]);
 
   const inactive = taxRates.filter((t) => !t.is_active);
   const visible = useMemo(() =>

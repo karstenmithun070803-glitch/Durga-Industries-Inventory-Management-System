@@ -14,6 +14,7 @@ import type {
   StageWiseCostingRow,
   MaterialWiseCostingRow,
 } from "@/lib/actions/reports.actions";
+import { updateVehicleMargin } from "@/lib/actions/material-issues.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { PrintButton } from "@/components/pdf/print-button";
 import { StageWiseCostingDocument } from "@/components/pdf/stage-wise-costing-pdf";
@@ -50,6 +51,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
   const [asOfDate, setAsOfDate] = useState("");
   const [rptType, setRptType] = useState<RptType>("stage");
   const [marginPct, setMarginPct] = useState(0);
+  const [storedMargin, setStoredMargin] = useState(0);
   const [stageRows, setStageRows] = useState<StageWiseCostingRow[]>([]);
   const [materialRows, setMaterialRows] = useState<MaterialWiseCostingRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,20 +68,34 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     ? `${selectedVehicle.job_ref_no}${selectedVehicle.vehicle_name ? ` — ${selectedVehicle.vehicle_name}` : ""}`
     : "";
 
-  function runReport() {
+  async function runReport() {
     if (!vehicleId) return;
     const gen = ++fetchGenRef.current;
     setIsLoading(true);
-    Promise.all([
-      getStageWiseCostingData(vehicleId, fy, asOfDate || undefined),
-      getMaterialWiseCostingData(vehicleId, fy, asOfDate || undefined),
-    ])
-      .then(([sw, mw]) => { if (gen === fetchGenRef.current) { setStageRows(sw); setMaterialRows(mw); setHasRun(true); } })
-      .catch(() => { if (gen === fetchGenRef.current) toast.error("Failed to load report data."); })
-      .finally(() => { if (gen === fetchGenRef.current) setIsLoading(false); });
+    try {
+      // If margin changed from stored value, persist to DB first
+      if (marginPct !== storedMargin) {
+        await updateVehicleMargin(vehicleId, fy, String(marginPct));
+      }
+      const [sw, mw] = await Promise.all([
+        getStageWiseCostingData(vehicleId, fy, asOfDate || undefined),
+        getMaterialWiseCostingData(vehicleId, fy, asOfDate || undefined),
+      ]);
+      if (gen === fetchGenRef.current) {
+        setStageRows(sw.rows);
+        setMaterialRows(mw.rows);
+        setStoredMargin(sw.storedMargin);
+        setMarginPct(sw.storedMargin);
+        setHasRun(true);
+      }
+    } catch {
+      if (gen === fetchGenRef.current) toast.error("Failed to load report data.");
+    } finally {
+      if (gen === fetchGenRef.current) setIsLoading(false);
+    }
   }
 
-  // Auto-run on filter change — skips silently if no vehicle selected
+  // Auto-run on filter change — fetches stored margin from DB and syncs input
   useEffect(() => {
     if (!vehicleId) return;
     const gen = ++fetchGenRef.current;
@@ -90,7 +106,15 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         getStageWiseCostingData(vehicleId, fy, asOfDate || undefined),
         getMaterialWiseCostingData(vehicleId, fy, asOfDate || undefined),
       ])
-        .then(([sw, mw]) => { if (gen === fetchGenRef.current) { setStageRows(sw); setMaterialRows(mw); setHasRun(true); } })
+        .then(([sw, mw]) => {
+          if (gen === fetchGenRef.current) {
+            setStageRows(sw.rows);
+            setMaterialRows(mw.rows);
+            setStoredMargin(sw.storedMargin);
+            setMarginPct(sw.storedMargin);
+            setHasRun(true);
+          }
+        })
         .catch(() => { if (gen === fetchGenRef.current) toast.error("Failed to load report data."); })
         .finally(() => { if (gen === fetchGenRef.current) setIsLoading(false); });
     }, 300);
@@ -98,14 +122,14 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleId, fy, asOfDate]);
 
-  // Apply margin client-side — no re-fetch needed
+  // Display rows use base_amount directly — DB is always updated before fetch
   const displayStageRows = useMemo(
-    () => stageRows.map((r) => ({ ...r, amount: r.base_amount * (1 + marginPct / 100) })),
-    [stageRows, marginPct]
+    () => stageRows.map((r) => ({ ...r, amount: r.base_amount })),
+    [stageRows]
   );
   const displayMaterialRows = useMemo(
-    () => materialRows.map((r) => ({ ...r, amount: r.base_amount * (1 + marginPct / 100) })),
-    [materialRows, marginPct]
+    () => materialRows.map((r) => ({ ...r, amount: r.base_amount })),
+    [materialRows]
   );
 
 
@@ -211,6 +235,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
             step="0.01"
             value={marginPct}
             onChange={(e) => setMarginPct(parseFloat(e.target.value) || 0)}
+            onFocus={(e) => e.target.select()}
             className="h-9 text-sm"
           />
         </div>

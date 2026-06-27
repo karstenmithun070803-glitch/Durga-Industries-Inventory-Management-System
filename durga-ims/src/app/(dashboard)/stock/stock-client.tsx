@@ -373,7 +373,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
           sub={[
             summary.standardCostCount > 0 ? `${summary.standardCostCount} use standard cost` : null,
             summary.materialsExcludedFromValue > 0 ? `${summary.materialsExcludedFromValue} excl. (no cost set)` : null,
-          ].filter(Boolean).join(" · ") || "based on last PO rate"}
+          ].filter(Boolean).join(" · ") || "based on last PO rate (incl. GST)"}
         />
         <SummaryCard
           label="Low Stock"
@@ -428,7 +428,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             size="sm"
             className="h-8 text-xs ml-auto"
             onClick={() => {
-              const headers = ["Code", "Material Name", "Unit", "Current Stock", "Min Level", "Max Level", "Valuation Rate", "Stock Value", "Status"];
+              const headers = ["Code", "Material Name", "Unit", "Current Stock", "Min Level", "Max Level", "Valuation Rate (incl. GST)", "Stock Value (incl. GST)", "Status"];
               const statusLabel: Record<string, string> = { ok: "OK", low: "Low Stock", out: "Out of Stock" };
               const csvRows = filtered.map((r) => {
                 const stock = parseFloat(r.current_stock);
@@ -458,7 +458,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               URL.revokeObjectURL(url);
             }}
           >
-            Export CSV ({filtered.length})
+            Export CSV
           </Button>
         </div>
 
@@ -472,8 +472,8 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Current Stock</th>
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Min Level</th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Last PO Rate</th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Stock Value</th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Last PO Rate (incl. GST)</th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Stock Value (incl. GST)</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Status</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Actions</th>
               </tr>
@@ -519,9 +519,11 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
                         {rate !== null ? (
-                          <span className="inline-flex items-center gap-1 justify-end">
+                          <span
+                            className={cn("inline-flex items-center gap-1 justify-end", isStdRate && "italic text-slate-400")}
+                            title={isStdRate ? "Standard cost — no purchase order received yet" : undefined}
+                          >
                             {fmtAmt(rate)}
-                            {isStdRate && <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1 rounded">Std</span>}
                           </span>
                         ) : "—"}
                       </td>
@@ -597,7 +599,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                         <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Reference</th>
                         <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Change</th>
                         <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Stock After</th>
-                        <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap" title="Value impact for manual adjustments (qty × last PO rate)">Value Δ</th>
+                        <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap" title="Value impact for manual adjustments (qty × base rate at time of adjustment, excl. GST)">Value Δ</th>
                         <th className="px-2 py-2 text-left font-medium text-slate-600">Note</th>
                       </tr>
                     </thead>

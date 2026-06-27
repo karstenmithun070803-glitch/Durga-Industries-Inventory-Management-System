@@ -242,6 +242,7 @@ export function PurchaseOrdersClient({
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // Batch print range
+  const [printByDate, setPrintByDate] = useState("");
   const [printFromId, setPrintFromId] = useState("");
   const [printToId, setPrintToId] = useState("");
   const [batchPOs, setBatchPOs] = useState<PurchaseOrderWithDetails[]>([]);
@@ -263,28 +264,37 @@ export function PurchaseOrdersClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-fetch full PO data when batch print range is selected
+  // Auto-fetch full PO data for batch print (date filter, range filter, or both as intersection)
   useEffect(() => {
-    if (!printFromId || !printToId) {
-      setBatchPOs([]);
-      return;
-    }
-    const from = dropdownItems.find((d) => d.id === printFromId)?.poNumber ?? 0;
-    const to = dropdownItems.find((d) => d.id === printToId)?.poNumber ?? 0;
-    if (!from || !to) { setBatchPOs([]); return; }
+    const dateActive  = !!printByDate;
+    const rangeActive = !!(printFromId && printToId);
 
-    const lo = Math.min(from, to);
-    const hi = Math.max(from, to);
-    const inRange = dropdownItems
-      .filter((d) => d.poNumber >= lo && d.poNumber <= hi)
-      .sort((a, b) => a.poNumber - b.poNumber);
-    if (inRange.length === 0) { setBatchPOs([]); return; }
+    if (!dateActive && !rangeActive) { setBatchPOs([]); return; }
+
+    let targets = dropdownItems as DropdownItem[];
+
+    if (dateActive) {
+      targets = targets.filter((d) => toISODate(d.date) === printByDate);
+    }
+
+    if (rangeActive) {
+      const from = dropdownItems.find((d) => d.id === printFromId)?.poNumber ?? 0;
+      const to   = dropdownItems.find((d) => d.id === printToId)?.poNumber ?? 0;
+      if (from && to) {
+        const lo = Math.min(from, to), hi = Math.max(from, to);
+        targets = targets.filter((d) => d.poNumber >= lo && d.poNumber <= hi);
+      }
+    }
+
+    targets = [...targets].sort((a, b) => a.poNumber - b.poNumber);
+
+    if (targets.length === 0) { setBatchPOs([]); setBatchLoading(false); return; }
 
     let cancelled = false;
     setBatchLoading(true);
     setBatchPOs([]);
 
-    Promise.all(inRange.map((d) => getPurchaseOrderById(d.id)))
+    Promise.all(targets.map((d) => getPurchaseOrderById(d.id)))
       .then((results) => {
         if (!cancelled) setBatchPOs(results.filter(Boolean) as PurchaseOrderWithDetails[]);
       })
@@ -294,15 +304,19 @@ export function PurchaseOrdersClient({
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [printFromId, printToId]);
+  }, [printByDate, printFromId, printToId]);
 
-  // FY change: refresh dropdown + clear form
+  // FY change: refresh dropdown + clear form + reset print state
   useEffect(() => {
     if (activeFY === loadedFY) return;
     getPOsForDropdown(activeFY).then((data) => {
       setDropdownItems(data as DropdownItem[]);
       setLoadedFY(activeFY);
       clearForm();
+      setPrintByDate("");
+      setPrintFromId("");
+      setPrintToId("");
+      setBatchPOs([]);
     });
   }, [activeFY, loadedFY]);
 
@@ -703,7 +717,7 @@ export function PurchaseOrdersClient({
               <div className="flex flex-wrap items-end gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 uppercase tracking-wide">Supplier</label>
-                  <div className="w-64">
+                  <div className="w-64" onClick={() => { if (eitherFilterActive) setIsListOpen(true); }}>
                     <Combobox
                       options={supplierFilterOptions}
                       value={filterSupplier}
@@ -940,7 +954,16 @@ export function PurchaseOrdersClient({
         </button>
         {sidebarOpen && (
           <div className="px-4 pb-4 flex flex-col gap-3">
-            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Print PO Range</h3>
+            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Print POs</h3>
+            <div className="space-y-1">
+              <label className="text-sm text-slate-500">Date</label>
+              <Input
+                type="date"
+                value={printByDate}
+                onChange={(e) => setPrintByDate(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
             <div className="space-y-1">
               <label className="text-sm text-slate-500">PO No From</label>
               <Combobox
@@ -968,8 +991,8 @@ export function PurchaseOrdersClient({
                   companySetting={companySetting}
                 />
               )}
-              disabled={!printFromId || !printToId || batchLoading}
-              label={batchLoading ? "Loading…" : "Print POs"}
+              disabled={(!printByDate && (!printFromId || !printToId)) || batchLoading}
+              label={batchLoading ? "Loading…" : `Print POs${batchPOs.length > 0 ? ` (${batchPOs.length})` : ""}`}
             />
           </div>
         )}

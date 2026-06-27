@@ -12,7 +12,6 @@ import { INDIAN_STATES } from "@/lib/constants";
 import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Supplier } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -34,13 +33,6 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef<typeof EMPTY>(EMPTY);
-
-  const router = useRouter();
-  useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [router]);
 
   const isDuplicateName = form.name.trim() !== "" &&
     suppliers.some((s) =>

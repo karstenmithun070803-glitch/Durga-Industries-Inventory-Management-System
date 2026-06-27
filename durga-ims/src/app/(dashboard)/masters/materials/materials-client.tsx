@@ -11,7 +11,6 @@ import { createMaterial, updateMaterial, deleteMaterial, reactivateMaterial } fr
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Material, TaxRate, Unit } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { BulkImportDialog } from "@/components/masters/bulk-import-dialog";
 
@@ -34,13 +33,6 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef<typeof EMPTY>(EMPTY);
-
-  const router = useRouter();
-  useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [router]);
 
   const isDuplicateName = form.name.trim() !== "" &&
     materials.some((m) =>

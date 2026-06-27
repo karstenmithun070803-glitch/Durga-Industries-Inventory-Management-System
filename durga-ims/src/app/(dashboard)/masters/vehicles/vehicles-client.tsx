@@ -12,7 +12,6 @@ import { createVehicle, updateVehicle, deleteVehicle, reactivateVehicle, bulkImp
 import { formatCode } from "@/lib/utils";
 import type { Customer } from "@/types";
 import { RotateCcw, UserX, Upload } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -36,13 +35,6 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef<typeof EMPTY>(EMPTY);
-
-  const router = useRouter();
-  useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [router]);
 
   const inactive = vehicles.filter((v) => !v.is_active);
   const visible = useMemo(() =>

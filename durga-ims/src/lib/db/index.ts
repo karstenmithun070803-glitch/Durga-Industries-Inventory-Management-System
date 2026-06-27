@@ -7,7 +7,7 @@ const connectionString = process.env.DATABASE_URL!;
 // prepare: false required for Supabase transaction pooler compatibility
 const client = postgres(connectionString, {
   prepare: false,
-  idle_timeout: 20,
+  idle_timeout: 60,
   max_lifetime: 1800,
 });
 

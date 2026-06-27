@@ -14,7 +14,6 @@ import {
 } from "@/lib/actions/stages.actions";
 import { formatCode } from "@/lib/utils";
 import { Trash2, RotateCcw, Layers } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
@@ -98,13 +97,6 @@ export function StagesClient({ stages, materials, units }: Props) {
     name: "",
     rows: [],
   });
-
-  const router = useRouter();
-  useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [router]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const inactive = stages.filter((s) => !s.is_active);

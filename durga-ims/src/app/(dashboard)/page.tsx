@@ -99,7 +99,7 @@ export default async function HomePage() {
         <StatCard
           label="Total Stock Value"
           value={fmtAmt(stats.totalStockValue)}
-          sub={`${stats.lowStockCount} below min · ${stats.materialsExcludedFromValue} excl. (no rate)`}
+          sub={`${stats.lowStockCount} below min · ${stats.materialsExcludedFromValue} excl. (no rate) · incl. GST basis`}
           href="/stock"
           color={stats.lowStockCount > 0 ? "amber" : "slate"}
         />
