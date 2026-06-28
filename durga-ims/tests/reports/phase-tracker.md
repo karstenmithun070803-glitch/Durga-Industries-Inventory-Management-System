@@ -4,12 +4,12 @@
 |-------|--------------------|-------------|-------|------|------|-------------------|------------|------------|
 | 0     | Pre-Flight Setup   | ✅ COMPLETE  | —     | —    | —    | See notes below   | 0          | 2026-06-29 |
 | 1     | Pure Function Unit | ✅ COMPLETE  | 128   | 128  | 0    | 14 functions      | 1 (fixed)  | 2026-06-29 |
-| 2     | DB Integration     | ⏳ PENDING   | ~100  | —    | —    | —                 | —          | —          |
+| 2     | DB Integration     | ✅ COMPLETE  | 67    | 67   | 0    | See phase-2 report| 1 cand.    | 2026-06-29 |
 | 3     | E2E Happy Paths    | ⏳ PENDING   | ~30   | —    | —    | —                 | —          | —          |
 | 4     | Edge Cases + Sec   | ⏳ PENDING   | ~35   | —    | —    | —                 | —          | —          |
 | 5     | Performance        | ⏳ PENDING   | ~12   | —    | —    | —                 | —          | —          |
 
-**Total so far:** 128 tests | 128 pass | 0 fail | 1 bug found | 1 bug fixed | 1 code change
+**Total so far:** 195 tests | 195 pass | 0 fail | 1 bug found + 1 candidate | 1 bug fixed | 1 code change
 
 ---
 

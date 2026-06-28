@@ -43,5 +43,27 @@ Format:
 - **Impact:** Users see "needed: 10.00." with stray trailing period in stock insufficiency error toasts — cosmetic but incorrect
 - **Status:** Fixed
 - **Fix applied:** Changed regex third capture group from `([\d.]+)` to `(\d+(?:\.\d+)?)` in `src/lib/utils.ts:26`. Root cause: `[\d.]` character class includes `.`, so the greedy match consumed the trailing period from error messages, leaving nothing for the `\.?` suffix to strip. The new pattern explicitly matches a decimal number (digits with optional `.digits` suffix) without consuming trailing punctuation.
-- **Fix verified:** Yes — re-ran full Phase 1 suite (129 tests), all passing
-- **Regression check:** Full Phase 1 suite re-run after fix — 129/129 passing. No other tests affected.
+- **Fix verified:** Yes — re-ran full Phase 1 suite (128 tests), all passing
+- **Regression check:** Full Phase 1 suite re-run after fix — 128/128 passing. No other tests affected.
+
+---
+
+## BUG-2-001 CANDIDATE — adjustStock() missing db.transaction() wrapper
+
+- **Phase found:** Phase 2
+- **Severity:** Medium
+- **Category:** Concurrency / Data Integrity
+- **File:** src/lib/actions/stock.actions.ts (~line 355–381)
+- **What was expected:** `UPDATE materials` and `INSERT stockLedger` execute atomically inside `db.transaction()`, so a failure mid-way leaves no partial state.
+- **What actually happened (code audit):** Both statements are issued as two separate, non-transactional `db` calls. If the `INSERT stockLedger` fails after `UPDATE materials` succeeds, stock is permanently changed with no audit trail.
+- **Test name:** `GAP-1 evidence: UPDATE materials without ledger → inconsistency possible > updating current_stock without inserting a ledger entry creates a stock/ledger mismatch` (tests/integration/stock-ledger.test.ts)
+- **Reproduction:** See stock-ledger.test.ts Group 2 test #6 — directly reproduces the pattern by updating materials without a ledger entry.
+- **Evidence:**
+  - **Test:** tests/integration/stock-ledger.test.ts (GAP-1 evidence describe block)
+  - **Output:** Test passed — pattern confirmed reproducible. `getMaterialStock()` returned 12, `getLatestLedger()` returned `null`. Stock was updated but no ledger entry existed — mismatch confirmed.
+  - **Screenshot:** N/A
+- **Impact:** If `adjustStock()` crashes between the UPDATE and INSERT, `materials.current_stock` is changed but the ledger has no record. Stock discrepancy goes undetected. Only affects manual stock adjustments — the main PO/MI flows are fully transactional.
+- **Status:** Candidate — pattern confirmed reproducible by test; no user-facing failure observed yet
+- **Fix applied:** None — RULE 1: do not touch working code until test confirms real-world bug
+- **Fix verified:** N/A
+- **Regression check:** N/A
