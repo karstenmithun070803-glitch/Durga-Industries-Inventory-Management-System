@@ -23,7 +23,7 @@ export function formatActionError(e: unknown, fallback = "Action failed"): strin
   const msg = e instanceof Error ? e.message : "";
   if (!msg) return fallback;
   const m = msg.match(
-    /^Insufficient stock for "([^"]+)": available ([\d.]+), requested ([\d.]+)\.?$/
+    /^Insufficient stock for "([^"]+)": available ([\d.]+), requested (\d+(?:\.\d+)?)\.?$/
   );
   if (m) return `Not enough stock — ${m[1]} (available: ${m[2]}, needed: ${m[3]})`;
   return msg;
