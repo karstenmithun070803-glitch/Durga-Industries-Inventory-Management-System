@@ -10,8 +10,10 @@ import {
   units,
   taxRates,
   materialIssues,
+  purchaseOrders,
+  purchaseOrderItems,
 } from "@/lib/db/schema";
-import { eq, and, count, sql } from "drizzle-orm";
+import { eq, and, count, sql, desc, inArray } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -130,20 +132,29 @@ export const getStageMaterials = unstable_cache(
 
     if (items.length === 0) return [];
 
-    // One batch query for all material rates instead of N parallel per-material queries
+    // One batch query for all material rates — uses inArray (correct UUID typing)
     const materialIds = items.map((i) => i.material_id);
-    const rateRows = await db.execute<{ material_id: string; rate: string }>(sql`
-      SELECT DISTINCT ON (poi.material_id)
-        poi.material_id,
-        poi.rate
-      FROM purchase_order_items poi
-      INNER JOIN purchase_orders po ON poi.po_id = po.id
-      WHERE po.status = 'Received'
-        AND poi.material_id = ANY(${materialIds})
-      ORDER BY poi.material_id, po.po_date DESC
-    `);
+    const allRateRows = await db
+      .select({
+        material_id: purchaseOrderItems.material_id,
+        rate: purchaseOrderItems.rate,
+      })
+      .from(purchaseOrderItems)
+      .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
+      .where(
+        and(
+          eq(purchaseOrders.status, "Received"),
+          inArray(purchaseOrderItems.material_id, materialIds)
+        )
+      )
+      .orderBy(desc(purchaseOrders.po_date));
 
-    const rateMap = new Map(Array.from(rateRows).map((r) => [r.material_id, r.rate]));
+    const rateMap = new Map<string, string>();
+    for (const row of allRateRows) {
+      if (!rateMap.has(row.material_id)) {
+        rateMap.set(row.material_id, row.rate);
+      }
+    }
     return items.map((item) => ({ ...item, last_po_rate: rateMap.get(item.material_id) ?? null }));
   },
   ["stage-materials"],
