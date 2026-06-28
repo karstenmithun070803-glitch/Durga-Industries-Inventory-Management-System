@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { FileText, ShoppingCart, BarChart2, Search, TrendingUp, GitCompare } from "lucide-react";
 import { InvoiceSummaryReport } from "./invoice-summary";
@@ -37,22 +37,73 @@ const NAV_ITEMS: { id: ReportTab; label: string; icon: React.ElementType }[] = [
 export function ReportsClient({ vehicles, suppliers, materials, customers, stages, jobCostVehicles, companySetting }: Props) {
   const { activeFY } = useFY();
   const [activeTab, setActiveTab] = useState<ReportTab>("invoice-summary");
+  const [navHighlight, setNavHighlight] = useState(-1);
+  const asideRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  function focusNavItem(index: number) {
+    const buttons = asideRef.current?.querySelectorAll<HTMLButtonElement>("button[data-nav-item]");
+    buttons?.[index]?.focus();
+  }
+
+  function handleAsideKeyDown(e: React.KeyboardEvent) {
+    const count = NAV_ITEMS.length;
+    const currentIdx = NAV_ITEMS.findIndex((item) => item.id === activeTab);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = Math.min(navHighlight < 0 ? currentIdx + 1 : navHighlight + 1, count - 1);
+      setNavHighlight(next);
+      focusNavItem(next);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = Math.max(navHighlight < 0 ? currentIdx - 1 : navHighlight - 1, 0);
+      setNavHighlight(prev);
+      focusNavItem(prev);
+    } else if (e.key === "Enter" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const idx = navHighlight >= 0 ? navHighlight : currentIdx;
+      setActiveTab(NAV_ITEMS[idx].id);
+      setNavHighlight(-1);
+      contentRef.current?.focus();
+    } else if (e.key === "Escape") {
+      setNavHighlight(-1);
+    }
+  }
+
+  function handleContentKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowLeft" && document.activeElement === contentRef.current) {
+      e.preventDefault();
+      const currentIdx = NAV_ITEMS.findIndex((item) => item.id === activeTab);
+      setNavHighlight(currentIdx);
+      focusNavItem(currentIdx);
+    }
+  }
 
   return (
     <div className="flex h-full">
       {/* Left sub-nav */}
-      <aside className="w-52 shrink-0 border-r border-slate-200 bg-slate-50 flex flex-col py-4 px-2 gap-0.5">
+      <aside
+        ref={asideRef}
+        className="w-52 shrink-0 border-r border-slate-200 bg-slate-50 flex flex-col py-4 px-2 gap-0.5"
+        onKeyDown={handleAsideKeyDown}
+      >
         <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider px-3 mb-2">Reports</p>
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.map((item, idx) => {
           const active = activeTab === item.id;
+          const highlighted = navHighlight === idx;
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              data-nav-item
+              onClick={() => { setActiveTab(item.id); setNavHighlight(-1); contentRef.current?.focus(); }}
+              onFocus={() => setNavHighlight(idx)}
+              onBlur={() => setNavHighlight(-1)}
               className={cn(
                 "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors text-left w-full",
                 active
                   ? "bg-slate-800 text-white font-medium"
+                  : highlighted
+                  ? "bg-slate-200 text-slate-800"
                   : "text-slate-600 hover:text-slate-800 hover:bg-slate-100"
               )}
             >
@@ -64,7 +115,12 @@ export function ReportsClient({ vehicles, suppliers, materials, customers, stage
       </aside>
 
       {/* Report content area */}
-      <div className="flex-1 min-w-0 overflow-auto">
+      <div
+        ref={contentRef}
+        tabIndex={-1}
+        className="flex-1 min-w-0 overflow-auto outline-none"
+        onKeyDown={handleContentKeyDown}
+      >
         {activeTab === "invoice-summary" && (
           <InvoiceSummaryReport
             vehicles={vehicles}

@@ -28,6 +28,8 @@ import { getFYOptions } from "@/lib/fy";
 import { useFY } from "@/lib/financial-year";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useHotkeys } from "react-hotkeys-hook";
+import { useRouter } from "next/navigation";
 
 const nav = [
   {
@@ -68,6 +70,7 @@ const fyOptions = getFYOptions(5);
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { activeFY, setActiveFY, isCurrentFY } = useFY();
   const [openSections, setOpenSections] = useState<string[]>(["Masters"]);
   const [fyOpen, setFyOpen] = useState(false);
@@ -76,6 +79,14 @@ export function Sidebar() {
     setOpenSections((prev) =>
       prev.includes(label) ? prev.filter((s) => s !== label) : [...prev, label]
     );
+
+  // Sidebar Alt+ shortcuts
+  useHotkeys("alt+m", (e) => { e.preventDefault(); toggle("Masters"); }, { enableOnFormTags: true });
+  useHotkeys("alt+t", (e) => { e.preventDefault(); toggle("Transactions"); }, { enableOnFormTags: true });
+  useHotkeys("alt+i", (e) => { e.preventDefault(); router.push("/invoice"); }, { enableOnFormTags: true });
+  useHotkeys("alt+k", (e) => { e.preventDefault(); router.push("/stock"); }, { enableOnFormTags: true });
+  useHotkeys("alt+r", (e) => { e.preventDefault(); router.push("/reports"); }, { enableOnFormTags: true });
+  useHotkeys("alt+g", (e) => { e.preventDefault(); router.push("/settings"); }, { enableOnFormTags: true });
 
   return (
     <aside className="w-56 shrink-0 bg-slate-900 flex flex-col h-screen sticky top-0">

@@ -7,6 +7,17 @@ interface UseKeyboardGridOptions {
   rows: LineItemDraft[];
   columnCount: number;
   appendEmptyRow: () => void;
+  /**
+   * Index of the last DATA column (the column before the delete button).
+   * When Enter is pressed from this column, focus wraps to col 0 of the next row
+   * instead of staying in the same column — more ergonomic for sequential row entry.
+   */
+  lastDataColIndex?: number;
+  /**
+   * Called when ↓ is pressed on the last EMPTY row (instead of doing nothing).
+   * Use this to transition focus out of the grid (e.g. to the action bar).
+   */
+  onExitBottom?: () => void;
 }
 
 function rowHasAnyData(row: LineItemDraft): boolean {
@@ -24,6 +35,8 @@ export function useKeyboardGrid({
   rows,
   columnCount,
   appendEmptyRow,
+  lastDataColIndex,
+  onExitBottom,
 }: UseKeyboardGridOptions) {
   const focusCell = useCallback(
     (rowIndex: number, colIndex: number) => {
@@ -68,21 +81,38 @@ export function useKeyboardGrid({
 
       const isLastRow = rowIndex === rows.length - 1;
 
+      // For button elements (e.g. delete button in grid): let browser fire the
+      // click event natively on Enter/Space. Do NOT intercept for grid nav.
+      if (
+        (e.key === "Enter" || e.key === " ") &&
+        (e.target as HTMLElement).tagName === "BUTTON"
+      ) {
+        return;
+      }
+
       switch (e.key) {
         case "ArrowDown":
         case "Enter": {
-          // Enter inside a text input should not trigger grid nav (let browser handle form submit)
-          // but we do want it for grid navigation — only intercept if not a textarea
           if (e.key === "Enter" && (e.target as HTMLElement).tagName === "TEXTAREA") return;
           e.preventDefault();
+
           if (isLastRow) {
             if (rowHasAnyData(rows[rowIndex])) {
               appendEmptyRow();
               setTimeout(() => focusCell(rowIndex + 1, 0), 10);
+            } else {
+              // Last row is empty — exit grid downward
+              onExitBottom?.();
             }
-            // empty last row → do nothing
           } else {
-            focusCell(rowIndex + 1, colIndex);
+            // When Enter is pressed from the last DATA column, wrap to col 0 of next row.
+            // This is more ergonomic for sequential row entry (Material → ... → Tax → Enter → Material of next row).
+            const wrapToStart =
+              e.key === "Enter" &&
+              lastDataColIndex !== undefined &&
+              colIndex === lastDataColIndex;
+
+            focusCell(rowIndex + 1, wrapToStart ? 0 : colIndex);
           }
           break;
         }
@@ -103,7 +133,7 @@ export function useKeyboardGrid({
         }
       }
     },
-    [rows, appendEmptyRow, focusCell, focusNextEditableCell]
+    [rows, appendEmptyRow, focusCell, focusNextEditableCell, lastDataColIndex, onExitBottom]
   );
 
   return { handleKeyDown, focusCell };

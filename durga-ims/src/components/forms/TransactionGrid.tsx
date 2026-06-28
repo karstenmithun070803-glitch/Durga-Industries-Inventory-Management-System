@@ -66,17 +66,21 @@ interface Props {
   showTaxColumns?: boolean;
   // When true (VMI New only): shows read-only Stage column after S.No
   showStageColumn?: boolean;
+  /** Called when ↓ is pressed on the last empty row — use to exit grid to action bar. */
+  onExitBottom?: () => void;
 }
 
-// Column indices per mode (only interactive/focusable elements counted)
-// PO:                  Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4
-// MI:                  Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5
-// Invoice:             Material=0, Qty=1, Rate=2
-// Invoice+showTax:     Material=0, Qty=1, Rate=2, Tax%=3
+// Column indices per mode (interactive/focusable elements, including delete button)
+// PO:                  Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4, Delete=5
+// MI:                  Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5, Delete=6
+// Invoice:             Material=0, Qty=1, Rate=2, Delete=3
+// Invoice+showTax:     Material=0, Qty=1, Rate=2, Tax%=3, Delete=4
+//
+// lastDataColIndex = the column BEFORE delete (Enter from here wraps to next row col 0)
 const STATIC_COL_CONFIG = {
-  "purchase-order": { columnCount: 5, qtyCol: 2 },
-  "material-issue": { columnCount: 6, qtyCol: 3 },
-  invoice:          { columnCount: 3, qtyCol: 1 },
+  "purchase-order": { columnCount: 6, qtyCol: 2, lastDataColIndex: 4 },
+  "material-issue": { columnCount: 7, qtyCol: 3, lastDataColIndex: 5 },
+  invoice:          { columnCount: 4, qtyCol: 1, lastDataColIndex: 2 },
 } as const;
 
 export function newRow(): LineItemDraft {
@@ -150,6 +154,7 @@ export function TransactionGrid({
   gstType,
   showTaxColumns = false,
   showStageColumn = false,
+  onExitBottom,
 }: Props) {
   const gridRef = useRef<HTMLTableElement>(null);
   const isIssueMode = mode === "material-issue";
@@ -162,9 +167,13 @@ export function TransactionGrid({
 
   // Dynamic column config — invoice mode gains extra columns when showTaxColumns=true
   const colConfig = isInvoiceMode
-    ? { columnCount: showTaxColumns ? 4 : 3, qtyCol: 1 }
+    ? {
+        columnCount: showTaxColumns ? 5 : 4,
+        qtyCol: 1,
+        lastDataColIndex: showTaxColumns ? 3 : 2,
+      }
     : STATIC_COL_CONFIG[mode];
-  const { columnCount, qtyCol } = colConfig;
+  const { columnCount, qtyCol, lastDataColIndex } = colConfig;
 
   // Track which combobox cell is open so the keyboard hook can yield to cmdk
   const [openComboboxCell, setOpenComboboxCell] = useState<{ row: number; col: number } | null>(null);
@@ -178,6 +187,8 @@ export function TransactionGrid({
     rows,
     columnCount,
     appendEmptyRow,
+    lastDataColIndex,
+    onExitBottom,
   });
 
   // Recalculate all rows when header-level gstType changes (issue / invoice mode only)
@@ -250,8 +261,11 @@ export function TransactionGrid({
       ...(isHeaderGstMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
     });
 
-    // Auto-focus Qty cell after async material load completes
-    setTimeout(() => focusCell(rowIndex, qtyCol), 100);
+    // Auto-focus next column after material selection:
+    // In MI/PO mode advance to Contractor/Supplier (col 1) for sequential entry.
+    // In invoice mode advance to Qty (col 1) since there's no contractor.
+    const nextCol = isInvoiceMode ? qtyCol : 1;
+    setTimeout(() => focusCell(rowIndex, nextCol), 100);
   }
 
   function handleSupplierSelect(key: string, supplierId: string) {
@@ -279,8 +293,12 @@ export function TransactionGrid({
   }
 
   function deleteRow(key: string) {
+    const deletedIndex = rows.findIndex((r) => r._key === key);
     const next = rows.filter((r) => r._key !== key);
     onChange(next.length === 0 ? [newRow()] : next);
+    // Restore focus to the row above (or row 0 if we deleted row 0)
+    const targetRow = Math.max(0, deletedIndex - 1);
+    setTimeout(() => focusCell(targetRow, 0), 10);
   }
 
   const materialOptions = useMemo(
@@ -365,15 +383,17 @@ export function TransactionGrid({
             const showZeroWarning = !row.rateBlank && row.rate === "0" && !row.zeroRateConfirmed;
 
             // Column indices depend on mode (see COL_CONFIG at top of file)
-            // PO:      Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4
-            // MI:      Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5
-            // Invoice: Material=0, Qty=1, Rate=2
+            // PO:               Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4, Delete=5
+            // MI:               Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5, Delete=6
+            // Invoice (base):   Material=0, Qty=1, Rate=2, Delete=3
+            // Invoice+showTax:  Material=0, Qty=1, Rate=2, Tax%=3, Delete=4
             const colMaterial = 0;
             const colSupplierOrContractor = 1;
             const colAffectsStock = isIssueMode ? 2 : -1;
             const colQty = qtyCol;
             const colRate = isInvoiceMode ? 2 : isIssueMode ? 4 : 3;
             const colTax = isIssueMode ? 5 : mode === "purchase-order" ? 4 : (isInvoiceMode && showTaxColumns) ? 3 : -1;
+            const colDelete = lastDataColIndex + 1;
 
             return (
               <tr key={row._key} className="border-t border-slate-100">
@@ -626,7 +646,12 @@ export function TransactionGrid({
                       size="icon"
                       className="h-7 w-7 text-slate-700 hover:text-red-500 hover:bg-red-50"
                       onClick={() => deleteRow(row._key)}
+                      onKeyDown={(e) => handleKeyDown(e, i, colDelete, false)}
+                      data-grid-row={i}
+                      data-grid-col={colDelete}
                       type="button"
+                      tabIndex={-1}
+                      title="Delete row (Enter)"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>

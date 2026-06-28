@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
+import { useFormSectionNav } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -214,6 +215,16 @@ export function InvoiceClient({
   const identifierRef = useRef<HTMLButtonElement>(null);
   const isSavingRef = useRef(false);
   const loadGenRef = useRef(0);
+
+  // ── Section nav refs ───────────────────────────────────────────────────────
+  const vehicleSectionRef = useRef<HTMLDivElement>(null);
+  const dateSectionRef = useRef<HTMLDivElement>(null);
+  const marginSectionRef = useRef<HTMLDivElement>(null);
+  const marginInputRef = useRef<HTMLInputElement>(null);
+  const includeTaxSectionRef = useRef<HTMLDivElement>(null);
+  const gridSectionRef = useRef<HTMLDivElement>(null);
+  const actionsSectionRef = useRef<HTMLDivElement>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
 
   // ── Dropdown state ────────────────────────────────────────────────────────
   const [dropdownItems, setDropdownItems] = useState<InvoiceDropdownItem[]>(initialDropdownItems);
@@ -657,6 +668,76 @@ export function InvoiceClient({
     setActiveView("invoice");
   }
 
+  // ── Section nav ────────────────────────────────────────────────────────────
+  const { goToSection, containerProps } = useFormSectionNav({
+    sections: [
+      {
+        id: "vehicle",
+        ref: vehicleSectionRef,
+        isDisabled: () => !isEditable,
+        onActivate: () => {
+          vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
+        },
+      },
+      {
+        id: "date",
+        ref: dateSectionRef,
+        isDisabled: () => !isEditable,
+        onActivate: () => {
+          dateSectionRef.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
+        },
+      },
+      {
+        id: "margin",
+        ref: marginSectionRef,
+        isDisabled: () => !isEditable,
+        autoActivate: true,
+        onActivate: () => {
+          marginInputRef.current?.focus();
+          marginInputRef.current?.select();
+        },
+        onDeactivate: () => marginInputRef.current?.blur(),
+      },
+      {
+        id: "includeTax",
+        ref: includeTaxSectionRef,
+        isDisabled: () => isCancelled,
+        autoActivate: true,
+        onActivate: () => {
+          includeTaxSectionRef.current?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus();
+        },
+      },
+      {
+        id: "grid",
+        ref: gridSectionRef,
+        isDisabled: () => isLoading,
+        onActivate: () => {
+          gridSectionRef.current
+            ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
+            ?.focus();
+        },
+      },
+      {
+        id: "actions",
+        ref: actionsSectionRef,
+        autoActivate: true,
+        onActivate: () => saveButtonRef.current?.focus(),
+      },
+    ],
+    isLoading: isLoading || isSaving,
+  });
+
+  // Margin Enter handler — defined with useCallback so it's stable
+  const handleMarginKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        goToSection(4); // advance to Grid
+      }
+    },
+    [goToSection]
+  );
+
   // ── Hotkeys ───────────────────────────────────────────────────────────────
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); if (activeView === "invoice") void handleSave(); }, { enableOnFormTags: true });
   useHotkeys("alt+n", (e) => { e.preventDefault(); if (!isSavingRef.current) handleNew(); }, { enableOnFormTags: true });
@@ -715,7 +796,7 @@ export function InvoiceClient({
 
   // ── Invoice view ──────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" {...containerProps}>
       {/* Page header + identifier */}
       <div className="px-6 pt-5 pb-3 flex items-center gap-3">
         <h1 className="text-lg font-semibold text-slate-800 shrink-0">Invoices</h1>
@@ -788,7 +869,7 @@ export function InvoiceClient({
                     {billNumber}
                   </div>
                 </div>
-                <div>
+                <div ref={dateSectionRef}>
                   <label className="text-xs text-slate-600 block mb-1">Bill Date</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">
@@ -818,7 +899,7 @@ export function InvoiceClient({
 
               {/* Row 2: Vehicle */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div ref={vehicleSectionRef}>
                   <label className="text-xs text-slate-600 block mb-1">Vehicle / Job</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">
@@ -886,16 +967,18 @@ export function InvoiceClient({
 
               {/* Material Margin + Include Tax */}
               <div className="grid grid-cols-3 gap-4 items-end">
-                <div>
+                <div ref={marginSectionRef}>
                   <label className="text-xs text-slate-600 block mb-1">Material Margin %</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">{materialMargin || "—"}</div>
                   ) : (
                     <Input
+                      ref={marginInputRef}
                       type="number"
                       value={materialMargin}
                       onChange={(e) => { setMaterialMargin(e.target.value); setIsDirty(true); }}
                       onFocus={(e) => e.target.select()}
+                      onKeyDown={handleMarginKeyDown}
                       className="h-9 text-sm"
                       min="0"
                       step="any"
@@ -903,7 +986,7 @@ export function InvoiceClient({
                     />
                   )}
                 </div>
-                <div className="flex items-center gap-2 pb-1">
+                <div className="flex items-center gap-2 pb-1" ref={includeTaxSectionRef}>
                   <input
                     type="checkbox"
                     id="include-tax"
@@ -920,7 +1003,7 @@ export function InvoiceClient({
             </div>
 
             {/* Line items grid */}
-            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden mb-4">
+            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden mb-4" ref={gridSectionRef}>
               <div className="px-4 py-2.5 border-b border-slate-100">
                 <h2 className="text-sm font-medium text-slate-700">Line Items</h2>
               </div>
@@ -935,6 +1018,7 @@ export function InvoiceClient({
                 mode="invoice"
                 gstType={gstType}
                 showTaxColumns={includeTax}
+                onExitBottom={() => goToSection(5)}
               />
             </div>
           </div>
@@ -965,7 +1049,7 @@ export function InvoiceClient({
               </span>
             </div>
 
-            <div className="flex items-center gap-2 px-6 py-3">
+            <div className="flex items-center gap-2 px-6 py-3" ref={actionsSectionRef}>
               {/* Left: destructive actions + cancel navigation */}
               <div className="flex gap-2">
                 {isDraft && currentInvoiceId && (
@@ -1000,6 +1084,7 @@ export function InvoiceClient({
 
                 {!isCancelled && (
                   <Button
+                    ref={saveButtonRef}
                     variant="outline"
                     size="sm"
                     onClick={handleSave}

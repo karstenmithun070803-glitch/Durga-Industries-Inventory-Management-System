@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useMemo } from "react";
+import { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import {
@@ -34,6 +34,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useHotkeys } from "react-hotkeys-hook";
+import { useFormSectionNav } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { formatActionError, cn } from "@/lib/utils";
 import { AlertTriangle, ChevronLeft, ChevronRight, Trash2, ChevronsUpDown, Plus } from "lucide-react";
@@ -279,6 +280,18 @@ export function NewVMIClient({
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
+  // ── Section nav refs ───────────────────────────────────────────────────────
+  const vehicleSectionRef = useRef<HTMLDivElement>(null);
+  const dateSectionRef = useRef<HTMLDivElement>(null);
+  const stageSectionRef = useRef<HTMLDivElement>(null);
+  const marginSectionRef = useRef<HTMLDivElement>(null);
+  const marginInputRef = useRef<HTMLInputElement>(null);
+  const gridSectionRef = useRef<HTMLDivElement>(null);
+  const actionsSectionRef = useRef<HTMLDivElement>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+  // Ref to goToSection so async callbacks (loadVehicleRecord) can call it
+  const goToSectionRef = useRef<((index: number) => void) | null>(null);
+
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId);
   const gstType: GstType = selectedVehicle
     ? determineGstType(selectedVehicle.customer_gstin, selectedVehicle.customer_state)
@@ -291,6 +304,67 @@ export function NewVMIClient({
   );
 
   const isAnyStageLoading = loadingStageIds.size > 0;
+
+  // ── Section nav ────────────────────────────────────────────────────────────
+  const { goToSection, containerProps } = useFormSectionNav({
+    sections: [
+      {
+        id: "vehicle",
+        ref: vehicleSectionRef,
+        onActivate: () => {
+          vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
+        },
+      },
+      {
+        id: "date",
+        ref: dateSectionRef,
+        isDisabled: () => !vehicleId,
+        onActivate: () => {
+          dateSectionRef.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
+        },
+      },
+      {
+        id: "stage",
+        ref: stageSectionRef,
+        isDisabled: () => !vehicleId,
+        onActivate: () => {
+          stageSectionRef.current?.querySelector<HTMLElement>("button")?.focus();
+        },
+      },
+      {
+        id: "margin",
+        ref: marginSectionRef,
+        isDisabled: () => !vehicleId,
+        autoActivate: true,
+        onActivate: () => {
+          marginInputRef.current?.focus();
+          marginInputRef.current?.select();
+        },
+        onDeactivate: () => marginInputRef.current?.blur(),
+      },
+      {
+        id: "grid",
+        ref: gridSectionRef,
+        isDisabled: () => !vehicleId || isLoading,
+        onActivate: () => {
+          gridSectionRef.current
+            ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
+            ?.focus();
+        },
+      },
+      {
+        id: "actions",
+        ref: actionsSectionRef,
+        isDisabled: () => !vehicleId,
+        autoActivate: true,
+        onActivate: () => saveButtonRef.current?.focus(),
+      },
+    ],
+    isLoading: isLoading || isPending,
+  });
+
+  // Keep goToSectionRef in sync so async callbacks can call it
+  goToSectionRef.current = goToSection;
 
   // Auto-load if initial vehicle ID provided
   useEffect(() => {
@@ -399,6 +473,8 @@ export function NewVMIClient({
       toast.error("Failed to load vehicle record");
     } finally {
       setIsLoading(false);
+      // Advance ring to Date section after vehicle loads
+      goToSectionRef.current?.(1);
     }
   }
 
@@ -728,7 +804,6 @@ export function NewVMIClient({
   }
 
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
-  useHotkeys("escape", () => handleCancel(), { enableOnFormTags: true });
 
   const { subtotal, cgst, sgst, igst, grand } = calcTotals(rows);
   const hasFormContent = !!vehicleId;
@@ -750,7 +825,7 @@ export function NewVMIClient({
   }, [vehicles, vehicleIssueDates]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" {...containerProps}>
       <div className="flex-1 overflow-y-auto p-6 pb-0">
         {/* Header card */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
@@ -759,7 +834,7 @@ export function NewVMIClient({
             <div className="flex-1 space-y-3">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-slate-600 w-28 shrink-0">Vehicle Name</span>
-                <div className="w-56">
+                <div className="w-56" ref={vehicleSectionRef}>
                   <Combobox
                     options={vehicleOptions}
                     value={vehicleId}
@@ -770,7 +845,7 @@ export function NewVMIClient({
                 </div>
                 <span className="px-2 py-0.5 rounded text-sm font-medium bg-emerald-100 text-emerald-800">NEW</span>
                 <span className="text-sm text-slate-600 shrink-0">Date</span>
-                <div className="w-36">
+                <div className="w-36" ref={dateSectionRef}>
                   <Input
                     type="date"
                     value={issueDate}
@@ -783,7 +858,7 @@ export function NewVMIClient({
 
               {/* Stage navigator */}
               {vehicleId && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" ref={stageSectionRef}>
                   <span className="text-sm text-slate-600 w-28 shrink-0">Stage</span>
                   <button
                     onClick={() => navigateStage(-1)}
@@ -891,10 +966,11 @@ export function NewVMIClient({
                       {selectedVehicle?.job_ref_no || "—"}
                     </div>
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1" ref={marginSectionRef}>
                     <label className="text-sm text-slate-600">Margin %</label>
                     <div className="w-24">
                       <Input
+                        ref={marginInputRef}
                         type="text"
                         inputMode="decimal"
                         value={marginPct}
@@ -906,6 +982,12 @@ export function NewVMIClient({
                           }
                         }}
                         onFocus={(e) => e.target.select()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            goToSection(4); // advance to Grid
+                          }
+                        }}
                         className="h-9 text-sm"
                         placeholder="0"
                       />
@@ -968,7 +1050,7 @@ export function NewVMIClient({
             Select a vehicle above to load its material issue record.
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
+          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4" ref={gridSectionRef}>
             {!hasExistingRecord && (
               <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-700">
                 No record exists yet for this vehicle in FY {loadedFY}. Add materials and save to create one.
@@ -1000,6 +1082,7 @@ export function NewVMIClient({
               gstType={gstType}
               mode="material-issue"
               showStageColumn={false}
+              onExitBottom={() => goToSection(5)}
             />
           </div>
         )}
@@ -1017,10 +1100,11 @@ export function NewVMIClient({
           </span>
         </div>
 
-        <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
+        <div className="px-6 py-3 flex items-center gap-4 flex-wrap" ref={actionsSectionRef}>
           {hasFormContent && (
             <>
               <Button
+                ref={saveButtonRef}
                 className="h-10 px-5 bg-blue-600 hover:bg-blue-700"
                 onClick={handleSave}
                 disabled={

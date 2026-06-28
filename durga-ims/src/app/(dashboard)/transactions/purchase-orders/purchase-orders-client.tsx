@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import {
@@ -29,6 +29,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PrintButton } from "@/components/pdf/print-button";
 import { PORegisterDocument } from "@/components/pdf/po-register-pdf";
 import { useHotkeys } from "react-hotkeys-hook";
+import { useFormSectionNav } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { formatCode } from "@/lib/utils";
 import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
@@ -605,7 +606,6 @@ export function PurchaseOrdersClient({
   // Hotkeys
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
   useHotkeys("alt+n", (e) => { e.preventDefault(); handleNew(); }, { enableOnFormTags: true });
-  useHotkeys("escape", () => handleCancel(), { enableOnFormTags: true });
 
   // ---------------------------------------------------------------------------
   // Computed
@@ -686,6 +686,41 @@ export function PurchaseOrdersClient({
     );
   }
 
+  // ── Section nav refs ───────────────────────────────────────────────────────
+  const dateSectionRef = useRef<HTMLDivElement>(null);
+  const gridSectionRef = useRef<HTMLDivElement>(null);
+  const actionsSectionRef = useRef<HTMLDivElement>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+  const { goToSection, containerProps } = useFormSectionNav({
+    sections: [
+      {
+        id: "date",
+        ref: dateSectionRef,
+        onActivate: () => {
+          dateSectionRef.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
+        },
+      },
+      {
+        id: "grid",
+        ref: gridSectionRef,
+        isDisabled: () => isLoading,
+        onActivate: () => {
+          gridSectionRef.current
+            ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
+            ?.focus();
+        },
+      },
+      {
+        id: "actions",
+        ref: actionsSectionRef,
+        autoActivate: true,
+        onActivate: () => saveButtonRef.current?.focus(),
+      },
+    ],
+    isLoading: isLoading || isPending,
+  });
+
   // Supplier filter options — unique supplier names from loaded dropdown
   const supplierFilterOptions = Array.from(
     new Set(dropdownItems.filter((d) => d.supplierName).map((d) => d.supplierName!))
@@ -706,7 +741,7 @@ export function PurchaseOrdersClient({
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full" {...containerProps}>
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <div className="flex-1 overflow-y-auto p-6 pb-0">
@@ -800,7 +835,7 @@ export function PurchaseOrdersClient({
 
             {/* Row 2: always-visible header fields */}
             <div className="mt-4 flex flex-wrap items-end gap-4">
-              <div className="space-y-1">
+              <div className="space-y-1" ref={dateSectionRef}>
                 <label className="text-sm text-slate-600">PO Date</label>
                 <div className="w-40">
                   <Input
@@ -841,7 +876,7 @@ export function PurchaseOrdersClient({
               Loading…
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
+            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4" ref={gridSectionRef}>
               {!hasFormContent && (
                 <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-700">
                   Enter a PO date and add materials to create a new PO, or use the filters above to find an existing PO.
@@ -855,6 +890,7 @@ export function PurchaseOrdersClient({
                 taxRates={taxRates}
                 units={units}
                 mode="purchase-order"
+                onExitBottom={() => goToSection(2)}
               />
             </div>
           )}
@@ -875,7 +911,7 @@ export function PurchaseOrdersClient({
           </div>
 
           {/* Action buttons */}
-          <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
+          <div className="px-6 py-3 flex items-center gap-4 flex-wrap" ref={actionsSectionRef}>
             <Button variant="outline" className="h-10 px-5" onClick={handleNew} disabled={isPending}>
               New
             </Button>
@@ -883,6 +919,7 @@ export function PurchaseOrdersClient({
             {hasFormContent && (
               <>
                 <Button
+                  ref={saveButtonRef}
                   variant="outline"
                   className="h-10 px-5"
                   onClick={handleSave}

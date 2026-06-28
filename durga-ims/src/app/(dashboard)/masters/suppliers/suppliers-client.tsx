@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { useMasterKeyboardNav } from "@/hooks/use-master-keyboard-nav";
 import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,12 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
     }
   }
   useHotkeys("escape", handleEscape, { enableOnFormTags: ["INPUT", "SELECT", "TEXTAREA"] });
+
+  useMasterKeyboardNav({
+    searchRef,
+    saveRef,
+    onNew: () => { resetForm(); setTimeout(() => firstFieldRef.current?.focus(), 50); },
+  });
 
   function handleSubmit() {
     startTransition(async () => {

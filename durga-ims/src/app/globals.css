@@ -61,4 +61,17 @@
   .line-through-cells td {
     text-decoration: line-through;
   }
+
+  /* Keyboard navigation section ring — set by useFormSectionNav hook */
+  [data-section-ring="true"] {
+    outline: 2px solid rgb(147 197 253); /* blue-300 */
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+  }
+  [data-section-active="true"] {
+    outline: 2px solid rgb(59 130 246); /* blue-500 */
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+    background-color: rgb(239 246 255 / 0.4); /* blue-50/40 */
+  }
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useTransition, useEffect, useRef } from "react";
+import { useState, useMemo, useTransition, useEffect, useRef, useCallback } from "react";
+import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -159,6 +160,8 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
   // Refresh — update timestamp only after transition fully settles
   // ---------------------------------------------------------------------------
 
+  const searchRef = useRef<HTMLInputElement>(null);
+
   const refreshTriggered = useRef(false);
   const prevPending = useRef(false);
 
@@ -170,10 +173,10 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
     prevPending.current = isPending;
   }, [isPending]);
 
-  function handleRefresh() {
+  const handleRefresh = useCallback(() => {
     refreshTriggered.current = true;
     startTransition(() => { router.refresh(); });
-  }
+  }, [router]);
 
   // ---------------------------------------------------------------------------
   // Derived adjustment values
@@ -250,6 +253,20 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
     low: rows.filter((r) => getStatus(r) === "low").length,
     out: rows.filter((r) => getStatus(r) === "out").length,
   }), [rows]);
+
+  // ---------------------------------------------------------------------------
+  // List keyboard nav (declared after filtered so itemCount is available)
+  // ---------------------------------------------------------------------------
+
+  const filteredRef = useRef(filtered);
+  filteredRef.current = filtered;
+
+  const { highlightedIndex, setHighlightedIndex, searchProps, tableProps } = useListKeyboardNav({
+    itemCount: filtered.length,
+    searchRef,
+    onActivate: (i) => openHistory(filteredRef.current[i]),
+    onRefresh: handleRefresh,
+  });
 
   // ---------------------------------------------------------------------------
   // History drawer
@@ -418,10 +435,12 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             );
           })}
           <Input
+            ref={searchRef}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setHighlightedIndex(-1); }}
             placeholder="Search material name or code..."
             className="h-8 text-xs w-56 ml-2"
+            {...searchProps}
           />
           <Button
             variant="outline"
@@ -463,7 +482,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
         </div>
 
         {/* Table */}
-        <div className="overflow-auto flex-1">
+        <div className="overflow-auto flex-1 outline-none" {...tableProps}>
           <table className="min-w-max text-sm w-full">
             <thead className="bg-slate-50 sticky top-0 z-10">
               <tr>
@@ -486,7 +505,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                   </td>
                 </tr>
               ) : (
-                filtered.map((row) => {
+                filtered.map((row, filteredIdx) => {
                   const status = getStatus(row);
                   const stock = parseFloat(row.current_stock);
                   const poRate = row.last_po_rate !== null ? parseFloat(row.last_po_rate) : null;
@@ -500,8 +519,18 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                     : status === "low" ? "bg-amber-50"
                     : "";
 
+                  const isHighlighted = highlightedIndex === filteredIdx;
                   return (
-                    <tr key={row.id} className={cn("border-t border-slate-100 hover:bg-slate-50/80 transition-colors cursor-pointer", rowBg)} onClick={() => openHistory(row)}>
+                    <tr
+                      key={row.id}
+                      data-highlighted={isHighlighted || undefined}
+                      className={cn(
+                        "border-t border-slate-100 hover:bg-slate-50/80 transition-colors cursor-pointer",
+                        rowBg,
+                        isHighlighted && "ring-1 ring-inset ring-blue-400 bg-blue-50"
+                      )}
+                      onClick={() => openHistory(row)}
+                    >
                       <td className="px-3 py-2 whitespace-nowrap text-slate-600 font-mono text-xs">
                         {formatCode("M", row.material_no)}
                       </td>

@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useMemo, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { useMasterKeyboardNav } from "@/hooks/use-master-keyboard-nav";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
@@ -299,6 +300,12 @@ export function StagesClient({ stages, materials, units }: Props) {
   useHotkeys("escape", handleEscape, { enableOnFormTags: ["INPUT", "SELECT", "TEXTAREA"] });
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, {
     enableOnFormTags: ["INPUT", "SELECT", "TEXTAREA"],
+  });
+
+  useMasterKeyboardNav({
+    searchRef,
+    saveRef,
+    onNew: () => { resetForm(); setTimeout(() => firstFieldRef.current?.focus(), 50); },
   });
 
   // ── Reactivate ────────────────────────────────────────────────────────────
