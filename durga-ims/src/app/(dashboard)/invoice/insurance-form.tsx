@@ -506,6 +506,7 @@ export function InsuranceForm({
                   type="number"
                   value={materialMargin}
                   onChange={(e) => setMaterialMargin(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   className="h-9 text-sm"
                   min="0"
                   step="any"
@@ -522,6 +523,7 @@ export function InsuranceForm({
                   type="number"
                   value={discount}
                   onChange={(e) => setDiscount(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   className="h-9 text-sm"
                   min="0"
                   step="any"
@@ -576,7 +578,7 @@ export function InsuranceForm({
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-28">Unit</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-24">Rate</th>
                   {includeTax && <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-16">Tax %</th>}
-                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500 w-24">{includeTax ? "Tax Amt" : "Tax"}</th>
+                  {includeTax && <th className="px-3 py-2 text-right text-xs font-medium text-slate-500 w-24">Tax Amt</th>}
                   <th className="px-3 py-2 text-right text-xs font-medium text-slate-500 w-28">Amount</th>
                   {!isFinalized && <th className="px-3 py-2 w-8" />}
                 </tr>
@@ -701,9 +703,11 @@ export function InsuranceForm({
                           )}
                         </td>
                       )}
-                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
-                        {fmt2(taxAmt)}
-                      </td>
+                      {includeTax && (
+                        <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
+                          {fmt2(taxAmt)}
+                        </td>
+                      )}
                       <td className="px-3 py-1.5 text-right tabular-nums font-medium text-slate-800">
                         {fmt2(grossAmt)}
                       </td>

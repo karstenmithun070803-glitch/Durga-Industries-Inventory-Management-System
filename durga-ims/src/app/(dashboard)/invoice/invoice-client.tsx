@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
@@ -30,9 +30,7 @@ import {
   finalizeInvoice,
   revertInvoiceToDraft,
   deleteInvoice,
-  getIssuedMIsForVehicle,
   getAllIssuedMIItemsForVehicle,
-  getLinkedSlipsForInvoice,
   peekNextBillNumber,
   getInvoicesForDropdown,
   getInsuranceBillByInvoiceId,
@@ -77,20 +75,6 @@ interface TaxRateOption {
 interface UnitOption {
   id: string;
   unit_name: string;
-}
-
-interface MISlipMeta {
-  id: string;
-  slip_number: number | null;
-  issue_date: string;
-  item_count: number;
-}
-
-interface MISlipWithItems {
-  slip_id: string;
-  slip_number: number | null;
-  issue_date: string;
-  items: InvoiceItemWithDetails[];
 }
 
 interface Props {
@@ -261,13 +245,6 @@ export function InvoiceClient({
   const [includeTax, setIncludeTax] = useState(false);
   const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
 
-  // ── MI slip state ─────────────────────────────────────────────────────────
-  const [miSlipsMeta, setMiSlipsMeta] = useState<MISlipMeta[]>([]);
-  const [miSlipsItems, setMiSlipsItems] = useState<MISlipWithItems[]>([]);
-  const [selectedSlipIds, setSelectedSlipIds] = useState<Set<string>>(new Set());
-  const [miLoading, setMiLoading] = useState(false);
-  const [linkedSlips, setLinkedSlips] = useState<MISlipMeta[]>([]);
-
   // ── Insurance state ───────────────────────────────────────────────────────
   const [insuranceBillId, setInsuranceBillId] = useState<string | null>(null);
   const [insuranceBillStatus, setInsuranceBillStatus] = useState<"Draft" | "Finalized" | null>(null);
@@ -357,12 +334,9 @@ export function InvoiceClient({
       setRows(inv.items.length ? itemsFromInvoice(inv.items, inv.material_margin ?? "0") : [newRow()]);
       setIsDirty(false);
 
-      // Load insurance bill + MI data in parallel
-      const [insuranceBillData, linkedSlipsData, miMeta, miItems] = await Promise.all([
+      // Load insurance bill
+      const [insuranceBillData] = await Promise.all([
         getInsuranceBillByInvoiceId(id),
-        getLinkedSlipsForInvoice(id),
-        getIssuedMIsForVehicle(inv.vehicle_id, id),
-        getAllIssuedMIItemsForVehicle(inv.vehicle_id, id),
       ]);
       if (gen !== loadGenRef.current) return;
 
@@ -376,15 +350,6 @@ export function InvoiceClient({
         setInsuranceBillStatus(null);
         setInsuranceBill(null);
       }
-
-      // Linked slips (read-only list for finalized invoice)
-      setLinkedSlips(linkedSlipsData);
-
-      // MI checklist (for Draft invoice editing)
-      setMiSlipsMeta(miMeta);
-      setMiSlipsItems(miItems);
-      // Don't auto-check — items already loaded from DB
-      setSelectedSlipIds(new Set());
     } catch (e) {
       if (gen !== loadGenRef.current) return;
       toast.error(e instanceof Error ? e.message : "Failed to load invoice.");
@@ -393,54 +358,11 @@ export function InvoiceClient({
     }
   }
 
-  // ── Rebuild rows from slip selections ─────────────────────────────────────
-  const rebuildRowsFromSlips = useCallback(
-    (slipItems: MISlipWithItems[], checkedIds: Set<string>, existingRows: LineItemDraft[], currentGstType: string) => {
-      const manualRows = existingRows.filter((r) => !r._slip_id);
-      const slipRows = slipItems
-        .filter((s) => checkedIds.has(s.slip_id))
-        .flatMap((s) =>
-          s.items.map((item) => ({
-            _key: crypto.randomUUID(),
-            _slip_id: s.slip_id,
-            material_id: item.material_id,
-            material_name: item.material_name,
-            material_no: item.material_no,
-            hsn_code: item.hsn_code ?? "",
-            supplier_id: "",
-            supplier_name: "",
-            gst_type: currentGstType,
-            qty: item.qty,
-            unit_id: item.unit_id ?? "",
-            unit_name: item.unit_name ?? "",
-            rate: item.rate,
-            baseRate: item.rate,
-            tax_percentage: item.tax_percentage,
-            cgst_amount: item.cgst_amount,
-            sgst_amount: item.sgst_amount,
-            igst_amount: item.igst_amount,
-            amount: item.amount,
-            rateBlank: false,
-            zeroRateConfirmed: parseFloat(item.rate) === 0,
-            contractor_id: "",
-            contractor_name: "",
-            affects_inventory: true,
-          }))
-        );
-      const combined = [...mergeSlipRows(slipRows), ...manualRows];
-      return combined.length ? combined : [newRow()];
-    },
-    []
-  );
-
   // ── Vehicle selection ─────────────────────────────────────────────────────
   async function handleVehicleChange(vid: string) {
     const v = vehicles.find((x) => x.id === vid);
     setVehicleId(vid);
     setSelectedVehicle(v ?? null);
-    setMiSlipsMeta([]);
-    setMiSlipsItems([]);
-    setSelectedSlipIds(new Set());
     setRows([newRow()]);
     setIsDirty(true);
 
@@ -449,18 +371,10 @@ export function InvoiceClient({
     const newGst = determineGstType(v.customer_gstin, v.customer_state);
     setGstType(newGst);
 
-    setMiLoading(true);
     try {
-      const [slipsMeta, slipsWithItems] = await Promise.all([
-        getIssuedMIsForVehicle(vid, currentInvoiceId ?? undefined),
-        getAllIssuedMIItemsForVehicle(vid, currentInvoiceId ?? undefined),
-      ]);
-      setMiSlipsMeta(slipsMeta);
-      setMiSlipsItems(slipsWithItems);
+      const slipsWithItems = await getAllIssuedMIItemsForVehicle(vid, currentInvoiceId ?? undefined);
 
       if (slipsWithItems.length > 0) {
-        const allIds = new Set(slipsWithItems.map((s) => s.slip_id));
-        setSelectedSlipIds(allIds);
         const populated = mergeSlipRows(
           slipsWithItems.flatMap((s) =>
             s.items.map((item) => ({
@@ -492,19 +406,7 @@ export function InvoiceClient({
       }
     } catch {
       toast.error("Failed to load issue slips.");
-    } finally {
-      setMiLoading(false);
     }
-  }
-
-  function handleSlipToggle(slipId: string, checked: boolean) {
-    setSelectedSlipIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(slipId); else next.delete(slipId);
-      setRows((currentRows) => rebuildRowsFromSlips(miSlipsItems, next, currentRows, gstType));
-      return next;
-    });
-    setIsDirty(true);
   }
 
   // ── Build payload ─────────────────────────────────────────────────────────
@@ -512,7 +414,7 @@ export function InvoiceClient({
     const filledRows = rows.filter((r) => r.material_id);
     return {
       vehicle_id: vehicleId,
-      slip_ids: Array.from(selectedSlipIds),
+      slip_ids: [],
       bill_date: billDate,
       inv_prefix: "",
       financial_year: activeFY,
@@ -550,10 +452,6 @@ export function InvoiceClient({
     setMaterialMargin("");
     setIncludeTax(false);
     setRows([newRow()]);
-    setMiSlipsMeta([]);
-    setMiSlipsItems([]);
-    setSelectedSlipIds(new Set());
-    setLinkedSlips([]);
     setInsuranceBillId(null);
     setInsuranceBillStatus(null);
     setInsuranceBill(null);
@@ -772,11 +670,14 @@ export function InvoiceClient({
     return items;
   }, [dropdownItems, dateFrom, dateTo]);
 
-  const identifierOptions = filteredDropdownItems.map((d) => ({
-    value: d.id,
-    label: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""}${d.customerName ? ` — ${d.customerName}` : ""} (${d.status})`,
-    displayLabel: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""} (${d.status})`,
-  }));
+  const identifierOptions = filteredDropdownItems.map((d) => {
+    const dateStr = d.date ? d.date.split("-").reverse().join("/") : "";
+    return {
+      value: d.id,
+      label: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""}${d.customerName ? ` — ${d.customerName}` : ""} (${d.status})${dateStr ? ` ${dateStr}` : ""}`,
+      displayLabel: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""} (${d.status})${dateStr ? ` ${dateStr}` : ""}`,
+    };
+  });
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
@@ -983,60 +884,6 @@ export function InvoiceClient({
                 </div>
               )}
 
-              {/* Linked slips — read-only (Finalized / Cancelled) */}
-              {!isEditable && linkedSlips.length > 0 && (
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1.5">Sourced from Issue Slips</label>
-                  <div className="border border-slate-200 rounded-md divide-y divide-slate-100">
-                    {linkedSlips.map((slip) => (
-                      <div key={slip.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                        <input type="checkbox" checked readOnly disabled className="w-4 h-4 accent-slate-700 flex-shrink-0 opacity-60" />
-                        <span className="font-mono text-slate-700 text-xs">MI-{String(slip.slip_number).padStart(4, "0")}</span>
-                        <span className="text-slate-500 text-xs">{new Date(slip.issue_date).toLocaleDateString("en-IN")}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* MI slip checklist — edit / new mode */}
-              {isEditable && vehicleId && (
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1.5">Auto-fill from Issue Slips</label>
-                  {miLoading ? (
-                    <div className="text-xs text-slate-400 px-1">Loading issue slips…</div>
-                  ) : miSlipsMeta.length === 0 ? (
-                    <div className="text-xs text-slate-400 px-1 py-2 bg-slate-50 rounded border border-slate-200">
-                      No confirmed issue slips for this vehicle. Enter items manually below.
-                    </div>
-                  ) : (
-                    <div className="border border-slate-200 rounded-md divide-y divide-slate-100 max-h-40 overflow-y-auto">
-                      {miSlipsMeta.map((slip) => {
-                        const checked = selectedSlipIds.has(slip.id);
-                        return (
-                          <label key={slip.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => handleSlipToggle(slip.id, e.target.checked)}
-                              className="w-4 h-4 accent-slate-700 flex-shrink-0"
-                            />
-                            <span className="font-mono text-slate-700 text-xs">MI-{String(slip.slip_number).padStart(4, "0")}</span>
-                            <span className="text-slate-500 text-xs">{new Date(slip.issue_date).toLocaleDateString("en-IN")}</span>
-                            <span className="text-slate-400 text-xs ml-auto">{slip.item_count} item{slip.item_count !== 1 ? "s" : ""}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {selectedSlipIds.size > 0 && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      ⚠ Items from {selectedSlipIds.size} slip{selectedSlipIds.size !== 1 ? "s" : ""} auto-populated. You can add, edit, or remove rows.
-                    </p>
-                  )}
-                </div>
-              )}
-
               {/* Material Margin + Include Tax */}
               <div className="grid grid-cols-3 gap-4 items-end">
                 <div>
@@ -1048,6 +895,7 @@ export function InvoiceClient({
                       type="number"
                       value={materialMargin}
                       onChange={(e) => { setMaterialMargin(e.target.value); setIsDirty(true); }}
+                      onFocus={(e) => e.target.select()}
                       className="h-9 text-sm"
                       min="0"
                       step="any"

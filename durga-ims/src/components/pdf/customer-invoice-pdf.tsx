@@ -56,19 +56,19 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
               {/* Left column — bill info */}
               <View style={{ flex: 1 }}>
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabel}>BILL NO.</Text>
+                  <Text style={styles.infoLineLabelInvoice}>BILL NO.</Text>
                   <Text style={styles.infoLineValue}>: {first.bill_number}</Text>
                 </View>
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabel}>BILL DATE</Text>
+                  <Text style={styles.infoLineLabelInvoice}>BILL DATE</Text>
                   <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
                 </View>
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabel}>VEHICLE</Text>
+                  <Text style={styles.infoLineLabelInvoice}>VEHICLE</Text>
                   <Text style={styles.infoLineValue}>: {first.vehicle_name ?? ""}</Text>
                 </View>
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabel}>JOB NO.</Text>
+                  <Text style={styles.infoLineLabelInvoice}>JOB NO.</Text>
                   <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
                 </View>
               </View>
@@ -77,25 +77,25 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
               <View style={{ flex: 1 }}>
                 {first.customer_name && (
                   <View style={styles.infoLine}>
-                    <Text style={styles.infoLineLabel}>CUSTOMER</Text>
+                    <Text style={styles.infoLineLabelInvoice}>CUSTOMER</Text>
                     <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
                   </View>
                 )}
                 {first.customer_gstin && (
                   <View style={styles.infoLine}>
-                    <Text style={styles.infoLineLabel}>GSTIN</Text>
+                    <Text style={styles.infoLineLabelInvoice}>GSTIN</Text>
                     <Text style={styles.infoLineValue}>: {first.customer_gstin}</Text>
                   </View>
                 )}
                 {first.customer_address && (
                   <View style={styles.infoLine}>
-                    <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                    <Text style={styles.infoLineLabelInvoice}>ADDRESS</Text>
                     <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
                   </View>
                 )}
                 {first.customer_state && (
                   <View style={styles.infoLine}>
-                    <Text style={styles.infoLineLabel}>PLACE OF SUPPLY</Text>
+                    <Text style={styles.infoLineLabelInvoice}>PLACE OF SUPPLY</Text>
                     <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
                   </View>
                 )}
@@ -111,13 +111,11 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                 <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>Qty</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "7%", marginLeft: 4 }]}>Unit</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Rate</Text>
-                {showTaxColumns ? (
+                {showTaxColumns && (
                   <>
                     <Text style={[styles.plainTableHeadCell, { width: "7%", textAlign: "right" }]}>Tax%</Text>
                     <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax Amt</Text>
                   </>
-                ) : (
-                  <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax</Text>
                 )}
                 <Text style={[styles.plainTableHeadCell, { width: "13%", textAlign: "right" }]}>Amount</Text>
               </View>
@@ -134,7 +132,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                     <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQty(r.qty)}</Text>
                     <Text style={[styles.plainTableCell, { width: "7%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
                     <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
-                    {showTaxColumns ? (
+                    {showTaxColumns && (
                       <>
                         <Text style={[styles.plainTableCell, { width: "7%", textAlign: "right" }]}>
                           {r.tax_percentage_item ? `${parseFloat(r.tax_percentage_item)}%` : "—"}
@@ -143,10 +141,6 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                           {fmtAmt(taxAmt.toFixed(2))}
                         </Text>
                       </>
-                    ) : (
-                      <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>
-                        {fmtAmt(taxAmt.toFixed(2))}
-                      </Text>
                     )}
                     <Text style={[styles.plainTableCellBold, { width: "13%", textAlign: "right" }]}>
                       {fmtAmt(grossAmt.toFixed(2))}

@@ -352,7 +352,6 @@ export function TransactionGrid({
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Unit</th>
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-28">Rate</th>
             {(!isInvoiceMode || showTaxColumns) && <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-20">Tax %</th>}
-            {isInvoiceMode && !showTaxColumns && <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-24">Tax</th>}
             {isInvoiceMode && showTaxColumns && <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-24">Tax Amt</th>}
             <th className="px-3 py-2 text-right font-medium whitespace-nowrap w-28">Amount</th>
             {!readOnly && <th className="px-3 py-2 w-10" />}
@@ -595,17 +594,6 @@ export function TransactionGrid({
                         max="100"
                         step="any"
                       />
-                    )}
-                  </td>
-                )}
-
-                {/* Tax — invoice mode without showTaxColumns: shows combined tax amount per line (read-only) */}
-                {isInvoiceMode && !showTaxColumns && (
-                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
-                    {fmt2(
-                      (parseFloat(row.cgst_amount || "0") +
-                       parseFloat(row.sgst_amount || "0") +
-                       parseFloat(row.igst_amount || "0")).toFixed(2)
                     )}
                   </td>
                 )}

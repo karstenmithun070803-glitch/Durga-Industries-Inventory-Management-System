@@ -717,13 +717,19 @@ export function PurchaseOrdersClient({
               <div className="flex flex-wrap items-end gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400 uppercase tracking-wide">Supplier</label>
-                  <div className="w-64" onClick={() => { if (eitherFilterActive) setIsListOpen(true); }}>
+                  <div className="relative w-64">
                     <Combobox
                       options={supplierFilterOptions}
                       value={filterSupplier}
                       onChange={handleFilterSupplierChange}
                       placeholder="Select supplier…"
                     />
+                    {eitherFilterActive && !isListOpen && (
+                      <div
+                        className="absolute inset-0 z-10 cursor-pointer"
+                        onClick={() => setIsListOpen(true)}
+                      />
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1">

@@ -621,7 +621,7 @@ export async function getVehicleComparisonData(
     amt1: parseFloat(r.amt1 ?? "0"),
     qty2: parseFloat(r.qty2 ?? "0"),
     amt2: parseFloat(r.amt2 ?? "0"),
-    diff: parseFloat(r.diff ?? "0"),
+    diff: Math.round(parseFloat(r.diff ?? "0") * 1000) / 1000,
   }));
 }
 

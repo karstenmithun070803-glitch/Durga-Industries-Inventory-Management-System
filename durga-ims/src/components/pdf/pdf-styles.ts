@@ -47,6 +47,16 @@ export const styles = StyleSheet.create({
     width: 130,
     color: "#000",
   },
+  infoLineLabelInvoice: {
+    fontSize: 8.5,
+    width: 90,
+    color: "#000",
+  },
+  infoLineLabelMI: {
+    fontSize: 8.5,
+    width: 75,
+    color: "#000",
+  },
   infoLineValue: {
     fontSize: 8.5,
     fontFamily: "Helvetica-Bold",

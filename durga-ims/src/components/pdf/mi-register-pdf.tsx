@@ -70,16 +70,16 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
               <View style={{ flex: 1 }}>
                 {slipLabel && (
                   <View style={styles.infoLine}>
-                    <Text style={styles.infoLineLabel}>SLIP NO.</Text>
+                    <Text style={styles.infoLineLabelMI}>SLIP NO.</Text>
                     <Text style={styles.infoLineValue}>: {slipLabel}</Text>
                   </View>
                 )}
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabel}>DATE</Text>
+                  <Text style={styles.infoLineLabelMI}>DATE</Text>
                   <Text style={styles.infoLineValue}>: {fmtDate(first.issue_date)}</Text>
                 </View>
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabel}>VEHICLE / JOB</Text>
+                  <Text style={styles.infoLineLabelMI}>VEHICLE / JOB</Text>
                   <Text style={styles.infoLineValue}>: {first.vehicle_name ?? ""}  ({jobLabel})</Text>
                 </View>
               </View>
@@ -87,13 +87,13 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
               <View style={{ flex: 1 }}>
                 {first.customer_name && (
                   <View style={styles.infoLine}>
-                    <Text style={styles.infoLineLabel}>CUSTOMER</Text>
+                    <Text style={styles.infoLineLabelMI}>CUSTOMER</Text>
                     <Text style={styles.infoLineValue}>: {first.customer_name}</Text>
                   </View>
                 )}
                 {first.customer_address && (
                   <View style={styles.infoLine}>
-                    <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                    <Text style={styles.infoLineLabelMI}>ADDRESS</Text>
                     <Text style={styles.infoLineValue}>: {first.customer_address}</Text>
                   </View>
                 )}

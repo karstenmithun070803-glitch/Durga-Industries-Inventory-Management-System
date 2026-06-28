@@ -56,30 +56,30 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
         <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
           <View style={{ flex: 1 }}>
             <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>DATE</Text>
+              <Text style={styles.infoLineLabelMI}>DATE</Text>
               <Text style={styles.infoLineValue}>: {fmtDate(slip.issue_date)}</Text>
             </View>
             <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>VEHICLE / JOB</Text>
+              <Text style={styles.infoLineLabelMI}>VEHICLE / JOB</Text>
               <Text style={styles.infoLineValue}>
                 : {slip.vehicle_name ?? ""} ({slip.job_ref_no})
               </Text>
             </View>
             <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>STATUS</Text>
+              <Text style={styles.infoLineLabelMI}>STATUS</Text>
               <Text style={styles.infoLineValue}>: {slip.status}</Text>
             </View>
           </View>
           <View style={{ flex: 1 }}>
             {slip.customer_name && (
               <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>CUSTOMER</Text>
+                <Text style={styles.infoLineLabelMI}>CUSTOMER</Text>
                 <Text style={styles.infoLineValue}>: {slip.customer_name}</Text>
               </View>
             )}
             {slip.customer_address && (
               <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>ADDRESS</Text>
+                <Text style={styles.infoLineLabelMI}>ADDRESS</Text>
                 <Text style={styles.infoLineValue}>
                   : {slip.customer_address
                       .split(/\r?\n/)
@@ -91,7 +91,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
             )}
             {slip.customer_gstin && (
               <View style={styles.infoLine}>
-                <Text style={styles.infoLineLabel}>GSTIN</Text>
+                <Text style={styles.infoLineLabelMI}>GSTIN</Text>
                 <Text style={styles.infoLineValue}>: {slip.customer_gstin}</Text>
               </View>
             )}
@@ -185,6 +185,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
             );
           })()}
 
+          <View wrap={false}>
           <View style={styles.separator} />
 
           {/* Totals */}
@@ -203,6 +204,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
               {igstTotal > 0 && <Text style={styles.plainTableCell}>{fmtAmt(String(igstTotal))}</Text>}
               <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(String(grandTotal))}</Text>
             </View>
+          </View>
           </View>
         </View>
 

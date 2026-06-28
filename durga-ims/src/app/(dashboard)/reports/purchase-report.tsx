@@ -60,6 +60,8 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   const [isLoading, setIsLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);
   const [groupByMonth, setGroupByMonth] = useState(false);
+  const [showBill, setShowBill] = useState(false);
+  const [showTaxAmt, setShowTaxAmt] = useState(false);
   const fetchGenRef = useRef(0);
 
   const supplierOptions = suppliers.map((s) => ({ value: s.id, label: s.name }));
@@ -167,18 +169,28 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
     let headers: string[];
     let csvRows: (string | number)[][];
     if (groupByMonth) {
-      headers = ["Month", "Supplier", "Material", "Qty", "Taxable Amount", "Tax Amt", "Total Amount"];
-      csvRows = monthlyRows.map((r) => [r.monthLabel, r.supplier, r.material, r.qty.toFixed(3), r.taxable.toFixed(2), (r.cgst + r.sgst + r.igst).toFixed(2), r.total.toFixed(2)]);
+      headers = ["Month", "Supplier", "Material", "Qty", "Taxable Amount", ...(showTaxAmt ? ["Tax Amt"] : []), "Total Amount"];
+      csvRows = monthlyRows.map((r) => [
+        r.monthLabel, r.supplier, r.material, r.qty.toFixed(3), r.taxable.toFixed(2),
+        ...(showTaxAmt ? [(r.cgst + r.sgst + r.igst).toFixed(2)] : []),
+        r.total.toFixed(2),
+      ]);
     } else {
       headers = [
-        "PO #", "Date", "Supplier Bill No.", "Supplier Bill Date", "Supplier", "Material", "Qty", "Unit", "Rate",
-        "Taxable Amount", "Tax Amt", "Total Amount",
+        "PO #", "Date",
+        ...(showBill ? ["Supplier Bill No.", "Supplier Bill Date"] : []),
+        "Supplier", "Material", "Qty", "Unit", "Rate",
+        "Taxable Amount",
+        ...(showTaxAmt ? ["Tax Amt"] : []),
+        "Total Amount",
       ];
       csvRows = rows.map((r) => [
-        r.po_number, r.po_date, r.supplier_bill_no ?? "", r.supplier_bill_date ?? "",
+        r.po_number, r.po_date,
+        ...(showBill ? [r.supplier_bill_no ?? "", r.supplier_bill_date ?? ""] : []),
         r.supplier_name ?? "", r.material_name,
         r.qty.toFixed(3), r.unit_name ?? "", r.rate.toFixed(2),
-        r.taxable_amount.toFixed(2), (r.cgst_amount + r.sgst_amount + r.igst_amount).toFixed(2),
+        r.taxable_amount.toFixed(2),
+        ...(showTaxAmt ? [(r.cgst_amount + r.sgst_amount + r.igst_amount).toFixed(2)] : []),
         r.total_amount.toFixed(2),
       ]);
     }
@@ -264,7 +276,17 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
         </div>
       ) : (
         <>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end items-center gap-3">
+            {!groupByMonth && (
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-600 select-none">
+                <input type="checkbox" checked={showBill} onChange={(e) => setShowBill(e.target.checked)} className="accent-slate-700" />
+                Supplier Bill
+              </label>
+            )}
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-600 select-none">
+              <input type="checkbox" checked={showTaxAmt} onChange={(e) => setShowTaxAmt(e.target.checked)} className="accent-slate-700" />
+              Tax Amount
+            </label>
             <Button
               variant={groupByMonth ? "default" : "outline"}
               size="sm"
@@ -290,6 +312,8 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                   dateFrom={dateFrom}
                   dateTo={dateTo}
                   companySetting={companySetting}
+                  showBill={showBill}
+                  showTaxAmt={showTaxAmt}
                 />
               )}
             />
@@ -305,13 +329,13 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                     <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
-                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>
+                    {showTaxAmt && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>}
                     <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {monthlyRows.length === 0 ? (
-                    <tr><td colSpan={7} className="px-3 py-8 text-center text-slate-400">No received purchases in selected range.</td></tr>
+                    <tr><td colSpan={showTaxAmt ? 7 : 6} className="px-3 py-8 text-center text-slate-400">No received purchases in selected range.</td></tr>
                   ) : (
                     monthlyRows.map((r) => (
                       <tr key={r.key} className="border-t border-slate-100 hover:bg-slate-50/50">
@@ -320,7 +344,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                         <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.material}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable)}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.cgst + r.sgst + r.igst) > 0 ? fmtAmt(r.cgst + r.sgst + r.igst) : "—"}</td>
+                        {showTaxAmt && <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.cgst + r.sgst + r.igst) > 0 ? fmtAmt(r.cgst + r.sgst + r.igst) : "—"}</td>}
                         <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.total)}</td>
                       </tr>
                     ))
@@ -329,9 +353,9 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                 <tfoot className="bg-slate-100 sticky bottom-0">
                   <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
                     <td colSpan={3} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">TOTAL</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.qty)}</td>
+                    <td />{/* Qty — no total */}
                     <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>
+                    {showTaxAmt && <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>}
                     <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
                   </tr>
                 </tfoot>
@@ -345,14 +369,14 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                 <tr>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">PO #</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Date</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier Bill</th>
+                  {showBill && <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier Bill</th>}
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Rate</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>
+                  {showTaxAmt && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>}
                   <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Total</th>
                 </tr>
               </thead>
@@ -375,11 +399,13 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                             <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-500 align-top border-r border-slate-100">
                               {r.po_date}
                             </td>
-                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-500 align-top border-r border-slate-100">
-                              {r.supplier_bill_no
-                                ? <span title={r.supplier_bill_date ?? undefined}>{r.supplier_bill_no}</span>
-                                : "—"}
-                            </td>
+                            {showBill && (
+                              <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-500 align-top border-r border-slate-100">
+                                {r.supplier_bill_no
+                                  ? <span title={r.supplier_bill_date ?? undefined}>{r.supplier_bill_no}</span>
+                                  : "—"}
+                              </td>
+                            )}
                             <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-600 align-top border-r border-slate-100">
                               {r.supplier_name ?? "—"}
                             </td>
@@ -390,11 +416,13 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                         <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.unit_name ?? "—"}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.rate)}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_amount)}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">
-                          {(r.cgst_amount + r.sgst_amount + r.igst_amount) > 0
-                            ? fmtAmt(r.cgst_amount + r.sgst_amount + r.igst_amount)
-                            : "—"}
-                        </td>
+                        {showTaxAmt && (
+                          <td className="px-3 py-1.5 whitespace-nowrap text-right">
+                            {(r.cgst_amount + r.sgst_amount + r.igst_amount) > 0
+                              ? fmtAmt(r.cgst_amount + r.sgst_amount + r.igst_amount)
+                              : "—"}
+                          </td>
+                        )}
                         <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">
                           {fmtAmt(r.total_amount)}
                         </td>
@@ -405,14 +433,14 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
               </tbody>
               <tfoot className="bg-slate-100 sticky bottom-0">
                 <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={5} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
+                  <td colSpan={4 + (showBill ? 1 : 0)} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
                     TOTAL {rows.filter((r) => r.status !== "Received").length > 0 && "(Received only)"}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.qty)}</td>
+                  <td />{/* Qty — no total */}
                   <td />{/* Unit */}
                   <td />{/* Rate — no total */}
                   <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>
+                  {showTaxAmt && <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>}
                   <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
                 </tr>
               </tfoot>

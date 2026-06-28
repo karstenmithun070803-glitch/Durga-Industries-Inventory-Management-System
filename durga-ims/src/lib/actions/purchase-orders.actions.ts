@@ -3,7 +3,7 @@
 import { revalidatePath, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
-import { purchaseOrders, purchaseOrderItems, materials, stockLedger } from "@/lib/db/schema";
+import { purchaseOrders, purchaseOrderItems, materials, stockLedger, materialIssueItems } from "@/lib/db/schema";
 import { suppliers, units } from "@/lib/db/schema";
 import { eq, and, max, desc, inArray } from "drizzle-orm";
 import type { PurchaseOrderWithDetails, PurchaseOrderItemWithDetails } from "@/types";
@@ -632,6 +632,26 @@ export async function revertPOToDraft(
 
   if (!po) return { error: "Purchase order not found." };
   if (po.status !== "Received") return { error: "Only Received POs can be reverted to Draft." };
+
+  // Pre-flight: block if any materials from this PO have been issued via VMI
+  if (po.affects_stock) {
+    const consumed = await db
+      .selectDistinct({ materialId: materialIssueItems.material_id })
+      .from(materialIssueItems)
+      .innerJoin(
+        purchaseOrderItems,
+        eq(materialIssueItems.material_id, purchaseOrderItems.material_id)
+      )
+      .where(eq(purchaseOrderItems.po_id, poId))
+      .limit(1);
+
+    if (consumed.length > 0) {
+      return {
+        error:
+          "Cannot revert to draft — materials from this PO have already been issued to vehicles via VMI.",
+      };
+    }
+  }
 
   // Pre-flight: check all materials have enough stock for reversal (single bulk query)
   if (po.affects_stock) {

@@ -517,13 +517,18 @@ export function MaterialIssuesClient({
                     <label className="text-sm text-slate-500">Margin %</label>
                     <div className="w-24">
                       <Input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={marginPct}
-                        onChange={(e) => { setMarginPct(e.target.value); setIsDirty(true); }}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                            setMarginPct(val);
+                            setIsDirty(true);
+                          }
+                        }}
                         onFocus={(e) => e.target.select()}
                         className="h-9 text-sm"
-                        min="0"
-                        step="0.01"
                         placeholder="0"
                       />
                     </div>
@@ -553,18 +558,18 @@ export function MaterialIssuesClient({
                         </p>
                       )}
                       {selectedVehicle.customer_gstin && (
-                        <p className="text-xs text-slate-500 font-mono mb-3">
+                        <p className="text-xs text-slate-500 font-mono mb-1">
                           {selectedVehicle.customer_gstin}
                         </p>
                       )}
+                      <p className="text-xs text-slate-500 mb-3">
+                        {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
+                      </p>
                       {selectedVehicle.customer_address && (
                         <p className="text-sm text-slate-600 break-words mb-3">
                           {selectedVehicle.customer_address}
                         </p>
                       )}
-                      <p className="text-sm text-slate-700">
-                        {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
-                      </p>
                     </>
                   )}
                 </div>
