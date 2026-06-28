@@ -40,7 +40,7 @@ const nav = [
     icon: Package,
     children: [
       { label: "Customers", href: "/masters/customers", icon: Users },
-      { label: "Vehicles / Jobs", href: "/masters/vehicles", icon: Truck },
+      { label: "Vehicle", href: "/masters/vehicles", icon: Truck },
       { label: "Suppliers", href: "/masters/suppliers", icon: Building2 },
       { label: "Materials", href: "/masters/materials", icon: Package },
       { label: "Units", href: "/masters/units", icon: Ruler },
@@ -55,7 +55,7 @@ const nav = [
     children: [
       { label: "Purchase Orders", href: "/transactions/purchase-orders", icon: ShoppingCart },
       { label: "Veh. Issue (Old)", href: "/transactions/material-issues", icon: ClipboardList },
-      { label: "Vehicle Mat. Issue", href: "/transactions/material-issues/new", icon: ClipboardCheck },
+      { label: "Veh. Issue (New)", href: "/transactions/material-issues/new", icon: ClipboardCheck },
     ],
   },
   { label: "Invoice", href: "/invoice", icon: FileText },
