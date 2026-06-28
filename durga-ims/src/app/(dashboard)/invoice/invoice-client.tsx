@@ -737,7 +737,7 @@ export function InvoiceClient({
             className="h-8 text-xs w-32"
             title="Filter from date"
           />
-          <span className="text-slate-400 text-xs">—</span>
+          <span className="text-slate-700 text-xs">—</span>
           <Input
             type="date"
             value={dateTo}
@@ -747,18 +747,18 @@ export function InvoiceClient({
           />
           <button
             onClick={() => { setDateFrom(""); setDateTo(""); }}
-            className={`text-xs text-slate-400 hover:text-slate-600 ${!dateFrom && !dateTo ? "invisible" : ""}`}
+            className={`text-xs text-slate-700 hover:text-slate-600 ${!dateFrom && !dateTo ? "invisible" : ""}`}
             title="Clear date filter"
           >
             ✕
           </button>
         </div>
-        {isLoading && <span className="text-sm text-slate-400 animate-pulse shrink-0">Loading…</span>}
+        {isLoading && <span className="text-sm text-slate-700 animate-pulse shrink-0">Loading…</span>}
       </div>
 
       {/* Blank state */}
       {!currentInvoiceId && !isLoading && !isNewMode && (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-4">
+        <div className="flex-1 flex flex-col items-center justify-center text-slate-700 gap-4">
           <p className="text-sm">Search for a bill number above, or create a new invoice.</p>
           <Button size="sm" onClick={handleNew} variant="outline">New Invoice</Button>
         </div>
@@ -783,13 +783,13 @@ export function InvoiceClient({
               {/* Row 1: Bill No / Bill Date / FY */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">Bill No.</label>
+                  <label className="text-xs text-slate-600 block mb-1">Bill No.</label>
                   <div className="h-9 px-3 flex items-center bg-slate-50 rounded border border-slate-200 font-mono text-sm text-slate-700">
                     {billNumber}
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">Bill Date</label>
+                  <label className="text-xs text-slate-600 block mb-1">Bill Date</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">
                       {new Date(billDate).toLocaleDateString("en-IN")}
@@ -804,7 +804,7 @@ export function InvoiceClient({
                   )}
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">Status</label>
+                  <label className="text-xs text-slate-600 block mb-1">Status</label>
                   <div className={`h-9 px-3 flex items-center rounded border text-sm font-medium ${
                     isDraft ? "bg-slate-50 border-slate-200 text-slate-600" :
                     isFinalized ? "bg-blue-50 border-blue-200 text-blue-700" :
@@ -819,7 +819,7 @@ export function InvoiceClient({
               {/* Row 2: Vehicle */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">Vehicle / Job</label>
+                  <label className="text-xs text-slate-600 block mb-1">Vehicle / Job</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">
                       {currentInvoice?.job_ref_no ?? ""}{currentInvoice?.vehicle_name ? ` — ${currentInvoice.vehicle_name}` : ""}
@@ -848,7 +848,7 @@ export function InvoiceClient({
                   {/* Insurance status badge */}
                   {currentInvoice && (
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
-                      !hasInsurance ? "bg-slate-50 text-slate-500 border-slate-200" :
+                      !hasInsurance ? "bg-slate-50 text-slate-600 border-slate-200" :
                       insuranceBillStatus === "Finalized" ? "bg-purple-50 text-purple-700 border-purple-200" :
                       "bg-amber-50 text-amber-700 border-amber-200"
                     }`}>
@@ -864,19 +864,19 @@ export function InvoiceClient({
               {(selectedVehicle?.customer_name || currentInvoice?.customer_name) && (
                 <div className="border-t border-slate-100 pt-3 grid grid-cols-3 gap-4 text-sm">
                   <div>
-                    <span className="text-xs text-slate-400 block">Customer</span>
+                    <span className="text-xs text-slate-700 block">Customer</span>
                     <span className="text-slate-700">
                       {selectedVehicle?.customer_name ?? currentInvoice?.customer_name}
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-slate-400 block">GSTIN</span>
+                    <span className="text-xs text-slate-700 block">GSTIN</span>
                     <span className="font-mono text-slate-600">
                       {selectedVehicle?.customer_gstin ?? currentInvoice?.customer_gstin ?? "—"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-slate-400 block">State</span>
+                    <span className="text-xs text-slate-700 block">State</span>
                     <span className="text-slate-600">
                       {selectedVehicle?.customer_state ?? currentInvoice?.customer_state ?? "—"}
                     </span>
@@ -887,7 +887,7 @@ export function InvoiceClient({
               {/* Material Margin + Include Tax */}
               <div className="grid grid-cols-3 gap-4 items-end">
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">Material Margin %</label>
+                  <label className="text-xs text-slate-600 block mb-1">Material Margin %</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">{materialMargin || "—"}</div>
                   ) : (
@@ -942,21 +942,21 @@ export function InvoiceClient({
           {/* Sticky totals + action bar */}
           <div className="fixed bottom-0 left-64 right-0 z-30 bg-white border-t border-slate-200 shadow-lg">
             <div className="flex items-center gap-6 px-6 py-2 border-b border-slate-100 text-sm">
-              <span className="text-slate-500">
+              <span className="text-slate-600">
                 Taxable: <strong className="text-slate-800">₹{fmt2(totals.subtotal)}</strong>
               </span>
               {totals.cgst > 0 && (
-                <span className="text-slate-500">
+                <span className="text-slate-600">
                   CGST: <strong className="text-slate-800">₹{fmt2(totals.cgst)}</strong>
                 </span>
               )}
               {totals.sgst > 0 && (
-                <span className="text-slate-500">
+                <span className="text-slate-600">
                   SGST: <strong className="text-slate-800">₹{fmt2(totals.sgst)}</strong>
                 </span>
               )}
               {totals.igst > 0 && (
-                <span className="text-slate-500">
+                <span className="text-slate-600">
                   IGST: <strong className="text-slate-800">₹{fmt2(totals.igst)}</strong>
                 </span>
               )}
@@ -983,7 +983,7 @@ export function InvoiceClient({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                    className="text-slate-600 hover:text-slate-700 hover:bg-slate-100"
                     onClick={handleGoBack}
                     disabled={isSaving}
                   >

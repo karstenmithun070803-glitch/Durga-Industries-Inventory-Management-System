@@ -27,7 +27,7 @@ export default function MaterialIssueError({
         <AlertTriangle className="w-5 h-5 shrink-0" />
         <p className="font-medium">{friendlyMessage(error)}</p>
       </div>
-      <p className="text-sm text-slate-500">Any unsaved changes may need to be re-entered.</p>
+      <p className="text-sm text-slate-600">Any unsaved changes may need to be re-entered.</p>
       <Button variant="outline" onClick={reset}>Try Again</Button>
     </div>
   );

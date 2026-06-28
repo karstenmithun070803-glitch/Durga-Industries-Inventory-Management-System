@@ -320,7 +320,7 @@ export function StagesClient({ stages, materials, units }: Props) {
     <>
       <div className="p-6 h-full flex flex-col gap-4">
         <h1 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
-          <Layers className="w-5 h-5 text-slate-500" />
+          <Layers className="w-5 h-5 text-slate-600" />
           Stage Master
         </h1>
 
@@ -330,13 +330,13 @@ export function StagesClient({ stages, materials, units }: Props) {
             {/* Stage Code */}
             <div className="flex items-center gap-4">
               <div className="flex-1 space-y-1.5">
-                <label className="text-xs text-slate-500">Stage Code</label>
+                <label className="text-xs text-slate-600">Stage Code</label>
                 <div className="h-9 flex items-center px-3 bg-slate-50 border border-slate-200 rounded-md text-sm font-mono text-slate-600">
-                  {editing ? editing.stage_code : <span className="text-slate-400 italic">Auto-assigned</span>}
+                  {editing ? editing.stage_code : <span className="text-slate-700 italic">Auto-assigned</span>}
                 </div>
               </div>
               <div className="flex-1 space-y-1.5">
-                <label className="text-xs text-slate-500">Stage Name *</label>
+                <label className="text-xs text-slate-600">Stage Name *</label>
                 <Input
                   ref={firstFieldRef}
                   placeholder="e.g. WOOD WORK"
@@ -383,7 +383,7 @@ export function StagesClient({ stages, materials, units }: Props) {
                             : "bg-slate-50/60 border-t border-slate-100"
                         }
                       >
-                        <td className="px-2 py-1 text-slate-400 text-xs text-center">
+                        <td className="px-2 py-1 text-slate-700 text-xs text-center">
                           {row.material_id ? i + 1 : ""}
                         </td>
                         <td className="px-1 py-1">
@@ -435,7 +435,7 @@ export function StagesClient({ stages, materials, units }: Props) {
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-400 mt-1.5">
+              <p className="text-xs text-slate-700 mt-1.5">
                 ↓ or Enter to add rows · ← → to move between columns
               </p>
             </div>
@@ -535,7 +535,7 @@ export function StagesClient({ stages, materials, units }: Props) {
                 <tbody>
                   {visible.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-700">
                         No stages found
                       </td>
                     </tr>
@@ -552,12 +552,12 @@ export function StagesClient({ stages, materials, units }: Props) {
                           : "hover:bg-blue-50/40"
                       }`}
                     >
-                      <td className="px-3 py-1.5 text-slate-500">{i + 1}</td>
+                      <td className="px-3 py-1.5 text-slate-600">{i + 1}</td>
                       <td className="px-3 py-1.5 font-mono text-xs font-medium text-slate-700">
                         {s.stage_code}
                       </td>
                       <td className="px-3 py-1.5 font-medium">{s.stage_name}</td>
-                      <td className="px-3 py-1.5 text-slate-500 text-xs">
+                      <td className="px-3 py-1.5 text-slate-600 text-xs">
                         {s.materials.length > 0
                           ? `${s.materials.length} material${s.materials.length === 1 ? "" : "s"}`
                           : <span className="text-slate-300">None</span>}
@@ -568,7 +568,7 @@ export function StagesClient({ stages, materials, units }: Props) {
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
                             Inactive
                           </span>
                         )}

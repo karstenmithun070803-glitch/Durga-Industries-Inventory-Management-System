@@ -15,7 +15,7 @@ interface Props {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-xs text-slate-500 block mb-1">{label}</label>
+      <label className="text-xs text-slate-600 block mb-1">{label}</label>
       {children}
     </div>
   );
@@ -101,7 +101,7 @@ export function SettingsClient({ initialSettings }: Props) {
 
       {/* Bank Details */}
       <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4 mb-4">
-        <h2 className="text-sm font-medium text-slate-700">Bank Details <span className="text-xs text-slate-400 font-normal">(shown on invoice PDFs)</span></h2>
+        <h2 className="text-sm font-medium text-slate-700">Bank Details <span className="text-xs text-slate-700 font-normal">(shown on invoice PDFs)</span></h2>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Bank Name">
             <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. State Bank of India" className="text-sm" />
@@ -120,7 +120,7 @@ export function SettingsClient({ initialSettings }: Props) {
 
       {/* Invoice Terms */}
       <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4 mb-4">
-        <h2 className="text-sm font-medium text-slate-700">Invoice Terms <span className="text-xs text-slate-400 font-normal">(shown in invoice PDF footer)</span></h2>
+        <h2 className="text-sm font-medium text-slate-700">Invoice Terms <span className="text-xs text-slate-700 font-normal">(shown in invoice PDF footer)</span></h2>
         <textarea
           value={invoiceTerms}
           onChange={(e) => setInvoiceTerms(e.target.value)}
@@ -134,7 +134,7 @@ export function SettingsClient({ initialSettings }: Props) {
         {isSaving ? "Saving…" : "Save Settings"}
       </Button>
 
-      <p className="text-xs text-slate-400 mt-4">
+      <p className="text-xs text-slate-700 mt-4">
         These details appear on all generated PDFs (invoices, purchase orders).
       </p>
     </div>

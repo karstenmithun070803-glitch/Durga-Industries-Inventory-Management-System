@@ -158,7 +158,7 @@ export function Sidebar() {
       {/* Footer */}
       <div className="px-4 py-3 border-t border-slate-700 space-y-2">
         <div>
-          <p className="text-slate-500 text-xs mb-1 flex items-center gap-1.5">
+          <p className="text-slate-400 text-xs mb-1 flex items-center gap-1.5">
             Financial Year
             {!isCurrentFY && (
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Viewing historical data" />

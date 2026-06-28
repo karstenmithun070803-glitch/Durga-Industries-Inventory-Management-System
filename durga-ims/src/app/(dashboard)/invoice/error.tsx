@@ -15,9 +15,9 @@ export default function InvoiceError({
   }, [error]);
 
   return (
-    <div className="flex flex-col h-full items-center justify-center gap-4 text-slate-500">
+    <div className="flex flex-col h-full items-center justify-center gap-4 text-slate-600">
       <p className="text-sm font-medium text-slate-700">Something went wrong.</p>
-      <p className="text-xs text-slate-400 max-w-sm text-center">
+      <p className="text-xs text-slate-700 max-w-sm text-center">
         The page may be stale. Try refreshing — any unsaved changes will need to be re-entered.
       </p>
       <Button size="sm" variant="outline" onClick={reset}>

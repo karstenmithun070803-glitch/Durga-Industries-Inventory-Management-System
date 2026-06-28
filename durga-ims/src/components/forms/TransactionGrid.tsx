@@ -377,9 +377,9 @@ export function TransactionGrid({
 
             return (
               <tr key={row._key} className="border-t border-slate-100">
-                <td className="px-3 py-1.5 text-slate-500">{i + 1}</td>
+                <td className="px-3 py-1.5 text-slate-600">{i + 1}</td>
                 {showStageColumn && (
-                  <td className="px-3 py-1.5 font-mono text-xs text-slate-400 whitespace-nowrap">
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-700 whitespace-nowrap">
                     {row.stage_name || "—"}
                   </td>
                 )}
@@ -412,7 +412,7 @@ export function TransactionGrid({
 
                 {/* HSN — read-only, auto-filled, issue mode and invoice mode */}
                 {(isIssueMode || isInvoiceMode) && (
-                  <td className="px-3 py-1.5 font-mono text-sm text-slate-500 whitespace-nowrap">
+                  <td className="px-3 py-1.5 font-mono text-sm text-slate-600 whitespace-nowrap">
                     {row.hsn_code || "—"}
                   </td>
                 )}
@@ -624,7 +624,7 @@ export function TransactionGrid({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      className="h-7 w-7 text-slate-700 hover:text-red-500 hover:bg-red-50"
                       onClick={() => deleteRow(row._key)}
                       type="button"
                     >

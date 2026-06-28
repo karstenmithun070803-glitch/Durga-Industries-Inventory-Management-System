@@ -111,18 +111,18 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Material" : "Add Material"}</p>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Material Name *</label>
+              <label className="text-xs text-slate-600">Material Name *</label>
               <Input ref={firstFieldRef} placeholder="e.g. 25*3MM ANGLE" value={form.name} onChange={(e) => set("name", e.target.value)} />
               {isDuplicateName && (
                 <p className="text-xs text-red-500 mt-0.5">A material named "{form.name.trim().toUpperCase()}" already exists.</p>
               )}
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">HSN Code</label>
+              <label className="text-xs text-slate-600">HSN Code</label>
               <Input placeholder="8-digit HSN" value={form.hsn_code} onChange={(e) => set("hsn_code", e.target.value)} maxLength={8} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Tax Rate</label>
+              <label className="text-xs text-slate-600">Tax Rate</label>
               <Combobox
                 options={activeTaxRates.map((t) => ({ value: t.id, label: t.description }))}
                 value={form.tax_rate_id}
@@ -132,7 +132,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Purchase Unit *</label>
+              <label className="text-xs text-slate-600">Purchase Unit *</label>
               <Combobox
                 options={activeUnits.map((u) => ({ value: u.id, label: `${formatCode("U", u.unit_code, 2)} — ${u.unit_name}` }))}
                 value={form.purchase_unit_id}
@@ -144,18 +144,18 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
             <div className="grid grid-cols-2 gap-2">
               {!editing && (
                 <div className="space-y-1.5">
-                  <label className="text-xs text-slate-500">Opening Stock</label>
+                  <label className="text-xs text-slate-600">Opening Stock</label>
                   <Input type="number" min="0" step="any" value={form.opening_stock} onChange={(e) => set("opening_stock", e.target.value)} />
                 </div>
               )}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-500">Min Level</label>
+                <label className="text-xs text-slate-600">Min Level</label>
                 <Input type="number" min="0" step="any" value={form.min_level} onChange={(e) => set("min_level", e.target.value)} />
               </div>
             </div>
             {editing && (
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-500">Standard Cost (₹) <span className="text-slate-400">— for valuation when no PO rate</span></label>
+                <label className="text-xs text-slate-600">Standard Cost (₹) <span className="text-slate-700">— for valuation when no PO rate</span></label>
                 <Input type="number" min={0} step="any" placeholder="e.g. 150.00" value={form.standard_cost} onChange={(e) => set("standard_cost", e.target.value)} />
               </div>
             )}
@@ -217,7 +217,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">No materials found</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-700">No materials found</td></tr>
                   )}
                   {visible.map((m, i) => {
                     const purUnit = units.find((u) => u.id === m.purchase_unit_id);
@@ -230,13 +230,13 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                         className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !m.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : stockLow ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-blue-50/40"}`}
                         onClick={() => startEdit(m)}
                       >
-                        <td className={`px-3 py-1.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                        <td className={`px-3 py-1.5 text-slate-600 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
                         <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("M", m.material_no)}</td>
                         <td className={`px-3 py-1.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{m.name}</td>
-                        <td className="px-3 py-1.5 text-slate-500 font-mono text-xs">{m.hsn_code ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-slate-500 text-xs">{taxRate ? taxRate.description : "—"}</td>
-                        <td className="px-3 py-1.5 text-slate-500">{purUnit?.unit_name ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-slate-500">{m.min_level ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-600 font-mono text-xs">{m.hsn_code ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-600 text-xs">{taxRate ? taxRate.description : "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{purUnit?.unit_name ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{m.min_level ?? "—"}</td>
                         <td className={`px-3 py-1.5 font-semibold ${stockLow ? "text-red-600" : "text-slate-800"}`}>{m.current_stock}</td>
                       </tr>
                     );

@@ -100,7 +100,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
               { label: "Contact Number", key: "contact", placeholder: "Phone number" },
             ].map(({ label, key, placeholder }) => (
               <div key={key} className="space-y-1.5">
-                <label className="text-xs text-slate-500">{label}</label>
+                <label className="text-xs text-slate-600">{label}</label>
                 <Input ref={key === "name" ? firstFieldRef : undefined} placeholder={placeholder} value={form[key as keyof typeof form]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
               </div>
             ))}
@@ -159,7 +159,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No contractors found</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-700">No contractors found</td></tr>
                   )}
                   {visible.map((c, i) => (
                     <tr
@@ -167,11 +167,11 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
                       className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(c)}
                     >
-                      <td className="px-4 py-1.5 text-slate-500">{i + 1}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
                       <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{formatCode("CON", c.code_no, 2)}</td>
                       <td className="px-4 py-1.5 font-medium">{c.name}</td>
-                      <td className="px-4 py-1.5 text-slate-500">{c.role ?? "—"}</td>
-                      <td className="px-4 py-1.5 text-slate-500">{c.contact ?? "—"}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{c.role ?? "—"}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{c.contact ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

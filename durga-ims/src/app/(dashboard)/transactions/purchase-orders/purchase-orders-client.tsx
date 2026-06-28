@@ -716,7 +716,7 @@ export function PurchaseOrdersClient({
             <div>
               <div className="flex flex-wrap items-end gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400 uppercase tracking-wide">Supplier</label>
+                  <label className="text-xs text-slate-700 uppercase tracking-wide">Supplier</label>
                   <div className="relative w-64">
                     <Combobox
                       options={supplierFilterOptions}
@@ -733,7 +733,7 @@ export function PurchaseOrdersClient({
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400 uppercase tracking-wide">Date</label>
+                  <label className="text-xs text-slate-700 uppercase tracking-wide">Date</label>
                   <div className="w-44">
                     <Input
                       type="date"
@@ -763,7 +763,7 @@ export function PurchaseOrdersClient({
                       <span className="flex-1 text-slate-600 truncate">
                         {po.supplierName ?? "—"}
                       </span>
-                      <span className="text-slate-400 shrink-0 text-xs">{formatDate(po.date)}</span>
+                      <span className="text-slate-700 shrink-0 text-xs">{formatDate(po.date)}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${
                         po.status === "Received"
                           ? "bg-emerald-100 text-emerald-800"
@@ -777,13 +777,13 @@ export function PurchaseOrdersClient({
               )}
 
               {isListOpen && eitherFilterActive && filteredPOs.length === 0 && (
-                <p className="mt-2 text-sm text-slate-400">No purchase orders found.</p>
+                <p className="mt-2 text-sm text-slate-700">No purchase orders found.</p>
               )}
 
               {/* PO No + Status — shown inline below results when a PO is loaded */}
               {loadedPO && (
                 <div className="mt-3 flex items-center gap-3">
-                  <span className="text-sm text-slate-500 shrink-0">PO No</span>
+                  <span className="text-sm text-slate-600 shrink-0">PO No</span>
                   <div className="h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md min-w-[80px]">
                     {formatCode("PO-", loadedPO.po_number, 4)}
                   </div>
@@ -801,7 +801,7 @@ export function PurchaseOrdersClient({
             {/* Row 2: always-visible header fields */}
             <div className="mt-4 flex flex-wrap items-end gap-4">
               <div className="space-y-1">
-                <label className="text-sm text-slate-500">PO Date</label>
+                <label className="text-sm text-slate-600">PO Date</label>
                 <div className="w-40">
                   <Input
                     type="date"
@@ -837,13 +837,13 @@ export function PurchaseOrdersClient({
 
           {/* Grid */}
           {isLoading ? (
-            <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
+            <div className="flex items-center justify-center py-16 text-slate-700 text-sm">
               Loading…
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
               {!hasFormContent && (
-                <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-400">
+                <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-700">
                   Enter a PO date and add materials to create a new PO, or use the filters above to find an existing PO.
                 </div>
               )}
@@ -865,10 +865,10 @@ export function PurchaseOrdersClient({
         <div className="border-t border-slate-200 bg-white shadow-lg shrink-0">
           {/* Totals */}
           <div className="px-6 py-2.5 flex items-center gap-6 text-sm border-b border-slate-100 flex-wrap">
-            <span className="text-slate-500">Subtotal: <span className="font-medium text-slate-800">{formatAmount(subtotal)}</span></span>
-            <span className="text-slate-500">CGST: <span className="font-medium text-slate-800">{formatAmount(cgst)}</span></span>
-            <span className="text-slate-500">SGST: <span className="font-medium text-slate-800">{formatAmount(sgst)}</span></span>
-            <span className="text-slate-500">IGST: <span className="font-medium text-slate-800">{formatAmount(igst)}</span></span>
+            <span className="text-slate-600">Subtotal: <span className="font-medium text-slate-800">{formatAmount(subtotal)}</span></span>
+            <span className="text-slate-600">CGST: <span className="font-medium text-slate-800">{formatAmount(cgst)}</span></span>
+            <span className="text-slate-600">SGST: <span className="font-medium text-slate-800">{formatAmount(sgst)}</span></span>
+            <span className="text-slate-600">IGST: <span className="font-medium text-slate-800">{formatAmount(igst)}</span></span>
             <span className="ml-auto text-slate-600 font-semibold text-base">
               Grand Total: <span className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</span>
             </span>
@@ -953,7 +953,7 @@ export function PurchaseOrdersClient({
       <div className={cn("shrink-0 border-l border-slate-200 bg-slate-50 flex flex-col transition-all duration-200", sidebarOpen ? "w-52" : "w-10")}>
         <button
           onClick={() => setSidebarOpen((v) => !v)}
-          className="p-2 hover:bg-slate-100 self-end text-slate-500 hover:text-slate-700"
+          className="p-2 hover:bg-slate-100 self-end text-slate-600 hover:text-slate-700"
           title={sidebarOpen ? "Collapse" : "Print PO Range"}
         >
           {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -962,7 +962,7 @@ export function PurchaseOrdersClient({
           <div className="px-4 pb-4 flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Print POs</h3>
             <div className="space-y-1">
-              <label className="text-sm text-slate-500">Date</label>
+              <label className="text-sm text-slate-600">Date</label>
               <Input
                 type="date"
                 value={printByDate}
@@ -971,7 +971,7 @@ export function PurchaseOrdersClient({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-500">PO No From</label>
+              <label className="text-sm text-slate-600">PO No From</label>
               <Combobox
                 options={dropdownOptions}
                 value={printFromId}
@@ -980,7 +980,7 @@ export function PurchaseOrdersClient({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-slate-500">PO No To</label>
+              <label className="text-sm text-slate-600">PO No To</label>
               <Combobox
                 options={dropdownOptions}
                 value={printToId}
@@ -1030,7 +1030,7 @@ export function PurchaseOrdersClient({
             </div>
           )}
           {affectsStock && (
-            <p className="text-xs text-slate-500">Stock changes are permanent and recorded in the Stock Ledger.</p>
+            <p className="text-xs text-slate-600">Stock changes are permanent and recorded in the Stock Ledger.</p>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setReceiveDialogOpen(false)} disabled={isPending}>

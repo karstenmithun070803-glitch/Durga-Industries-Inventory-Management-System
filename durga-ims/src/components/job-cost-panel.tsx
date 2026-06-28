@@ -67,7 +67,7 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
       </div>
 
       {loading && (
-        <p className="text-sm text-slate-400 py-6 text-center">Loading job cost data…</p>
+        <p className="text-sm text-slate-700 py-6 text-center">Loading job cost data…</p>
       )}
 
       {!loading && result && (
@@ -81,14 +81,14 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
             )}>
               {result.vehicle.vehicle_type === "New" ? "New Build" : "Old Build"}
             </span>
-            <span className="text-slate-400">Job #{result.vehicle.job_ref_no}</span>
+            <span className="text-slate-700">Job #{result.vehicle.job_ref_no}</span>
             {result.vehicle.customer_name && (
-              <span className="text-slate-500">{result.vehicle.customer_name}</span>
+              <span className="text-slate-600">{result.vehicle.customer_name}</span>
             )}
           </div>
 
           {result.rows.length === 0 ? (
-            <p className="text-sm text-slate-400 py-4">No materials have been issued to this vehicle yet.</p>
+            <p className="text-sm text-slate-700 py-4">No materials have been issued to this vehicle yet.</p>
           ) : (
             <>
               <div className="overflow-auto border border-slate-200 rounded-lg">
@@ -107,9 +107,9 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
                     {result.rows.map((r, i) => (
                       <tr key={i} className="border-t border-slate-100">
                         <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.material_name}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.contractor_name ?? "—"}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.contractor_name ?? "—"}</td>
                         <td className="px-3 py-1.5 text-right whitespace-nowrap">{fmtQty(r.total_qty)}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.unit_name ?? "—"}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.unit_name ?? "—"}</td>
                         <td className="px-3 py-1.5 text-right whitespace-nowrap text-slate-600">{fmtAmt(r.rate)}</td>
                         <td className="px-3 py-1.5 text-right whitespace-nowrap font-medium">{fmtAmt(r.total_amount)}</td>
                       </tr>

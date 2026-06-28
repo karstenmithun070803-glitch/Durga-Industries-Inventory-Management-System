@@ -165,7 +165,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 statusFilter === s
                   ? "bg-slate-800 text-white border-slate-800"
-                  : "text-slate-500 border-slate-200 hover:border-slate-400"
+                  : "text-slate-600 border-slate-200 hover:border-slate-400"
               }`}
             >
               {s === "all" ? "All" : s} ({count})
@@ -181,7 +181,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
             className="h-8 text-xs w-36"
             placeholder="From"
           />
-          <span className="text-slate-400 text-xs">—</span>
+          <span className="text-slate-700 text-xs">—</span>
           <Input
             type="date"
             value={dateTo}
@@ -265,7 +265,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
             <tbody>
               {invoiceRows.length === 0 ? (
                 <tr>
-                  <td colSpan={hasDraft ? 15 : 14} className="px-3 py-12 text-center text-slate-400">
+                  <td colSpan={hasDraft ? 15 : 14} className="px-3 py-12 text-center text-slate-700">
                     No invoices found.
                   </td>
                 </tr>
@@ -275,7 +275,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                   const extraItems = (itemCounts.get(r.id) ?? 1) - 1;
                   return (
                     <tr key={r.item_id} className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer" onClick={() => router.push(`/invoice/${r.id}/edit`)}>
-                      <td className={`px-3 py-2.5 text-slate-400 text-xs sticky left-0 z-10 ${stickyBg}`}>
+                      <td className={`px-3 py-2.5 text-slate-700 text-xs sticky left-0 z-10 ${stickyBg}`}>
                         {i + 1}
                       </td>
                       <td className={`px-3 py-2.5 font-mono text-xs font-medium text-slate-700 sticky left-10 z-10 border-r border-slate-200 whitespace-nowrap ${stickyBg}`}>
@@ -285,7 +285,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                         {fmtDate(r.bill_date)}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-xs">
-                        <span className="font-mono text-slate-500">
+                        <span className="font-mono text-slate-600">
                           {r.job_ref_no}
                         </span>{" "}
                         <span className="text-slate-700">{r.vehicle_name ?? "—"}</span>
@@ -293,28 +293,28 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 text-xs">
                         {r.customer_name ?? "—"}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-slate-500 whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-xs text-slate-600 whitespace-nowrap">
                         {formatCode("M", r.material_no)}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 text-xs">
                         {r.material_name}
                         {extraItems > 0 && (
-                          <span className="ml-1.5 text-slate-400">(+{extraItems} more)</span>
+                          <span className="ml-1.5 text-slate-700">(+{extraItems} more)</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-slate-400 whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-xs text-slate-700 whitespace-nowrap">
                         {r.hsn_code ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 text-xs whitespace-nowrap">
                         {parseFloat(r.qty).toFixed(3)}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-500 text-xs whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-slate-600 text-xs whitespace-nowrap">
                         {r.unit_name ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 text-xs whitespace-nowrap">
                         {fmt2(r.rate)}
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums text-slate-500 text-xs whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 text-xs whitespace-nowrap">
                         {parseFloat(r.tax_percentage_item || "0").toFixed(0)}%
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium text-slate-800 text-xs whitespace-nowrap">
@@ -337,7 +337,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                              className="h-7 w-7 text-slate-700 hover:text-red-500 hover:bg-red-50"
                               title="Delete"
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: r.id, bill_number: r.bill_number }); }}
                             >
@@ -355,7 +355,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
         </div>
 
         {invoiceRows.length > 0 && (
-          <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400 bg-slate-50 rounded-b-lg flex items-center justify-between">
+          <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-700 bg-slate-50 rounded-b-lg flex items-center justify-between">
             <span>{filteredInvoiceCount} invoice{filteredInvoiceCount !== 1 ? "s" : ""}</span>
           </div>
         )}

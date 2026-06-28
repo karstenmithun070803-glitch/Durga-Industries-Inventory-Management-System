@@ -483,7 +483,7 @@ export function MaterialIssuesClient({
             {/* Left column */}
             <div className="flex-1 space-y-3">
               <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-sm text-slate-500 w-28 shrink-0">Vehicle Name</span>
+                <span className="text-sm text-slate-600 w-28 shrink-0">Vehicle Name</span>
                 <div className="w-56">
                   <Combobox
                     options={vehicleOptions}
@@ -493,7 +493,7 @@ export function MaterialIssuesClient({
                     openOnArrowDown
                   />
                 </div>
-                <span className="text-sm text-slate-500 shrink-0">Date</span>
+                <span className="text-sm text-slate-600 shrink-0">Date</span>
                 <div className="w-36">
                   <Input
                     type="date"
@@ -508,13 +508,13 @@ export function MaterialIssuesClient({
               {vehicleId && (
                 <div className="flex flex-wrap items-end gap-4">
                   <div className="space-y-1">
-                    <label className="text-sm text-slate-500">Job No</label>
+                    <label className="text-sm text-slate-600">Job No</label>
                     <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
                       {selectedVehicle?.job_ref_no || "—"}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm text-slate-500">Margin %</label>
+                    <label className="text-sm text-slate-600">Margin %</label>
                     <div className="w-24">
                       <Input
                         type="text"
@@ -558,11 +558,11 @@ export function MaterialIssuesClient({
                         </p>
                       )}
                       {selectedVehicle.customer_gstin && (
-                        <p className="text-xs text-slate-500 font-mono mb-1">
+                        <p className="text-xs text-slate-600 font-mono mb-1">
                           {selectedVehicle.customer_gstin}
                         </p>
                       )}
-                      <p className="text-xs text-slate-500 mb-3">
+                      <p className="text-xs text-slate-600 mb-3">
                         {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
                       </p>
                       {selectedVehicle.customer_address && (
@@ -574,7 +574,7 @@ export function MaterialIssuesClient({
                   )}
                 </div>
                 <div className="mt-4">
-                  <p className="text-xs text-slate-400 uppercase tracking-wide">Total</p>
+                  <p className="text-xs text-slate-700 uppercase tracking-wide">Total</p>
                   <p className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</p>
                 </div>
               </div>
@@ -584,15 +584,15 @@ export function MaterialIssuesClient({
 
         {/* Grid */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-16 text-slate-400 text-sm">Loading…</div>
+          <div className="flex items-center justify-center py-16 text-slate-700 text-sm">Loading…</div>
         ) : !vehicleId ? (
-          <div className="bg-white rounded-lg border border-slate-200 p-5 text-center text-sm text-slate-400 mb-4">
+          <div className="bg-white rounded-lg border border-slate-200 p-5 text-center text-sm text-slate-700 mb-4">
             Select a vehicle above to load its material issue record.
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4">
             {!hasExistingRecord && (
-              <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-400">
+              <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-700">
                 No record exists yet for this vehicle in FY {loadedFY}. Add materials and save to create one.
               </div>
             )}
@@ -614,10 +614,10 @@ export function MaterialIssuesClient({
       {/* Sticky bottom bar */}
       <div className="border-t border-slate-200 bg-white shadow-lg shrink-0">
         <div className="px-6 py-2.5 flex items-center gap-6 text-sm border-b border-slate-100 flex-wrap">
-          <span className="text-slate-500">Subtotal: <span className="font-medium text-slate-800">{formatAmount(subtotal)}</span></span>
-          <span className="text-slate-500">CGST: <span className="font-medium text-slate-800">{formatAmount(cgst)}</span></span>
-          <span className="text-slate-500">SGST: <span className="font-medium text-slate-800">{formatAmount(sgst)}</span></span>
-          <span className="text-slate-500">IGST: <span className="font-medium text-slate-800">{formatAmount(igst)}</span></span>
+          <span className="text-slate-600">Subtotal: <span className="font-medium text-slate-800">{formatAmount(subtotal)}</span></span>
+          <span className="text-slate-600">CGST: <span className="font-medium text-slate-800">{formatAmount(cgst)}</span></span>
+          <span className="text-slate-600">SGST: <span className="font-medium text-slate-800">{formatAmount(sgst)}</span></span>
+          <span className="text-slate-600">IGST: <span className="font-medium text-slate-800">{formatAmount(igst)}</span></span>
           <span className="ml-auto text-slate-600 font-semibold text-base">
             Grand Total: <span className="text-2xl font-bold text-slate-900">{formatAmount(grand)}</span>
           </span>

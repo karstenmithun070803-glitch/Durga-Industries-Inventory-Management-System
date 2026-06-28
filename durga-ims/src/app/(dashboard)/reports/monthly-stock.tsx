@@ -170,7 +170,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
     <div className="p-6 flex flex-col gap-5 h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Monthly Stock Report</h2>
-        <p className="text-sm text-slate-500 mt-0.5">Warehouse stock movement by period — what came in, what was used, and what remains</p>
+        <p className="text-sm text-slate-600 mt-0.5">Warehouse stock movement by period — what came in, what was used, and what remains</p>
       </div>
 
       {/* Filters */}
@@ -249,11 +249,11 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
 
       {/* Results */}
       {!hasRun ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
           {isLoading ? "Loading…" : "Set filters and click Run Report"}
         </div>
       ) : rows.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
           No active materials found.
         </div>
       ) : (
@@ -312,12 +312,12 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                   return (
                     <tr key={r.material_id} className="border-t border-slate-100 hover:bg-slate-50/50">
                       <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">
-                        <span className="font-mono text-slate-400 mr-1.5">
+                        <span className="font-mono text-slate-700 mr-1.5">
                           M-{String(r.material_no).padStart(4, "0")}
                         </span>
                         {r.material_name}
                       </td>
-                      <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.unit_name ?? "—"}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.unit_name ?? "—"}</td>
                       <td className="px-3 py-1.5 whitespace-nowrap text-right text-slate-600">{fmtQty(r.opening_stock)}</td>
                       <td className="px-3 py-1.5 whitespace-nowrap text-right text-blue-700">
                         {r.po_inward > 0 ? `+${fmtQty(r.po_inward)}` : "—"}
@@ -329,13 +329,13 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                         <>
                           <td className={cn(
                             "px-3 py-1.5 whitespace-nowrap text-right",
-                            r.reversals > 0 ? "text-purple-700" : r.reversals < 0 ? "text-rose-700" : "text-slate-400"
+                            r.reversals > 0 ? "text-purple-700" : r.reversals < 0 ? "text-rose-700" : "text-slate-700"
                           )}>
                             {fmtSigned(r.reversals)}
                           </td>
                           <td className={cn(
                             "px-3 py-1.5 whitespace-nowrap text-right",
-                            r.adjustments > 0 ? "text-green-700" : r.adjustments < 0 ? "text-rose-700" : "text-slate-400"
+                            r.adjustments > 0 ? "text-green-700" : r.adjustments < 0 ? "text-rose-700" : "text-slate-700"
                           )}>
                             {fmtSigned(r.adjustments)}
                           </td>
@@ -349,11 +349,11 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                       </td>
                       {showPrices && (
                         <>
-                          <td className="px-3 py-1.5 whitespace-nowrap text-right text-slate-500">
+                          <td className="px-3 py-1.5 whitespace-nowrap text-right text-slate-600">
                             {effectiveRate !== null ? (
                               <span className="inline-flex items-center gap-1 justify-end">
                                 {fmtAmt(effectiveRate)}
-                                {isStdRate && <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1 rounded">Std</span>}
+                                {isStdRate && <span className="text-[10px] font-medium text-slate-700 bg-slate-100 px-1 rounded">Std</span>}
                               </span>
                             ) : "—"}
                           </td>
@@ -369,13 +369,13 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
               <tfoot className="bg-slate-100 sticky bottom-0">
                 {hasMultipleUnits ? (
                   <tr className="border-t-2 border-slate-300">
-                    <td colSpan={6 + (showDetails ? 2 : 0) + (showPrices ? 2 : 0)} className="px-3 py-2 text-center text-xs text-slate-500 italic">
+                    <td colSpan={6 + (showDetails ? 2 : 0) + (showPrices ? 2 : 0)} className="px-3 py-2 text-center text-xs text-slate-600 italic">
                       Unit-wise total not shown — multiple units in this report. Filter by a single material or unit for a meaningful total.
                     </td>
                   </tr>
                 ) : (
                   <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                    <td colSpan={2} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">TOTAL</td>
+                    <td colSpan={2} className="px-3 py-2 whitespace-nowrap text-right text-slate-600 font-medium">TOTAL</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.opening)}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right text-blue-700">
                       {totals.inward > 0 ? `+${fmtQty(totals.inward)}` : "—"}
@@ -395,7 +395,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                 )}
                 {!showDetails && (
                   <tr>
-                    <td colSpan={6 + (showPrices ? 2 : 0)} className="px-3 py-1 text-center text-[10px] text-slate-400 italic border-t border-slate-200">
+                    <td colSpan={6 + (showPrices ? 2 : 0)} className="px-3 py-1 text-center text-[10px] text-slate-700 italic border-t border-slate-200">
                       Reversals and Adjustments columns hidden — toggle Show Details to view.
                     </td>
                   </tr>

@@ -446,7 +446,7 @@ export function InsuranceForm({
       <div className="flex items-center gap-2 px-6 pt-5 pb-3">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+          className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-800"
         >
           <ChevronLeft className="w-4 h-4" />
           Back to Customer Bill ({parentInvoice.billNumber})
@@ -468,7 +468,7 @@ export function InsuranceForm({
           {/* Bill info row */}
           <div className="grid grid-cols-4 gap-4">
             <div>
-              <label className="text-xs text-slate-500 block mb-1">Bill Date</label>
+              <label className="text-xs text-slate-600 block mb-1">Bill Date</label>
               {isFinalized ? (
                 <div className="h-9 px-3 flex items-center text-sm text-slate-700">
                   {new Date(billDate).toLocaleDateString("en-IN")}
@@ -483,7 +483,7 @@ export function InsuranceForm({
               )}
             </div>
             <div>
-              <label className="text-xs text-slate-500 block mb-1">Tax %</label>
+              <label className="text-xs text-slate-600 block mb-1">Tax %</label>
               {isFinalized ? (
                 <div className="h-9 px-3 flex items-center text-sm text-slate-700">{taxPercentage}</div>
               ) : (
@@ -498,7 +498,7 @@ export function InsuranceForm({
               )}
             </div>
             <div>
-              <label className="text-xs text-slate-500 block mb-1">Material Margin %</label>
+              <label className="text-xs text-slate-600 block mb-1">Material Margin %</label>
               {isFinalized ? (
                 <div className="h-9 px-3 flex items-center text-sm text-slate-700">{materialMargin || "—"}</div>
               ) : (
@@ -515,7 +515,7 @@ export function InsuranceForm({
               )}
             </div>
             <div>
-              <label className="text-xs text-slate-500 block mb-1">Discount</label>
+              <label className="text-xs text-slate-600 block mb-1">Discount</label>
               {isFinalized ? (
                 <div className="h-9 px-3 flex items-center text-sm text-slate-700">{discount || "0"}</div>
               ) : (
@@ -536,15 +536,15 @@ export function InsuranceForm({
           {/* Customer info + include_tax */}
           <div className="grid grid-cols-4 gap-4 border-t border-slate-100 pt-3">
             <div>
-              <span className="text-xs text-slate-400 block">Vehicle</span>
+              <span className="text-xs text-slate-700 block">Vehicle</span>
               <span className="text-sm text-slate-700">{parentInvoice.vehicleName ?? "—"}</span>
             </div>
             <div>
-              <span className="text-xs text-slate-400 block">Customer</span>
+              <span className="text-xs text-slate-700 block">Customer</span>
               <span className="text-sm text-slate-700">{parentInvoice.customerName ?? "—"}</span>
             </div>
             <div>
-              <span className="text-xs text-slate-400 block">GSTIN</span>
+              <span className="text-xs text-slate-700 block">GSTIN</span>
               <span className="font-mono text-sm text-slate-600">{parentInvoice.gstin ?? "—"}</span>
             </div>
             <div className="flex items-center gap-2 mt-4">
@@ -571,15 +571,15 @@ export function InsuranceForm({
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-8">#</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500">Material</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-24">HSN</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-20">Qty</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-28">Unit</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-24">Rate</th>
-                  {includeTax && <th className="px-3 py-2 text-left text-xs font-medium text-slate-500 w-16">Tax %</th>}
-                  {includeTax && <th className="px-3 py-2 text-right text-xs font-medium text-slate-500 w-24">Tax Amt</th>}
-                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-500 w-28">Amount</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-8">#</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-600">Material</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-24">HSN</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-20">Qty</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-28">Unit</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-24">Rate</th>
+                  {includeTax && <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-16">Tax %</th>}
+                  {includeTax && <th className="px-3 py-2 text-right text-xs font-medium text-slate-600 w-24">Tax Amt</th>}
+                  <th className="px-3 py-2 text-right text-xs font-medium text-slate-600 w-28">Amount</th>
                   {!isFinalized && <th className="px-3 py-2 w-8" />}
                 </tr>
               </thead>
@@ -589,7 +589,7 @@ export function InsuranceForm({
                   const grossAmt = parseFloat(row.amount || "0") + taxAmt;
                   return (
                     <tr key={row._key} className="hover:bg-slate-50">
-                      <td className="px-3 py-1.5 text-slate-400 text-xs">{idx + 1}</td>
+                      <td className="px-3 py-1.5 text-slate-700 text-xs">{idx + 1}</td>
                       <td className="px-3 py-1.5">
                         {isFinalized ? (
                           <span className="text-slate-800">
@@ -606,7 +606,7 @@ export function InsuranceForm({
                             <button
                               type="button"
                               onClick={() => updateRow(row._key, { useCustomName: false, material_name_override: "" })}
-                              className="text-xs text-slate-400 hover:text-slate-600 whitespace-nowrap"
+                              className="text-xs text-slate-700 hover:text-slate-600 whitespace-nowrap"
                             >
                               ← Lookup
                             </button>
@@ -625,7 +625,7 @@ export function InsuranceForm({
                             <button
                               type="button"
                               onClick={() => updateRow(row._key, { useCustomName: true, material_id: null })}
-                              className="text-xs text-slate-400 hover:text-slate-600 whitespace-nowrap"
+                              className="text-xs text-slate-700 hover:text-slate-600 whitespace-nowrap"
                             >
                               Custom
                             </button>
@@ -634,7 +634,7 @@ export function InsuranceForm({
                       </td>
                       <td className="px-3 py-1.5">
                         {isFinalized ? (
-                          <span className="font-mono text-xs text-slate-500">{row.hsn_code || "—"}</span>
+                          <span className="font-mono text-xs text-slate-600">{row.hsn_code || "—"}</span>
                         ) : (
                           <Input
                             value={row.hsn_code}
@@ -716,7 +716,7 @@ export function InsuranceForm({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                            className="h-7 w-7 text-slate-700 hover:text-red-500 hover:bg-red-50"
                             onClick={() => deleteRow(row._key)}
                             type="button"
                           >
@@ -735,7 +735,7 @@ export function InsuranceForm({
               <button
                 type="button"
                 onClick={() => setRows((prev) => [...prev, blankRow(gstType)])}
-                className="text-sm text-slate-400 hover:text-slate-700"
+                className="text-sm text-slate-700 hover:text-slate-700"
               >
                 + Add row
               </button>
@@ -747,20 +747,20 @@ export function InsuranceForm({
       {/* Sticky totals + action bar */}
       <div className="fixed bottom-0 left-64 right-0 z-30 bg-white border-t border-slate-200 shadow-lg">
         <div className="flex items-center gap-6 px-6 py-2 border-b border-slate-100 text-sm">
-          <span className="text-slate-500">
+          <span className="text-slate-600">
             Taxable: <strong className="text-slate-800">₹{fmt2(subtotal)}</strong>
           </span>
           {totalCgst > 0 && (
-            <span className="text-slate-500">CGST: <strong className="text-slate-800">₹{fmt2(totalCgst)}</strong></span>
+            <span className="text-slate-600">CGST: <strong className="text-slate-800">₹{fmt2(totalCgst)}</strong></span>
           )}
           {totalSgst > 0 && (
-            <span className="text-slate-500">SGST: <strong className="text-slate-800">₹{fmt2(totalSgst)}</strong></span>
+            <span className="text-slate-600">SGST: <strong className="text-slate-800">₹{fmt2(totalSgst)}</strong></span>
           )}
           {totalIgst > 0 && (
-            <span className="text-slate-500">IGST: <strong className="text-slate-800">₹{fmt2(totalIgst)}</strong></span>
+            <span className="text-slate-600">IGST: <strong className="text-slate-800">₹{fmt2(totalIgst)}</strong></span>
           )}
           {(parseFloat(discount) || 0) > 0 && (
-            <span className="text-slate-500">Discount: <strong className="text-red-600">-₹{fmt2(parseFloat(discount))}</strong></span>
+            <span className="text-slate-600">Discount: <strong className="text-red-600">-₹{fmt2(parseFloat(discount))}</strong></span>
           )}
           <span className="ml-auto text-base font-semibold text-slate-900">Net: ₹{fmt2(parseFloat(netAmount))}</span>
         </div>

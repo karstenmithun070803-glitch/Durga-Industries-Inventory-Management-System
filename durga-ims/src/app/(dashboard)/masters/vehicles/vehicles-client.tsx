@@ -107,7 +107,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Vehicle" : "Add Vehicle"}</p>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Job No. *</label>
+              <label className="text-xs text-slate-600">Job No. *</label>
               <Input
                 ref={firstFieldRef}
                 placeholder="e.g. 2026/001"
@@ -116,11 +116,11 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Vehicle Name / Reg. No</label>
+              <label className="text-xs text-slate-600">Vehicle Name / Reg. No</label>
               <Input placeholder="e.g. TN 82 H 3560" value={form.vehicle_name} onChange={(e) => set("vehicle_name", e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Vehicle Type</label>
+              <label className="text-xs text-slate-600">Vehicle Type</label>
               <Combobox
                 options={[
                   { value: "New", label: "New (New chassis + New body)" },
@@ -132,7 +132,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Customer</label>
+              <label className="text-xs text-slate-600">Customer</label>
               <Combobox
                 options={customers.map((c) => ({ value: c.id, label: `${formatCode("C", c.customer_no)} — ${c.customer_name}` }))}
                 value={form.customer_id}
@@ -199,7 +199,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No vehicles found</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-700">No vehicles found</td></tr>
                   )}
                   {visible.map((v, i) => (
                     <tr
@@ -207,13 +207,13 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                       className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !v.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(v)}
                     >
-                      <td className="px-4 py-1.5 text-slate-500">{i + 1}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
                       <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{v.job_ref_no}</td>
                       <td className="px-4 py-1.5 font-medium">{v.vehicle_name ?? "—"}</td>
                       <td className="px-4 py-1.5">
                         <Badge variant={v.type === "New" ? "default" : "secondary"}>{v.type}</Badge>
                       </td>
-                      <td className="px-4 py-1.5 text-slate-500">{v.customer_name ?? "—"}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{v.customer_name ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

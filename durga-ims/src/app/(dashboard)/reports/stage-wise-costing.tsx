@@ -176,8 +176,8 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     <div className="p-6 flex flex-col gap-5 h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Stage Wise Costing</h2>
-        <p className="text-sm text-slate-500 mt-0.5">Material cost breakdown by stage or material for a vehicle</p>
-        <p className="text-xs text-slate-400 mt-0.5">Stage-wise view shows VMI New (stage-based) issues only.</p>
+        <p className="text-sm text-slate-600 mt-0.5">Material cost breakdown by stage or material for a vehicle</p>
+        <p className="text-xs text-slate-700 mt-0.5">Stage-wise view shows VMI New (stage-based) issues only.</p>
       </div>
 
       {/* Filters */}
@@ -219,7 +219,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                   "px-3 text-xs font-medium transition-colors",
                   rptType === t
                     ? "bg-slate-800 text-white"
-                    : "bg-white text-slate-500 hover:bg-slate-50"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
                 )}
               >
                 {t === "stage" ? "Stage Wise" : "Material Wise"}
@@ -247,11 +247,11 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
 
       {/* Results */}
       {!hasRun ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
           {isLoading ? "Loading…" : "Select a vehicle and financial year to view stage-wise costs"}
         </div>
       ) : activeRows.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
           No stage-based (VMI New) material slips found for {vehicleLabel} in FY {fy}{asOfDate && ` as of ${fmtDate(asOfDate)}`}
         </div>
       ) : (
@@ -299,7 +299,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                         r.is_direct && "bg-amber-50/60 italic"
                       )}
                     >
-                      <td className="px-3 py-1.5 font-mono text-slate-500">{r.code}</td>
+                      <td className="px-3 py-1.5 font-mono text-slate-600">{r.code}</td>
                       <td className="px-3 py-1.5 text-slate-700">{r.name}</td>
                       <td className="px-3 py-1.5 text-right font-medium text-slate-800">{fmtAmt(r.amount)}</td>
                     </tr>
@@ -326,10 +326,10 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                 <tbody>
                   {displayMaterialRows.map((r, i) => (
                     <tr key={r.code + i} className="border-t border-slate-100 hover:bg-slate-50/50">
-                      <td className="px-3 py-1.5 text-slate-500">{i + 1}</td>
+                      <td className="px-3 py-1.5 text-slate-600">{i + 1}</td>
                       <td className="px-3 py-1.5 font-mono text-slate-600">{r.code}</td>
                       <td className="px-3 py-1.5 text-slate-700">{r.name}</td>
-                      <td className="px-3 py-1.5 text-slate-400 text-xs">{r.stages || "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-700 text-xs">{r.stages || "—"}</td>
                       <td className="px-3 py-1.5 text-right font-medium text-slate-800">{fmtAmt(r.amount)}</td>
                     </tr>
                   ))}

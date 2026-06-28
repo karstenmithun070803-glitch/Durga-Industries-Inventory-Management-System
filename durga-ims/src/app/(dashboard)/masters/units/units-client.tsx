@@ -84,7 +84,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
           <div className="space-y-4">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Unit" : "Add New Unit"}</p>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Unit Name *</label>
+              <label className="text-xs text-slate-600">Unit Name *</label>
               <Input ref={firstFieldRef} placeholder="e.g. KG, PCS, ROLL" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
             </div>
             <div className="flex gap-2">
@@ -139,7 +139,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400 text-sm">No units found</td></tr>
+                    <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-700 text-sm">No units found</td></tr>
                   )}
                   {visible.map((unit, i) => (
                     <tr
@@ -147,7 +147,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                       className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !unit.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(unit)}
                     >
-                      <td className="px-4 py-1.5 text-slate-500">{i + 1}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
                       <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{formatCode("U", unit.unit_code, 2)}</td>
                       <td className="px-4 py-1.5 font-medium text-slate-800">{unit.unit_name}</td>
                     </tr>

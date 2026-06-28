@@ -146,7 +146,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
     <div className="p-6 flex flex-col gap-5 h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Invoice Summary</h2>
-        <p className="text-sm text-slate-500 mt-0.5">GST filing and billing review by financial year</p>
+        <p className="text-sm text-slate-600 mt-0.5">GST filing and billing review by financial year</p>
       </div>
 
       {/* Filters */}
@@ -192,11 +192,11 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
 
       {/* Results */}
       {!hasRun ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
           {isLoading ? "Loading…" : "Set filters and click Run Report"}
         </div>
       ) : rows.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
           No invoices found for the selected filters.
         </div>
       ) : (
@@ -250,7 +250,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                     )}
                   >
                     <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.bill_number}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-500">{r.bill_date}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.bill_date}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.vehicle_name ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap">
                       {r.vehicle_type ? (
@@ -263,7 +263,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                       ) : "—"}
                     </td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.customer_name ?? "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-400 font-mono text-xs">{r.customer_gstin ?? "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-700 font-mono text-xs">{r.customer_gstin ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_value)}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.total_cgst + r.total_sgst + r.total_igst) > 0 ? fmtAmt(r.total_cgst + r.total_sgst + r.total_igst) : "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.gross_total)}</td>
@@ -285,7 +285,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
               {/* Totals row */}
               <tfoot className="bg-slate-100 sticky bottom-0">
                 <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={6} className="px-3 py-2 whitespace-nowrap text-right text-slate-500 font-medium">
+                  <td colSpan={6} className="px-3 py-2 whitespace-nowrap text-right text-slate-600 font-medium">
                     {isCancelledOnlyView
                       ? "Reference Total (void — excluded from GST)"
                       : rows.some((r) => r.status === "Cancelled")

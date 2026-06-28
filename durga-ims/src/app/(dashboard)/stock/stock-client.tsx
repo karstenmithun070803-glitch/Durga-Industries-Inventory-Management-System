@@ -344,7 +344,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-800">Stock Dashboard</h1>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-slate-700">
             Last updated: {fmtLastUpdated(lastUpdated)}
           </span>
           <Button
@@ -410,7 +410,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                   "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
                   tab === t
                     ? "bg-slate-800 text-white border-slate-800"
-                    : "text-slate-500 border-slate-200 hover:border-slate-400"
+                    : "text-slate-600 border-slate-200 hover:border-slate-400"
                 )}
               >
                 {label}
@@ -481,7 +481,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-12 text-center text-slate-400 text-sm">
+                  <td colSpan={9} className="px-3 py-12 text-center text-slate-700 text-sm">
                     No materials found.
                   </td>
                 </tr>
@@ -502,25 +502,25 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
 
                   return (
                     <tr key={row.id} className={cn("border-t border-slate-100 hover:bg-slate-50/80 transition-colors cursor-pointer", rowBg)} onClick={() => openHistory(row)}>
-                      <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-mono text-xs">
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-600 font-mono text-xs">
                         {formatCode("M", row.material_no)}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-800">
                         {row.name}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-slate-500">
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-600">
                         {row.unit_name ?? "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-slate-800">
                         {fmtQty(row.current_stock)}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right text-slate-500">
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
                         {row.min_level && parseFloat(row.min_level) > 0 ? fmtQty(row.min_level) : "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
                         {rate !== null ? (
                           <span
-                            className={cn("inline-flex items-center gap-1 justify-end", isStdRate && "italic text-slate-400")}
+                            className={cn("inline-flex items-center gap-1 justify-end", isStdRate && "italic text-slate-700")}
                             title={isStdRate ? "Standard cost — no purchase order received yet" : undefined}
                           >
                             {fmtAmt(rate)}
@@ -538,14 +538,14 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                           <button
                             onClick={(e) => { e.stopPropagation(); openHistory(row); }}
                             title="View stock history"
-                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                            className="p-1 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-700 transition-colors"
                           >
                             <History className="w-4 h-4" />
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); openAdjust(row); }}
                             title="Adjust stock"
-                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                            className="p-1 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-700 transition-colors"
                           >
                             <SlidersHorizontal className="w-4 h-4" />
                           </button>
@@ -555,7 +555,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                                 href={`/transactions/purchase-orders/new?prefill=${row.id}`}
                                 title="Create Purchase Order for this material"
                               >
-                                <button className="p-1 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors">
+                                <button className="p-1 rounded hover:bg-blue-50 text-slate-700 hover:text-blue-600 transition-colors">
                                   <ShoppingCart className="w-4 h-4" />
                                 </button>
                               </Link>
@@ -578,16 +578,16 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
           <SheetHeader>
             <SheetTitle className="text-base">
               Stock History — {historyMaterial?.name}
-              <span className="ml-2 text-xs font-normal text-slate-400 font-mono">
+              <span className="ml-2 text-xs font-normal text-slate-700 font-mono">
                 {historyMaterial ? formatCode("M", historyMaterial.material_no) : ""}
               </span>
             </SheetTitle>
           </SheetHeader>
           <div className="mt-4">
             {historyLoading ? (
-              <p className="text-sm text-slate-400 py-8 text-center">Loading history…</p>
+              <p className="text-sm text-slate-700 py-8 text-center">Loading history…</p>
             ) : historyEntries.length === 0 ? (
-              <p className="text-sm text-slate-400 py-8 text-center">No movement history for this material.</p>
+              <p className="text-sm text-slate-700 py-8 text-center">No movement history for this material.</p>
             ) : (
               <>
                 <div className="overflow-auto">
@@ -613,7 +613,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                           : null;
                         return (
                           <tr key={e.id} className="border-t border-slate-100">
-                            <td className="px-2 py-1.5 whitespace-nowrap text-slate-500">{fmtDateTime(e.created_at)}</td>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">{fmtDateTime(e.created_at)}</td>
                             <td className="px-2 py-1.5 whitespace-nowrap">
                               <span className={cn("px-1.5 py-0.5 rounded text-xs font-medium", LEDGER_TYPE_COLOR[e.transaction_type] ?? "bg-slate-100 text-slate-600")}>
                                 {LEDGER_TYPE_LABELS[e.transaction_type] ?? e.transaction_type.replace("_", " ")}
@@ -636,7 +636,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                                 <span className="text-slate-300">—</span>
                               )}
                             </td>
-                            <td className="px-2 py-1.5 text-slate-400 max-w-[120px] truncate" title={e.reason ?? ""}>
+                            <td className="px-2 py-1.5 text-slate-700 max-w-[120px] truncate" title={e.reason ?? ""}>
                               {e.reason ? (e.reason.length > 80 ? e.reason.slice(0, 80) + "…" : e.reason) : "—"}
                             </td>
                           </tr>
@@ -646,7 +646,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                   </table>
                 </div>
                 {historyEntries.length === 100 && (
-                  <p className="text-xs text-slate-400 text-center py-2">
+                  <p className="text-xs text-slate-700 text-center py-2">
                     Showing last 100 movements. For older history use the Monthly Stock Report.
                   </p>
                 )}
@@ -662,7 +662,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
           <DialogHeader>
             <DialogTitle>
               Adjust Stock — {adjustMaterial?.name}
-              <span className="ml-2 text-xs font-normal text-slate-400 font-mono">
+              <span className="ml-2 text-xs font-normal text-slate-700 font-mono">
                 {adjustMaterial ? formatCode("M", adjustMaterial.material_no) : ""}
               </span>
             </DialogTitle>
@@ -676,9 +676,9 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             {/* Current Stock panel */}
             <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
               <div>
-                <span className="text-sm text-slate-500">Current Stock</span>
+                <span className="text-sm text-slate-600">Current Stock</span>
                 {adjustFreshStock === null && (
-                  <span className="ml-2 text-xs text-slate-400">(loading live value…)</span>
+                  <span className="ml-2 text-xs text-slate-700">(loading live value…)</span>
                 )}
               </div>
               <span className="text-2xl font-bold text-slate-800">
@@ -713,7 +713,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                 placeholder="Enter new quantity"
               />
               {deltaLabel && (
-                <p className={cn("text-xs mt-1", delta === 0 ? "text-slate-400" : delta > 0 ? "text-green-600" : "text-red-600")}>
+                <p className={cn("text-xs mt-1", delta === 0 ? "text-slate-700" : delta > 0 ? "text-green-600" : "text-red-600")}>
                   {deltaLabel}
                 </p>
               )}
@@ -791,7 +791,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             {adjustMaterial?.last_po_rate === null && (
               <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
                 <label className="text-sm font-medium text-slate-700">
-                  Unit Cost (₹) <span className="text-slate-400 font-normal">— for stock valuation</span>
+                  Unit Cost (₹) <span className="text-slate-700 font-normal">— for stock valuation</span>
                 </label>
                 <Input
                   type="number"
@@ -811,7 +811,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
 
             {/* Reason textarea */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Reason <span className="text-slate-400 font-normal">(required)</span></label>
+              <label className="text-sm font-medium text-slate-700">Reason <span className="text-slate-700 font-normal">(required)</span></label>
               <Textarea
                 value={adjustReason}
                 onChange={(e) => setAdjustReason(e.target.value)}
@@ -840,7 +840,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             )}
 
             {/* Permanent warning */}
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-700">
               ⚠ Adjustments are permanent and cannot be undone. They will appear in this material&apos;s movement history.
             </p>
           </div>
@@ -899,9 +899,9 @@ function SummaryCard({
         clickable && "cursor-pointer hover:shadow-sm"
       )}
     >
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
+      <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">{label}</p>
       <p className={cn("text-2xl font-bold mt-1", valueClass)}>{value}</p>
-      <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
+      <p className="text-xs text-slate-700 mt-0.5">{sub}</p>
     </div>
   );
 }

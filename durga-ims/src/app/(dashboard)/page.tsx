@@ -30,9 +30,9 @@ function StatCard({
   };
   const inner = (
     <div className={cn("border rounded-lg p-5 space-y-1", colorMap[color ?? "slate"])}>
-      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className="text-xs font-medium text-slate-600">{label}</p>
       <p className="text-2xl font-bold text-slate-800">{value}</p>
-      {sub && <p className="text-xs text-slate-500">{sub}</p>}
+      {sub && <p className="text-xs text-slate-600">{sub}</p>}
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
@@ -62,7 +62,7 @@ function RecentTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={headers.length} className="px-3 py-4 text-center text-slate-400">None yet</td>
+              <td colSpan={headers.length} className="px-3 py-4 text-center text-slate-700">None yet</td>
             </tr>
           ) : (
             rows.map((row, i) => (
@@ -91,7 +91,7 @@ export default async function HomePage() {
     <div className="p-6 max-w-6xl">
       <div className="flex items-baseline gap-3 mb-6">
         <h1 className="text-xl font-semibold text-slate-800">Home</h1>
-        <span className="text-sm text-slate-400">FY {fy}</span>
+        <span className="text-sm text-slate-700">FY {fy}</span>
       </div>
 
       {/* KPI Cards */}
@@ -129,7 +129,7 @@ export default async function HomePage() {
               r.supplier_name ?? "—",
               <span key="s" className={cn(
                 "px-1.5 py-0.5 rounded text-xs font-medium",
-                r.status === "Received" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
+                r.status === "Received" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
               )}>{r.status}</span>,
             ])}
           />
@@ -147,7 +147,7 @@ export default async function HomePage() {
               r.vehicle_name ?? "—",
               <span key="s" className={cn(
                 "px-1.5 py-0.5 rounded text-xs font-medium",
-                r.status === "Issued" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"
+                r.status === "Issued" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"
               )}>{r.status}</span>,
             ])}
           />

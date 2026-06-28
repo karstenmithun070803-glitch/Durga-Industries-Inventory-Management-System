@@ -195,7 +195,7 @@ export function GenericBulkImportDialog({
             {step === 2 && "Preview & Validate"}
             {step === 3 && "Import Complete"}
           </DialogTitle>
-          <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+          <div className="flex items-center gap-2 text-xs text-slate-600 mt-1">
             {(["1. Upload", "2. Preview", "3. Done"] as const).map((label, idx) => (
               <React.Fragment key={label}>
                 <span className={step === idx + 1 ? "font-semibold text-slate-800" : ""}>{label}</span>
@@ -217,7 +217,7 @@ export function GenericBulkImportDialog({
                 Download Template (.xlsx)
               </Button>
               {referenceSheet && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-600">
                   The template includes a <strong>Reference</strong> sheet with valid lookup values.
                 </p>
               )}
@@ -235,7 +235,7 @@ export function GenericBulkImportDialog({
                 onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")}
                 className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-slate-200 file:text-xs file:font-medium file:bg-white file:text-slate-700 hover:file:bg-slate-50 cursor-pointer"
               />
-              {fileName && <p className="text-xs text-slate-500">Selected: {fileName}</p>}
+              {fileName && <p className="text-xs text-slate-600">Selected: {fileName}</p>}
             </div>
           </div>
         )}
@@ -286,7 +286,7 @@ export function GenericBulkImportDialog({
                           : ""
                       }`}
                     >
-                      <td className="px-3 py-2 text-slate-400 font-mono">{row.rowNum}</td>
+                      <td className="px-3 py-2 text-slate-700 font-mono">{row.rowNum}</td>
                       <td className="px-3 py-2 font-medium text-slate-700">{row.displayName}</td>
                       <td className="px-3 py-2">
                         {row.status === "valid" && (
@@ -305,7 +305,7 @@ export function GenericBulkImportDialog({
                           </Badge>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-slate-500">
+                      <td className="px-3 py-2 text-slate-600">
                         {row.status === "error" && row.errors.join(" · ")}
                         {row.status === "skipped" && "Already in system — will be skipped"}
                         {row.status === "valid" && (

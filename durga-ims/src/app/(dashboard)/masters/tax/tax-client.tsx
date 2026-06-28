@@ -94,7 +94,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
           <div className="space-y-4">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Tax Rate" : "Add Tax Rate"}</p>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Tax Percentage *</label>
+              <label className="text-xs text-slate-600">Tax Percentage *</label>
               <Input
                 ref={firstFieldRef}
                 placeholder="e.g. 18"
@@ -105,7 +105,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
                 max="100"
                 step="any"
               />
-              <p className="text-xs text-slate-400">Description auto-generated (e.g. GST 18%)</p>
+              <p className="text-xs text-slate-700">Description auto-generated (e.g. GST 18%)</p>
             </div>
             <div className="flex gap-2">
               <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add"}</Button>
@@ -159,7 +159,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400">No tax rates found</td></tr>
+                    <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-700">No tax rates found</td></tr>
                   )}
                   {visible.map((t, i) => (
                     <tr
@@ -167,7 +167,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
                       className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !t.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(t)}
                     >
-                      <td className="px-4 py-1.5 text-slate-500">{i + 1}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
                       <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{formatCode("T", t.vat_code, 2)}</td>
                       <td className="px-4 py-1.5 font-medium">{parseFloat(t.tax_percentage)}%</td>
                     </tr>

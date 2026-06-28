@@ -114,7 +114,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
     <div className="p-6 flex flex-col gap-5 h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Vehicle Comparison</h2>
-        <p className="text-sm text-slate-500 mt-0.5">Compare material usage between two vehicles side by side</p>
+        <p className="text-sm text-slate-600 mt-0.5">Compare material usage between two vehicles side by side</p>
       </div>
 
       {/* Filters */}
@@ -147,7 +147,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
         <div className="flex items-center gap-6">
           {/* All / Diff.Material radio */}
           <div className="flex items-center gap-4 text-sm">
-            <label className="text-xs font-medium text-slate-500">Show:</label>
+            <label className="text-xs font-medium text-slate-600">Show:</label>
             {[false, true].map((val) => (
               <label key={String(val)} className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-600">
                 <input
@@ -183,11 +183,11 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
 
       {/* Results */}
       {!hasRun ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
           {isLoading ? "Comparing…" : "Select two vehicles and click Compare"}
         </div>
       ) : displayRows.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
           {showDiffOnly && allRows.length > 0
             ? "No material differences found between the two vehicles"
             : `No issued material slips found for either vehicle in FY ${fy}`}
@@ -195,11 +195,11 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
       ) : (
         <>
           {/* Vehicle labels */}
-          <div className="flex items-center gap-3 text-xs text-slate-500">
+          <div className="flex items-center gap-3 text-xs text-slate-600">
             <span className="font-medium text-slate-700">{v1Label}</span>
             <span className="text-slate-300">vs</span>
             <span className="font-medium text-slate-700">{v2Label}</span>
-            <span className="text-slate-400 ml-1">— FY {fy}</span>
+            <span className="text-slate-700 ml-1">— FY {fy}</span>
           </div>
 
           {/* Actions */}
@@ -243,16 +243,16 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
               <tbody>
                 {displayRows.map((r, i) => (
                   <tr key={`${r.code}-${r.stage_name}`} className="border-t border-slate-100 hover:bg-slate-50/50">
-                    <td className="px-3 py-1.5 text-slate-500">{i + 1}</td>
+                    <td className="px-3 py-1.5 text-slate-600">{i + 1}</td>
                     <td className="px-3 py-1.5 text-slate-700">{r.material_name}</td>
-                    <td className="px-3 py-1.5 text-slate-500">{r.stage_name}</td>
+                    <td className="px-3 py-1.5 text-slate-600">{r.stage_name}</td>
                     <td className="px-3 py-1.5 text-right text-slate-700">{fmtQty(r.qty1)}</td>
                     {!hideAmounts && <td className="px-3 py-1.5 text-right text-slate-600">{r.amt1 > 0 ? fmtAmt(r.amt1) : "—"}</td>}
                     <td className="px-3 py-1.5 text-right text-slate-700">{fmtQty(r.qty2)}</td>
                     {!hideAmounts && <td className="px-3 py-1.5 text-right text-slate-600">{r.amt2 > 0 ? fmtAmt(r.amt2) : "—"}</td>}
                     <td className={cn(
                       "px-3 py-1.5 text-right font-medium",
-                      r.diff !== 0 ? "text-amber-700" : "text-slate-400"
+                      r.diff !== 0 ? "text-amber-700" : "text-slate-700"
                     )}>
                       {r.diff !== 0 ? (r.diff > 0 ? "+" : "") + fmtQty(r.diff) : "—"}
                     </td>

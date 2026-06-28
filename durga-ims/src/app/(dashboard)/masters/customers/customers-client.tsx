@@ -108,36 +108,36 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Customer" : "Add Customer"}</p>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Customer Name *</label>
+              <label className="text-xs text-slate-600">Customer Name *</label>
               <Input ref={firstFieldRef} placeholder="Full name" value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
               {isDuplicateName && (
                 <p className="text-xs text-red-500 mt-0.5">A customer named "{form.customer_name.trim()}" already exists.</p>
               )}
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Address Line 1</label>
+              <label className="text-xs text-slate-600">Address Line 1</label>
               <Input placeholder="Door no, Building" value={form.address_1} onChange={(e) => set("address_1", e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Address Line 2</label>
+              <label className="text-xs text-slate-600">Address Line 2</label>
               <Input placeholder="Area, Landmark" value={form.address_2} onChange={(e) => set("address_2", e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">Street</label>
+              <label className="text-xs text-slate-600">Street</label>
               <Input placeholder="Street name" value={form.street} onChange={(e) => set("street", e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-500">City</label>
+                <label className="text-xs text-slate-600">City</label>
                 <Input placeholder="City" value={form.city} onChange={(e) => set("city", e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-500">State</label>
+                <label className="text-xs text-slate-600">State</label>
                 <Combobox options={INDIAN_STATES.map((s) => ({ value: s, label: s }))} value={form.state} onChange={(v) => set("state", v)} placeholder="Select state..." searchPlaceholder="Search states..." />
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-500">GSTIN</label>
+              <label className="text-xs text-slate-600">GSTIN</label>
               <Input
                 placeholder="e.g. 33AAAAA1234A1Z5"
                 value={form.gstin}
@@ -208,7 +208,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">No customers found</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-700">No customers found</td></tr>
                   )}
                   {visible.map((c, i) => {
                     const stickyBg = !c.is_active ? "bg-slate-50" : "bg-white";
@@ -219,13 +219,13 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                       className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
                       onClick={() => startEdit(c)}
                     >
-                      <td className={`px-3 py-1.5 text-slate-500 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                      <td className={`px-3 py-1.5 text-slate-600 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
                       <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("C", c.customer_no)}</td>
                       <td className={`px-3 py-1.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{c.customer_name}</td>
-                      <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{addr}</td>
-                      <td className="px-3 py-1.5 text-slate-500">{c.city ?? "—"}</td>
-                      <td className="px-3 py-1.5 text-slate-500">{c.state ?? "—"}</td>
-                      <td className="px-3 py-1.5 text-slate-500 font-mono text-xs">{c.gstin ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{addr}</td>
+                      <td className="px-3 py-1.5 text-slate-600">{c.city ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-600">{c.state ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-600 font-mono text-xs">{c.gstin ?? "—"}</td>
                     </tr>
                   );
                   })}

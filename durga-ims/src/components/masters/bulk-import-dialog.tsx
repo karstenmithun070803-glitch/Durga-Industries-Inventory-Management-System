@@ -245,7 +245,7 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
             {step === 3 && "Import Complete"}
           </DialogTitle>
           {/* Step indicator */}
-          <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+          <div className="flex items-center gap-2 text-xs text-slate-600 mt-1">
             {(["1. Upload", "2. Preview", "3. Done"] as const).map((label, idx) => (
               <React.Fragment key={label}>
                 <span className={step === idx + 1 ? "font-semibold text-slate-800" : ""}>{label}</span>
@@ -266,7 +266,7 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
                 <Download className="w-3.5 h-3.5 mr-1.5" />
                 Download Template (.xlsx)
               </Button>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-600">
                 The template includes a <strong>Reference</strong> sheet listing all available unit names and tax rates.
               </p>
               <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
@@ -283,7 +283,7 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
                 onChange={handleFileChange}
                 className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-slate-200 file:text-xs file:font-medium file:bg-white file:text-slate-700 hover:file:bg-slate-50 cursor-pointer"
               />
-              {fileName && <p className="text-xs text-slate-500">Selected: {fileName}</p>}
+              {fileName && <p className="text-xs text-slate-600">Selected: {fileName}</p>}
             </div>
           </div>
         )}
@@ -325,14 +325,14 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
                 <tbody>
                   {parsedRows.map((row) => (
                     <tr key={row.rowNum} className={`border-t border-slate-100 ${row.status === "error" ? "bg-red-50/40" : row.status === "skipped" ? "bg-amber-50/30" : ""}`}>
-                      <td className="px-3 py-2 text-slate-400 font-mono">{row.rowNum}</td>
+                      <td className="px-3 py-2 text-slate-700 font-mono">{row.rowNum}</td>
                       <td className="px-3 py-2 font-medium text-slate-700">{row.displayName}</td>
                       <td className="px-3 py-2">
                         {row.status === "valid" && <Badge variant="default" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">Valid</Badge>}
                         {row.status === "error" && <Badge variant="destructive" className="text-xs">Error</Badge>}
                         {row.status === "skipped" && <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">Exists</Badge>}
                       </td>
-                      <td className="px-3 py-2 text-slate-500">
+                      <td className="px-3 py-2 text-slate-600">
                         {row.status === "error" && row.errors.join(" · ")}
                         {row.status === "skipped" && "Already in system — will be skipped"}
                         {row.status === "valid" && (

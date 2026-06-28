@@ -25,7 +25,7 @@ export default async function LoginPage({
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             DURGA INDUSTRIES
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Inventory Management System</p>
+          <p className="text-sm text-slate-600 mt-1">Inventory Management System</p>
         </div>
 
         {/* Card */}
@@ -46,7 +46,7 @@ export default async function LoginPage({
 
           <form action={login} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="username" className="text-xs text-slate-500 uppercase tracking-wide">
+              <Label htmlFor="username" className="text-xs text-slate-600 uppercase tracking-wide">
                 Username
               </Label>
               <Input
@@ -62,7 +62,7 @@ export default async function LoginPage({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-xs text-slate-500 uppercase tracking-wide">
+              <Label htmlFor="password" className="text-xs text-slate-600 uppercase tracking-wide">
                 Password
               </Label>
               <Input

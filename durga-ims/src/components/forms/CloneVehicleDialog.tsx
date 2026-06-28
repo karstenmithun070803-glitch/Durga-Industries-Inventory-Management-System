@@ -194,7 +194,7 @@ export function CloneVehicleDialog({
         <div className="space-y-5 py-2">
           {/* Job & Vehicle section */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Job & Vehicle</p>
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Job & Vehicle</p>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -230,7 +230,7 @@ export function CloneVehicleDialog({
 
           {/* Customer section */}
           <div className="space-y-3 border-t border-slate-100 pt-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</p>
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Customer</p>
 
             <div className="space-y-1.5">
               <Label>Select existing customer</Label>
@@ -247,7 +247,7 @@ export function CloneVehicleDialog({
             <div className="space-y-1.5">
               <Label htmlFor="clone-customer-name">
                 Customer name <span className="text-red-500">*</span>
-                {isExistingCustomer && <span className="ml-1 text-slate-400 font-normal">(read-only — edit in Customer Master)</span>}
+                {isExistingCustomer && <span className="ml-1 text-slate-700 font-normal">(read-only — edit in Customer Master)</span>}
               </Label>
               <Input
                 id="clone-customer-name"
@@ -343,7 +343,7 @@ export function CloneVehicleDialog({
             {/* GST type preview */}
             {(gstin || state) && (
               <div className="flex items-center gap-2 pt-1">
-                <span className="text-xs text-slate-500">GST Type:</span>
+                <span className="text-xs text-slate-600">GST Type:</span>
                 <span className={`text-xs px-2 py-0.5 rounded font-medium ${
                   gstType === "CGST_SGST"
                     ? "bg-blue-100 text-blue-800"
@@ -352,7 +352,7 @@ export function CloneVehicleDialog({
                   {gstType === "CGST_SGST" ? "CGST + SGST" : "IGST"}
                 </span>
                 {gstType === "IGST" && (
-                  <span className="text-xs text-slate-400">Tax amounts will be recalculated</span>
+                  <span className="text-xs text-slate-700">Tax amounts will be recalculated</span>
                 )}
               </div>
             )}
