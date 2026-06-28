@@ -102,6 +102,17 @@ export function Combobox({
       }
       // Delegate grid arrow keys to the parent grid hook when combobox is closed
       onGridKeyDown?.(e);
+    } else {
+      // Popup is open — forward navigation keys to CommandInput so cmdk handles them
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        const input = document.querySelector<HTMLInputElement>("[cmdk-root] input");
+        if (input) {
+          input.focus();
+          input.dispatchEvent(new KeyboardEvent("keydown", { key: e.key, bubbles: true, cancelable: true }));
+        }
+      }
     }
   }
 
@@ -125,7 +136,7 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent className="w-[var(--anchor-width)] p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
+          <CommandInput autoFocus placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>

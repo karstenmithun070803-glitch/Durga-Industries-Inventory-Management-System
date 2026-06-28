@@ -36,7 +36,7 @@ interface UseFormSectionNavReturn {
 }
 
 function isCmkdOpen(): boolean {
-  return !!document.activeElement?.closest("[cmdk-root]");
+  return !!document.querySelector("[cmdk-root]");
 }
 
 function isDialogOpen(): boolean {

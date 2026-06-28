@@ -1132,6 +1132,16 @@ export async function getInsuranceBillByInvoiceId(invoiceId: string): Promise<In
   };
 }
 
+export async function getInsuranceBillStatusByInvoiceId(
+  invoiceId: string
+): Promise<{ id: string; status: "Draft" | "Finalized" } | null> {
+  const [header] = await db
+    .select({ id: invoiceInsurance.id, status: invoiceInsurance.status })
+    .from(invoiceInsurance)
+    .where(eq(invoiceInsurance.invoice_id, invoiceId));
+  return header ? { id: header.id, status: header.status as "Draft" | "Finalized" } : null;
+}
+
 interface InsuranceBillItemInput {
   material_id: string | null;
   material_name_override: string | null;

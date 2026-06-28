@@ -34,6 +34,7 @@ import {
   peekNextBillNumber,
   getInvoicesForDropdown,
   getInsuranceBillByInvoiceId,
+  getInsuranceBillStatusByInvoiceId,
   createInsuranceBill,
 } from "@/lib/actions/invoices.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
@@ -329,7 +330,11 @@ export function InvoiceClient({
     setIsLoading(true);
     setActiveView("invoice");
     try {
-      const inv = await getInvoiceById(id);
+      // Fetch invoice + insurance status in parallel — badge and buttons are correct from first render
+      const [inv, insuranceStatus] = await Promise.all([
+        getInvoiceById(id),
+        getInsuranceBillStatusByInvoiceId(id),
+      ]);
       if (gen !== loadGenRef.current) return;
       if (!inv) throw new Error("Invoice not found.");
       setCurrentInvoice(inv);
@@ -346,17 +351,11 @@ export function InvoiceClient({
       dispatch({ type: "SET_ALL", rows: inv.items.length ? itemsFromInvoice(inv.items, inv.material_margin ?? "0") : [newRow()] });
       setIsDirty(false);
 
-      // Load insurance bill
-      const [insuranceBillData] = await Promise.all([
-        getInsuranceBillByInvoiceId(id),
-      ]);
-      if (gen !== loadGenRef.current) return;
-
-      // Insurance
-      if (insuranceBillData) {
-        setInsuranceBillId(insuranceBillData.header.id);
-        setInsuranceBillStatus(insuranceBillData.header.status as "Draft" | "Finalized");
-        setInsuranceBill(insuranceBillData);
+      // Insurance badge/buttons — set instantly from header-only fetch (no items loaded yet)
+      if (insuranceStatus) {
+        setInsuranceBillId(insuranceStatus.id);
+        setInsuranceBillStatus(insuranceStatus.status);
+        setInsuranceBill(null); // full items loaded on demand in ensureInsuranceBillLoaded()
       } else {
         setInsuranceBillId(null);
         setInsuranceBillStatus(null);
@@ -368,6 +367,13 @@ export function InvoiceClient({
     } finally {
       if (gen === loadGenRef.current) setIsLoading(false);
     }
+  }
+
+  // Lazily loads full insurance bill items — only needed when opening the insurance form
+  async function ensureInsuranceBillLoaded(id: string) {
+    if (insuranceBill !== null) return;
+    const data = await getInsuranceBillByInvoiceId(id);
+    if (data) setInsuranceBill(data);
   }
 
   // ── Vehicle selection ─────────────────────────────────────────────────────
@@ -1153,7 +1159,10 @@ export function InvoiceClient({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setActiveView("insurance")}
+                      onClick={async () => {
+                        if (insuranceBillId) await ensureInsuranceBillLoaded(insuranceBillId);
+                        setActiveView("insurance");
+                      }}
                     >
                       {insuranceBillStatus === "Finalized" ? "View Insurance Bill" : "Edit Insurance Bill"}
                     </Button>

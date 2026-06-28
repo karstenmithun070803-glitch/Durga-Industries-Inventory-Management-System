@@ -14,7 +14,7 @@ const FOCUSABLE =
 export function MasterLayout({ title, formPanel, tablePanel }: Props) {
   const handleFormKeyDown = useCallback((e: React.KeyboardEvent<HTMLFormElement>) => {
     // When combobox dropdown is open, pass all keys through to cmdk
-    if (document.activeElement?.closest("[cmdk-root]")) return;
+    if (document.querySelector("[cmdk-root]")) return;
 
     if (e.key === "Tab") {
       e.preventDefault();
