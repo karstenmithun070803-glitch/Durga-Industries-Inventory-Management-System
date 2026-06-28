@@ -175,6 +175,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
               <Input
                 ref={searchRef}
+                autoComplete="off"
                 placeholder="Search by vehicle name, job number, or customer..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}

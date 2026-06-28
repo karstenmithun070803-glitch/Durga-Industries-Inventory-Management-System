@@ -168,6 +168,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
               <Input
                 ref={searchRef}
+                autoComplete="off"
                 placeholder="Search by name, S001 or just 1, GSTIN..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}

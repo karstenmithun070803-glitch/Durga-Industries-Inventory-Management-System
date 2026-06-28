@@ -219,12 +219,9 @@ export function InvoiceClient({
   // ── Section nav refs ───────────────────────────────────────────────────────
   const vehicleSectionRef = useRef<HTMLDivElement>(null);
   const dateSectionRef = useRef<HTMLDivElement>(null);
-  const marginSectionRef = useRef<HTMLDivElement>(null);
+  const headerRowSectionRef = useRef<HTMLDivElement>(null);
   const marginInputRef = useRef<HTMLInputElement>(null);
-  const includeTaxSectionRef = useRef<HTMLDivElement>(null);
   const gridSectionRef = useRef<HTMLDivElement>(null);
-  const actionsSectionRef = useRef<HTMLDivElement>(null);
-  const saveButtonRef = useRef<HTMLButtonElement>(null);
 
   // ── Dropdown state ────────────────────────────────────────────────────────
   const [dropdownItems, setDropdownItems] = useState<InvoiceDropdownItem[]>(initialDropdownItems);
@@ -688,24 +685,14 @@ export function InvoiceClient({
         },
       },
       {
-        id: "margin",
-        ref: marginSectionRef,
+        id: "headerRow",
+        ref: headerRowSectionRef,
         isDisabled: () => !isEditable,
-        autoActivate: true,
         onActivate: () => {
           marginInputRef.current?.focus();
           marginInputRef.current?.select();
         },
         onDeactivate: () => marginInputRef.current?.blur(),
-      },
-      {
-        id: "includeTax",
-        ref: includeTaxSectionRef,
-        isDisabled: () => isCancelled,
-        autoActivate: true,
-        onActivate: () => {
-          includeTaxSectionRef.current?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus();
-        },
       },
       {
         id: "grid",
@@ -717,26 +704,33 @@ export function InvoiceClient({
             ?.focus();
         },
       },
-      {
-        id: "actions",
-        ref: actionsSectionRef,
-        autoActivate: true,
-        onActivate: () => saveButtonRef.current?.focus(),
-      },
     ],
     isLoading: isLoading || isSaving,
   });
 
-  // Margin Enter handler — defined with useCallback so it's stable
+  // Margin Enter handler — advance to Grid (section 3)
   const handleMarginKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        goToSection(4); // advance to Grid
+        goToSection(3); // advance to Grid
       }
     },
     [goToSection]
   );
+
+  // Header row internal ←/→ navigation: Margin ↔ Include Tax checkbox
+  const handleHeaderRowKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const checkbox = headerRowSectionRef.current?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    if (e.key === "ArrowRight" && document.activeElement === marginInputRef.current) {
+      e.stopPropagation();
+      checkbox?.focus();
+    }
+    if (e.key === "ArrowLeft" && document.activeElement === checkbox) {
+      e.stopPropagation();
+      marginInputRef.current?.focus();
+    }
+  }, []);
 
   // ── Hotkeys ───────────────────────────────────────────────────────────────
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); if (activeView === "invoice") void handleSave(); }, { enableOnFormTags: true });
@@ -881,6 +875,7 @@ export function InvoiceClient({
                       value={billDate}
                       onChange={(e) => { setBillDate(e.target.value); setIsDirty(true); }}
                       className="h-9 text-sm"
+                      autoComplete="off"
                     />
                   )}
                 </div>
@@ -965,9 +960,13 @@ export function InvoiceClient({
                 </div>
               )}
 
-              {/* Material Margin + Include Tax */}
-              <div className="grid grid-cols-3 gap-4 items-end">
-                <div ref={marginSectionRef}>
+              {/* Material Margin + Include Tax — single header row section, ←/→ navigates between them */}
+              <div
+                ref={headerRowSectionRef}
+                className="grid grid-cols-3 gap-4 items-end"
+                onKeyDown={handleHeaderRowKeyDown}
+              >
+                <div>
                   <label className="text-xs text-slate-600 block mb-1">Material Margin %</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">{materialMargin || "—"}</div>
@@ -983,10 +982,11 @@ export function InvoiceClient({
                       min="0"
                       step="any"
                       placeholder="0"
+                      autoComplete="off"
                     />
                   )}
                 </div>
-                <div className="flex items-center gap-2 pb-1" ref={includeTaxSectionRef}>
+                <div className="flex items-center gap-2 pb-1">
                   <input
                     type="checkbox"
                     id="include-tax"
@@ -1018,7 +1018,6 @@ export function InvoiceClient({
                 mode="invoice"
                 gstType={gstType}
                 showTaxColumns={includeTax}
-                onExitBottom={() => goToSection(5)}
               />
             </div>
           </div>
@@ -1049,7 +1048,7 @@ export function InvoiceClient({
               </span>
             </div>
 
-            <div className="flex items-center gap-2 px-6 py-3" ref={actionsSectionRef}>
+            <div className="flex items-center gap-2 px-6 py-3">
               {/* Left: destructive actions + cancel navigation */}
               <div className="flex gap-2">
                 {isDraft && currentInvoiceId && (
@@ -1084,7 +1083,6 @@ export function InvoiceClient({
 
                 {!isCancelled && (
                   <Button
-                    ref={saveButtonRef}
                     variant="outline"
                     size="sm"
                     onClick={handleSave}

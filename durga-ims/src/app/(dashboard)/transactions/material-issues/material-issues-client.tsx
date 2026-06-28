@@ -234,8 +234,6 @@ export function MaterialIssuesClient({
   const marginSectionRef = useRef<HTMLDivElement>(null);
   const marginInputRef = useRef<HTMLInputElement>(null);
   const gridSectionRef = useRef<HTMLDivElement>(null);
-  const actionsSectionRef = useRef<HTMLDivElement>(null);
-  const saveButtonRef = useRef<HTMLButtonElement>(null);
   const goToSectionRef = useRef<((index: number) => void) | null>(null);
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId);
@@ -281,13 +279,6 @@ export function MaterialIssuesClient({
             ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
             ?.focus();
         },
-      },
-      {
-        id: "actions",
-        ref: actionsSectionRef,
-        isDisabled: () => !vehicleId,
-        autoActivate: true,
-        onActivate: () => saveButtonRef.current?.focus(),
       },
     ],
     isLoading: isLoading || isPending,
@@ -564,6 +555,7 @@ export function MaterialIssuesClient({
                     onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
                     className="h-9 text-sm"
                     disabled={!vehicleId}
+                    autoComplete="off"
                   />
                 </div>
               </div>
@@ -600,6 +592,7 @@ export function MaterialIssuesClient({
                         }}
                         className="h-9 text-sm"
                         placeholder="0"
+                        autoComplete="off"
                       />
                     </div>
                   </div>
@@ -676,7 +669,6 @@ export function MaterialIssuesClient({
               contractors={contractors}
               gstType={gstType}
               mode="material-issue"
-              onExitBottom={() => goToSection(4)}
             />
           </div>
         )}
@@ -694,11 +686,10 @@ export function MaterialIssuesClient({
           </span>
         </div>
 
-        <div className="px-6 py-3 flex items-center gap-4 flex-wrap" ref={actionsSectionRef}>
+        <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
           {hasFormContent && (
             <>
               <Button
-                ref={saveButtonRef}
                 className="h-10 px-5 bg-blue-600 hover:bg-blue-700"
                 onClick={handleSave}
                 disabled={isPending || isLoading || !isDirty}

@@ -689,10 +689,8 @@ export function PurchaseOrdersClient({
   // ── Section nav refs ───────────────────────────────────────────────────────
   const dateSectionRef = useRef<HTMLDivElement>(null);
   const gridSectionRef = useRef<HTMLDivElement>(null);
-  const actionsSectionRef = useRef<HTMLDivElement>(null);
-  const saveButtonRef = useRef<HTMLButtonElement>(null);
 
-  const { goToSection, containerProps } = useFormSectionNav({
+  const { containerProps } = useFormSectionNav({
     sections: [
       {
         id: "date",
@@ -710,12 +708,6 @@ export function PurchaseOrdersClient({
             ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
             ?.focus();
         },
-      },
-      {
-        id: "actions",
-        ref: actionsSectionRef,
-        autoActivate: true,
-        onActivate: () => saveButtonRef.current?.focus(),
       },
     ],
     isLoading: isLoading || isPending,
@@ -843,6 +835,8 @@ export function PurchaseOrdersClient({
                     value={poDate}
                     onChange={(e) => { setPoDate(e.target.value); setIsDirty(true); }}
                     className="h-9 text-sm"
+                    autoComplete="off"
+                    autoFocus
                   />
                 </div>
               </div>
@@ -890,7 +884,6 @@ export function PurchaseOrdersClient({
                 taxRates={taxRates}
                 units={units}
                 mode="purchase-order"
-                onExitBottom={() => goToSection(2)}
               />
             </div>
           )}
@@ -911,7 +904,7 @@ export function PurchaseOrdersClient({
           </div>
 
           {/* Action buttons */}
-          <div className="px-6 py-3 flex items-center gap-4 flex-wrap" ref={actionsSectionRef}>
+          <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
             <Button variant="outline" className="h-10 px-5" onClick={handleNew} disabled={isPending}>
               New
             </Button>
@@ -919,7 +912,6 @@ export function PurchaseOrdersClient({
             {hasFormContent && (
               <>
                 <Button
-                  ref={saveButtonRef}
                   variant="outline"
                   className="h-10 px-5"
                   onClick={handleSave}

@@ -138,6 +138,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
               <Input
                 ref={searchRef}
+                autoComplete="off"
                 placeholder="Search by description, T01 or just 1, tax %..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}

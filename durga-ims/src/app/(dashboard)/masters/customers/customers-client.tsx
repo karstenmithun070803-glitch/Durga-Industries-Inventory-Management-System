@@ -190,6 +190,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                   else if (e.key === "Escape") { setFocusedIdx(-1); }
                 }}
                 ref={searchRef}
+                autoComplete="off"
                 className="max-w-sm"
               />
               {inactive.length > 0 && (

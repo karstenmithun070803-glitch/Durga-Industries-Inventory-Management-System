@@ -66,8 +66,6 @@ interface Props {
   showTaxColumns?: boolean;
   // When true (VMI New only): shows read-only Stage column after S.No
   showStageColumn?: boolean;
-  /** Called when ↓ is pressed on the last empty row — use to exit grid to action bar. */
-  onExitBottom?: () => void;
 }
 
 // Column indices per mode (interactive/focusable elements, including delete button)
@@ -154,7 +152,6 @@ export function TransactionGrid({
   gstType,
   showTaxColumns = false,
   showStageColumn = false,
-  onExitBottom,
 }: Props) {
   const gridRef = useRef<HTMLTableElement>(null);
   const isIssueMode = mode === "material-issue";
@@ -187,8 +184,6 @@ export function TransactionGrid({
     rows,
     columnCount,
     appendEmptyRow,
-    lastDataColIndex,
-    onExitBottom,
   });
 
   // Recalculate all rows when header-level gstType changes (issue / invoice mode only)
@@ -261,11 +256,8 @@ export function TransactionGrid({
       ...(isHeaderGstMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
     });
 
-    // Auto-focus next column after material selection:
-    // In MI/PO mode advance to Contractor/Supplier (col 1) for sequential entry.
-    // In invoice mode advance to Qty (col 1) since there's no contractor.
-    const nextCol = isInvoiceMode ? qtyCol : 1;
-    setTimeout(() => focusCell(rowIndex, nextCol), 100);
+    // After material selection, focus returns to the material cell (col 0).
+    // The user navigates to the next column with → arrow key.
   }
 
   function handleSupplierSelect(key: string, supplierId: string) {

@@ -496,6 +496,7 @@ export function StagesClient({ stages, materials, units }: Props) {
             <div className="p-3 border-b border-slate-100 flex items-center gap-2">
               <Input
                 ref={searchRef}
+                autoComplete="off"
                 placeholder="Search by stage code or name…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
