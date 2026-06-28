@@ -15,8 +15,8 @@ import {
   invoices,
   stages,
 } from "@/lib/db/schema";
-import { eq, and, sql, desc, max, asc } from "drizzle-orm";
-import { revalidatePath, unstable_cache } from "next/cache";
+import { eq, and, sql, desc, max, asc, inArray, gte, lte, or, ilike } from "drizzle-orm";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { fyDateRange } from "@/lib/fy";
 import type { MaterialIssueWithDetails, MaterialIssueItemWithDetails, MaterialIssueRow } from "@/types";
@@ -184,25 +184,38 @@ export const getActiveContractors = unstable_cache(
 export const getActiveIssueMaterials = unstable_cache(
   async () => {
     const pu = units;
-    return db
-      .select({
-        id: materials.id,
-        material_no: materials.material_no,
-        name: materials.name,
-        hsn_code: materials.hsn_code,
-        tax_rate_id: materials.tax_rate_id,
-        tax_percentage: taxRates.tax_percentage,
-        purchase_unit_id: materials.purchase_unit_id,
-        purchase_unit_name: pu.unit_name,
-        sales_unit_id: materials.sales_unit_id,
-        current_stock: materials.current_stock,
-        min_level: materials.min_level,
-      })
-      .from(materials)
-      .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
-      .leftJoin(pu, eq(materials.purchase_unit_id, pu.id))
-      .where(eq(materials.is_active, true))
-      .orderBy(materials.material_no);
+    const [mats, rates] = await Promise.all([
+      db
+        .select({
+          id: materials.id,
+          material_no: materials.material_no,
+          name: materials.name,
+          hsn_code: materials.hsn_code,
+          tax_rate_id: materials.tax_rate_id,
+          tax_percentage: taxRates.tax_percentage,
+          purchase_unit_id: materials.purchase_unit_id,
+          purchase_unit_name: pu.unit_name,
+          sales_unit_id: materials.sales_unit_id,
+          current_stock: materials.current_stock,
+          min_level: materials.min_level,
+        })
+        .from(materials)
+        .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
+        .leftJoin(pu, eq(materials.purchase_unit_id, pu.id))
+        .where(eq(materials.is_active, true))
+        .orderBy(materials.material_no),
+      db.execute<{ material_id: string; rate: string }>(sql`
+        SELECT DISTINCT ON (poi.material_id)
+          poi.material_id,
+          poi.rate
+        FROM purchase_order_items poi
+        INNER JOIN purchase_orders po ON poi.po_id = po.id
+        WHERE po.status = 'Received'
+        ORDER BY poi.material_id, po.po_date DESC
+      `),
+    ]);
+    const rateMap = new Map(rates.map((r) => [r.material_id, r.rate]));
+    return mats.map((m) => ({ ...m, lastRate: rateMap.get(m.id) ?? null }));
   },
   ["mi-active-materials"],
   { tags: [CACHE_TAGS.materials], revalidate: false }
@@ -280,10 +293,20 @@ export async function getSlipsForDropdown(
 // Read — list + detail
 // ---------------------------------------------------------------------------
 
+interface MIListParams {
+  search?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export async function getMaterialIssues(
   financialYear: string,
-  issueType: "OLD" | "NEW"
+  issueType: "OLD" | "NEW",
+  params: MIListParams = {}
 ): Promise<MaterialIssueRow[]> {
+  const { search, status, dateFrom, dateTo } = params;
+  const q = search ? `%${search}%` : null;
   const cu = customers;
   const co = contractors;
   const u = units;
@@ -337,12 +360,14 @@ export async function getMaterialIssues(
     .leftJoin(cu, eq(v.customer_id, cu.id))
     .leftJoin(co, eq(materialIssueItems.contractor_id, co.id))
     .leftJoin(u, eq(materialIssueItems.unit_id, u.id))
-    .where(
-      and(
-        eq(materialIssues.financial_year, financialYear),
-        eq(materialIssues.issue_type, issueType)
-      )
-    )
+    .where(and(
+      eq(materialIssues.financial_year, financialYear),
+      eq(materialIssues.issue_type, issueType),
+      status && status !== "all" ? eq(materialIssues.status, status) : undefined,
+      dateFrom ? gte(materialIssues.issue_date, new Date(dateFrom)) : undefined,
+      dateTo ? lte(materialIssues.issue_date, new Date(dateTo + "T23:59:59")) : undefined,
+      q ? or(ilike(v.vehicle_name, q), ilike(cu.customer_name, q)) : undefined,
+    ))
     .orderBy(desc(materialIssues.issue_date), desc(materialIssues.slip_number));
 
   return rows.map((r) => ({
@@ -615,51 +640,55 @@ export async function issueMaterialIssue(id: string): Promise<number | null> {
     .from(materialIssueItems)
     .where(eq(materialIssueItems.issue_id, id));
 
+  const inventoryItems = items.filter((i) => i.affects_inventory);
+
   await db.transaction(async (tx) => {
+    // Batch: single SELECT covers both validation and stock update
+    const matStocks = inventoryItems.length > 0
+      ? await tx
+          .select({ id: materials.id, name: materials.name, current_stock: materials.current_stock })
+          .from(materials)
+          .where(inArray(materials.id, inventoryItems.map((i) => i.material_id)))
+      : [];
+    const stockMap = new Map(matStocks.map((m) => [m.id, { name: m.name, stock: parseFloat(m.current_stock) }]));
+
+    // Validate stock sufficiency
     const qtyByMaterial = new Map<string, number>();
-    for (const item of items) {
-      if (!item.affects_inventory) continue;
-      qtyByMaterial.set(
-        item.material_id,
-        (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
-      );
+    for (const item of inventoryItems) {
+      qtyByMaterial.set(item.material_id, (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0"));
     }
     for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
-      const [mat] = await tx
-        .select({ name: materials.name, current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, materialId));
+      const mat = stockMap.get(materialId);
       if (!mat) throw new Error("Material not found.");
-      if (parseFloat(mat.current_stock) < requestedQty)
-        throw new Error(
-          `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
-        );
+      if (mat.stock < requestedQty)
+        throw new Error(`Insufficient stock for "${mat.name}": available ${mat.stock.toFixed(2)}, requested ${requestedQty.toFixed(2)}.`)
     }
 
     await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, id));
 
-    for (const item of items) {
-      if (!item.affects_inventory) continue;
-      const [mat] = await tx
-        .select({ current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, item.material_id));
+    for (const item of inventoryItems) {
+      const newStock = stockMap.get(item.material_id)!.stock - parseFloat(item.qty);
+      await tx.update(materials).set({ current_stock: newStock.toString() }).where(eq(materials.id, item.material_id));
+    }
 
-      const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
-      await tx.update(materials).set({ current_stock: newStock }).where(eq(materials.id, item.material_id));
-      await tx.insert(stockLedger).values({
-        material_id: item.material_id,
-        transaction_type: "ISSUE",
-        reference_id: id,
-        reference_type: "material_issue",
-        qty_change: (-parseFloat(item.qty)).toString(),
-        stock_after: newStock,
-      });
+    if (inventoryItems.length > 0) {
+      await tx.insert(stockLedger).values(
+        inventoryItems.map((item) => ({
+          material_id: item.material_id,
+          transaction_type: "ISSUE",
+          reference_id: id,
+          reference_type: "material_issue",
+          qty_change: (-parseFloat(item.qty)).toString(),
+          stock_after: (stockMap.get(item.material_id)!.stock - parseFloat(item.qty)).toFixed(4),
+        }))
+      );
     }
   });
 
   revalidatePath("/transactions/material-issues");
   revalidatePath("/transactions/material-issues/new");
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
   return issue.slip_number;
 }
 
@@ -694,23 +723,29 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
       .from(materialIssueItems)
       .where(eq(materialIssueItems.issue_id, id));
 
-    for (const item of oldItems) {
-      if (!item.affects_inventory) continue;
-      const [mat] = await tx
-        .select({ current_stock: materials.current_stock })
+    const oldInventoryItems = oldItems.filter((i) => i.affects_inventory);
+    if (oldInventoryItems.length > 0) {
+      const oldMatStocks = await tx
+        .select({ id: materials.id, current_stock: materials.current_stock })
         .from(materials)
-        .where(eq(materials.id, item.material_id));
+        .where(inArray(materials.id, oldInventoryItems.map((i) => i.material_id)));
+      const oldStockMap = new Map(oldMatStocks.map((m) => [m.id, parseFloat(m.current_stock)]));
 
-      const reversedStock = (parseFloat(mat.current_stock) + parseFloat(item.qty)).toString();
-      await tx.update(materials).set({ current_stock: reversedStock }).where(eq(materials.id, item.material_id));
-      await tx.insert(stockLedger).values({
-        material_id: item.material_id,
-        transaction_type: "REVERSAL",
-        reference_id: id,
-        reference_type: "material_issue",
-        qty_change: item.qty,
-        stock_after: reversedStock,
-      });
+      for (const item of oldInventoryItems) {
+        const reversedStock = oldStockMap.get(item.material_id)! + parseFloat(item.qty);
+        await tx.update(materials).set({ current_stock: reversedStock.toString() }).where(eq(materials.id, item.material_id));
+      }
+
+      await tx.insert(stockLedger).values(
+        oldInventoryItems.map((item) => ({
+          material_id: item.material_id,
+          transaction_type: "REVERSAL",
+          reference_id: id,
+          reference_type: "material_issue",
+          qty_change: item.qty,
+          stock_after: (oldStockMap.get(item.material_id)! + parseFloat(item.qty)).toFixed(4),
+        }))
+      );
     }
 
     await tx.delete(materialIssueItems).where(eq(materialIssueItems.issue_id, id));
@@ -718,44 +753,40 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
       await tx.insert(materialIssueItems).values(data.items.map((item) => itemValues(id, item)));
     }
 
-    const qtyByMaterial = new Map<string, number>();
-    for (const item of data.items) {
-      if (!item.affects_inventory) continue;
-      qtyByMaterial.set(
-        item.material_id,
-        (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
-      );
-    }
-    for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
-      const [mat] = await tx
-        .select({ name: materials.name, current_stock: materials.current_stock })
+    const newInventoryItems = data.items.filter((i) => i.affects_inventory);
+    if (newInventoryItems.length > 0) {
+      const newMatStocks = await tx
+        .select({ id: materials.id, name: materials.name, current_stock: materials.current_stock })
         .from(materials)
-        .where(eq(materials.id, materialId));
-      if (!mat) throw new Error("Material not found.");
-      if (parseFloat(mat.current_stock) < requestedQty) {
-        throw new Error(
-          `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
-        );
+        .where(inArray(materials.id, newInventoryItems.map((i) => i.material_id)));
+      const newStockMap = new Map(newMatStocks.map((m) => [m.id, { name: m.name, stock: parseFloat(m.current_stock) }]));
+
+      const qtyByMaterial = new Map<string, number>();
+      for (const item of newInventoryItems) {
+        qtyByMaterial.set(item.material_id, (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0"));
       }
-    }
+      for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
+        const mat = newStockMap.get(materialId);
+        if (!mat) throw new Error("Material not found.");
+        if (mat.stock < requestedQty)
+          throw new Error(`Insufficient stock for "${mat.name}": available ${mat.stock.toFixed(2)}, requested ${requestedQty.toFixed(2)}.`);
+      }
 
-    for (const item of data.items) {
-      if (!item.affects_inventory) continue;
-      const [mat] = await tx
-        .select({ current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, item.material_id));
+      for (const item of newInventoryItems) {
+        const newStock = newStockMap.get(item.material_id)!.stock - parseFloat(item.qty);
+        await tx.update(materials).set({ current_stock: newStock.toString() }).where(eq(materials.id, item.material_id));
+      }
 
-      const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
-      await tx.update(materials).set({ current_stock: newStock }).where(eq(materials.id, item.material_id));
-      await tx.insert(stockLedger).values({
-        material_id: item.material_id,
-        transaction_type: "ISSUE",
-        reference_id: id,
-        reference_type: "material_issue",
-        qty_change: (-parseFloat(item.qty)).toString(),
-        stock_after: newStock,
-      });
+      await tx.insert(stockLedger).values(
+        newInventoryItems.map((item) => ({
+          material_id: item.material_id,
+          transaction_type: "ISSUE",
+          reference_id: id,
+          reference_type: "material_issue",
+          qty_change: (-parseFloat(item.qty)).toString(),
+          stock_after: (newStockMap.get(item.material_id)!.stock - parseFloat(item.qty)).toFixed(4),
+        }))
+      );
     }
 
     // stage_id is immutable after issue — do not update it
@@ -772,6 +803,8 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
 
   revalidatePath("/transactions/material-issues");
   revalidatePath("/transactions/material-issues/new");
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 // ---------------------------------------------------------------------------
@@ -810,23 +843,29 @@ export async function deleteMaterialIssue(id: string): Promise<void> {
       .where(eq(materialIssueItems.issue_id, id));
 
     await db.transaction(async (tx) => {
-      for (const item of items) {
-        if (!item.affects_inventory) continue;
-        const [mat] = await tx
-          .select({ current_stock: materials.current_stock })
+      const delInventoryItems = items.filter((i) => i.affects_inventory);
+      if (delInventoryItems.length > 0) {
+        const delMatStocks = await tx
+          .select({ id: materials.id, current_stock: materials.current_stock })
           .from(materials)
-          .where(eq(materials.id, item.material_id));
+          .where(inArray(materials.id, delInventoryItems.map((i) => i.material_id)));
+        const delStockMap = new Map(delMatStocks.map((m) => [m.id, parseFloat(m.current_stock)]));
 
-        const restoredStock = (parseFloat(mat.current_stock) + parseFloat(item.qty)).toString();
-        await tx.update(materials).set({ current_stock: restoredStock }).where(eq(materials.id, item.material_id));
-        await tx.insert(stockLedger).values({
-          material_id: item.material_id,
-          transaction_type: "REVERSAL",
-          reference_id: id,
-          reference_type: "material_issue",
-          qty_change: item.qty,
-          stock_after: restoredStock,
-        });
+        for (const item of delInventoryItems) {
+          const restoredStock = delStockMap.get(item.material_id)! + parseFloat(item.qty);
+          await tx.update(materials).set({ current_stock: restoredStock.toString() }).where(eq(materials.id, item.material_id));
+        }
+
+        await tx.insert(stockLedger).values(
+          delInventoryItems.map((item) => ({
+            material_id: item.material_id,
+            transaction_type: "REVERSAL",
+            reference_id: id,
+            reference_type: "material_issue",
+            qty_change: item.qty,
+            stock_after: (delStockMap.get(item.material_id)! + parseFloat(item.qty)).toFixed(4),
+          }))
+        );
       }
       await tx.delete(materialIssues).where(eq(materialIssues.id, id));
     });
@@ -834,6 +873,8 @@ export async function deleteMaterialIssue(id: string): Promise<void> {
 
   revalidatePath("/transactions/material-issues");
   revalidatePath("/transactions/material-issues/new");
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 // ---------------------------------------------------------------------------
@@ -1133,45 +1174,45 @@ export async function saveVehicleMaterialIssue(
         .insert(materialIssueItems)
         .values(data.items.map((item) => itemValues(issue.id, item)));
 
-      // Issue: deduct stock
-      const qtyByMaterial = new Map<string, number>();
-      for (const item of data.items) {
-        if (!item.affects_inventory) continue;
-        qtyByMaterial.set(
-          item.material_id,
-          (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
+      // Issue: deduct stock — batch to reduce N+1 queries
+      const vmiInventoryItems = data.items.filter((i) => i.affects_inventory);
+      if (vmiInventoryItems.length > 0) {
+        const vmiMatStocks = await tx
+          .select({ id: materials.id, name: materials.name, current_stock: materials.current_stock })
+          .from(materials)
+          .where(inArray(materials.id, vmiInventoryItems.map((i) => i.material_id)));
+        const vmiStockMap = new Map(vmiMatStocks.map((m) => [m.id, { name: m.name, stock: parseFloat(m.current_stock) }]));
+
+        const qtyByMaterial = new Map<string, number>();
+        for (const item of vmiInventoryItems) {
+          qtyByMaterial.set(item.material_id, (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0"));
+        }
+        for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
+          const mat = vmiStockMap.get(materialId);
+          if (!mat) throw new Error("Material not found.");
+          if (mat.stock < requestedQty)
+            throw new Error(`Insufficient stock for "${mat.name}": available ${mat.stock.toFixed(2)}, requested ${requestedQty.toFixed(2)}.`);
+        }
+
+        await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, issue.id));
+
+        for (const item of vmiInventoryItems) {
+          const newStock = vmiStockMap.get(item.material_id)!.stock - parseFloat(item.qty);
+          await tx.update(materials).set({ current_stock: newStock.toString() }).where(eq(materials.id, item.material_id));
+        }
+
+        await tx.insert(stockLedger).values(
+          vmiInventoryItems.map((item) => ({
+            material_id: item.material_id,
+            transaction_type: "ISSUE",
+            reference_id: issue.id,
+            reference_type: "material_issue",
+            qty_change: (-parseFloat(item.qty)).toString(),
+            stock_after: (vmiStockMap.get(item.material_id)!.stock - parseFloat(item.qty)).toFixed(4),
+          }))
         );
-      }
-      for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
-        const [mat] = await tx
-          .select({ name: materials.name, current_stock: materials.current_stock })
-          .from(materials)
-          .where(eq(materials.id, materialId));
-        if (!mat) throw new Error("Material not found.");
-        if (parseFloat(mat.current_stock) < requestedQty)
-          throw new Error(
-            `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
-          );
-      }
-
-      await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, issue.id));
-
-      for (const item of data.items) {
-        if (!item.affects_inventory) continue;
-        const [mat] = await tx
-          .select({ current_stock: materials.current_stock })
-          .from(materials)
-          .where(eq(materials.id, item.material_id));
-        const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
-        await tx.update(materials).set({ current_stock: newStock }).where(eq(materials.id, item.material_id));
-        await tx.insert(stockLedger).values({
-          material_id: item.material_id,
-          transaction_type: "ISSUE",
-          reference_id: issue.id,
-          reference_type: "material_issue",
-          qty_change: (-parseFloat(item.qty)).toString(),
-          stock_after: newStock,
-        });
+      } else {
+        await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, issue.id));
       }
 
       return issue.id;
@@ -1179,6 +1220,8 @@ export async function saveVehicleMaterialIssue(
 
     revalidatePath("/transactions/material-issues");
     revalidatePath("/transactions/material-issues/new");
+    revalidateTag(CACHE_TAGS.materials);
+    revalidateTag(CACHE_TAGS.dashboard);
     return { id: newId, isNew: true };
   }
 
@@ -1310,12 +1353,14 @@ export async function cloneVehicleMaterialIssue(
         (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
       );
     }
-    for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
-      const [mat] = await tx
-        .select({ name: materials.name, current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, materialId));
-      if (!mat) throw new Error("Material not found.");
+    // Batch stock check — one SELECT for all materials at once
+    const inventoryMaterialIds = Array.from(qtyByMaterial.keys());
+    const stockCheckRows = await tx
+      .select({ id: materials.id, name: materials.name, current_stock: materials.current_stock })
+      .from(materials)
+      .where(inArray(materials.id, inventoryMaterialIds));
+    for (const mat of stockCheckRows) {
+      const requestedQty = qtyByMaterial.get(mat.id)!;
       if (parseFloat(mat.current_stock) < requestedQty)
         throw new Error(
           `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
@@ -1324,22 +1369,32 @@ export async function cloneVehicleMaterialIssue(
 
     await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, issue.id));
 
-    for (const item of recalcItems) {
-      if (!item.affects_inventory) continue;
-      const [mat] = await tx
-        .select({ current_stock: materials.current_stock })
-        .from(materials)
-        .where(eq(materials.id, item.material_id));
-      const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
-      await tx.update(materials).set({ current_stock: newStock }).where(eq(materials.id, item.material_id));
-      await tx.insert(stockLedger).values({
-        material_id: item.material_id,
-        transaction_type: "ISSUE",
-        reference_id: issue.id,
-        reference_type: "material_issue",
-        qty_change: (-parseFloat(item.qty)).toString(),
-        stock_after: newStock,
-      });
+    const inventoryItems = recalcItems.filter(item => item.affects_inventory);
+    if (inventoryItems.length > 0) {
+      const currentStockMap = new Map(stockCheckRows.map(m => [m.id, parseFloat(m.current_stock)]));
+
+      // Batch UPDATE materials stock — one statement instead of N round-trips
+      await tx.execute(sql`
+        UPDATE materials
+        SET current_stock = v.stock::text
+        FROM (VALUES ${sql.join(
+          inventoryItems.map(item => sql`(${item.material_id}::uuid, ${(currentStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4)}::numeric)`),
+          sql`, `
+        )}) AS v(id, stock)
+        WHERE materials.id = v.id
+      `);
+
+      // Bulk INSERT stock ledger
+      await tx.insert(stockLedger).values(
+        inventoryItems.map(item => ({
+          material_id: item.material_id,
+          transaction_type: "ISSUE" as const,
+          reference_id: issue.id,
+          reference_type: "material_issue",
+          qty_change: (-parseFloat(item.qty)).toString(),
+          stock_after: (currentStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4),
+        }))
+      );
     }
 
     newIssueId = issue.id;
@@ -1347,6 +1402,8 @@ export async function cloneVehicleMaterialIssue(
 
   revalidatePath("/transactions/material-issues");
   revalidatePath("/transactions/material-issues/new");
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
   return { newIssueId };
 }
 
@@ -1468,56 +1525,80 @@ export async function updateVehicleMargin(
   if (Math.abs(factor - 1) < 0.0001) return;
 
   await db.transaction(async (tx) => {
-    for (const issue of issueRecords) {
-      const items = await tx
-        .select({
-          id: materialIssueItems.id,
-          qty: materialIssueItems.qty,
-          rate: materialIssueItems.rate,
-          tax_percentage: materialIssueItems.tax_percentage,
-          gst_type: materialIssueItems.gst_type,
-        })
-        .from(materialIssueItems)
-        .where(eq(materialIssueItems.issue_id, issue.id));
+    // Batch fetch all items for all issues in one query
+    const issueIds = issueRecords.map(i => i.id);
+    const allItems = await tx
+      .select({
+        id: materialIssueItems.id,
+        issue_id: materialIssueItems.issue_id,
+        qty: materialIssueItems.qty,
+        rate: materialIssueItems.rate,
+        tax_percentage: materialIssueItems.tax_percentage,
+        gst_type: materialIssueItems.gst_type,
+      })
+      .from(materialIssueItems)
+      .where(inArray(materialIssueItems.issue_id, issueIds));
 
-      let issueTotal = 0;
+    // Calculate new values for every item
+    const itemUpdates: Array<{ id: string; rate: string; amount: string; cgst: string; sgst: string; igst: string }> = [];
+    const issueTotals = new Map<string, number>();
 
-      for (const item of items) {
-        const qty = parseFloat(item.qty) || 0;
-        const oldRate = parseFloat(item.rate) || 0;
-        const taxPct = parseFloat(item.tax_percentage ?? "0") || 0;
-        const gstType = item.gst_type ?? "CGST_SGST";
+    for (const item of allItems) {
+      const qty = parseFloat(item.qty) || 0;
+      const oldRate = parseFloat(item.rate) || 0;
+      const taxPct = parseFloat(item.tax_percentage ?? "0") || 0;
+      const gstType = item.gst_type ?? "CGST_SGST";
 
-        const newRate = oldRate * factor;
-        const newAmount = qty * newRate;
-        const taxAmt = newAmount * (taxPct / 100);
+      const newRate = oldRate * factor;
+      const newAmount = qty * newRate;
+      const taxAmt = newAmount * (taxPct / 100);
+      const cgst = gstType === "CGST_SGST" ? taxAmt / 2 : 0;
+      const sgst = gstType === "CGST_SGST" ? taxAmt / 2 : 0;
+      const igst = gstType === "IGST" ? taxAmt : 0;
 
-        const cgst = gstType === "CGST_SGST" ? taxAmt / 2 : 0;
-        const sgst = gstType === "CGST_SGST" ? taxAmt / 2 : 0;
-        const igst = gstType === "IGST" ? taxAmt : 0;
-
-        issueTotal += newAmount + cgst + sgst + igst;
-
-        await tx
-          .update(materialIssueItems)
-          .set({
-            rate: newRate.toFixed(4),
-            amount: newAmount.toFixed(2),
-            cgst_amount: cgst.toFixed(2),
-            sgst_amount: sgst.toFixed(2),
-            igst_amount: igst.toFixed(2),
-          })
-          .where(eq(materialIssueItems.id, item.id));
-      }
-
-      await tx
-        .update(materialIssues)
-        .set({
-          margin_percentage: newMarginStr,
-          total_amount: issueTotal.toFixed(2),
-        })
-        .where(eq(materialIssues.id, issue.id));
+      itemUpdates.push({
+        id: item.id,
+        rate: newRate.toFixed(4),
+        amount: newAmount.toFixed(2),
+        cgst: cgst.toFixed(2),
+        sgst: sgst.toFixed(2),
+        igst: igst.toFixed(2),
+      });
+      issueTotals.set(item.issue_id, (issueTotals.get(item.issue_id) ?? 0) + newAmount + cgst + sgst + igst);
     }
+
+    // Batch UPDATE all items in one statement
+    if (itemUpdates.length > 0) {
+      await tx.execute(sql`
+        UPDATE material_issue_items
+        SET rate         = v.rate,
+            amount       = v.amount,
+            cgst_amount  = v.cgst,
+            sgst_amount  = v.sgst,
+            igst_amount  = v.igst
+        FROM (VALUES ${sql.join(
+          itemUpdates.map(u => sql`(${u.id}::uuid, ${u.rate}::numeric, ${u.amount}::numeric, ${u.cgst}::numeric, ${u.sgst}::numeric, ${u.igst}::numeric)`),
+          sql`, `
+        )}) AS v(id, rate, amount, cgst, sgst, igst)
+        WHERE material_issue_items.id = v.id
+      `);
+    }
+
+    // Batch UPDATE all issue totals in one statement
+    const issueTotalUpdates = issueRecords.map(issue => ({
+      id: issue.id,
+      total: (issueTotals.get(issue.id) ?? 0).toFixed(2),
+    }));
+    await tx.execute(sql`
+      UPDATE material_issues
+      SET margin_percentage = ${newMarginStr},
+          total_amount      = v.total
+      FROM (VALUES ${sql.join(
+        issueTotalUpdates.map(u => sql`(${u.id}::uuid, ${u.total}::numeric)`),
+        sql`, `
+      )}) AS v(id, total)
+      WHERE material_issues.id = v.id
+    `);
   });
 
   revalidatePath("/transactions/material-issues/new");

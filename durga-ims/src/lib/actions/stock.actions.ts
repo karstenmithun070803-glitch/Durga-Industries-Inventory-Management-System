@@ -100,10 +100,11 @@ export interface JobCostResult {
 // getStockDashboardMaterials
 // ---------------------------------------------------------------------------
 
-export async function getStockDashboardMaterials(): Promise<{
+export const getStockDashboardMaterials = unstable_cache(
+  async (): Promise<{
   rows: StockMaterialRow[];
   summary: StockSummary;
-}> {
+}> => {
   // Fetch all materials: active ones + deactivated ones with stock > 0
   const allMats = await db
     .select({
@@ -195,7 +196,10 @@ export async function getStockDashboardMaterials(): Promise<{
     rows,
     summary: { totalMaterials, lowStockCount, outOfStockCount, totalStockValue, materialsExcludedFromValue, standardCostCount },
   };
-}
+},
+["stock-dashboard"],
+{ tags: [CACHE_TAGS.materials], revalidate: false }
+);
 
 // ---------------------------------------------------------------------------
 // getStockMovementHistory

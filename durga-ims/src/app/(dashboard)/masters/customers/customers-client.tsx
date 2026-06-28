@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useMemo, useEffect } from "react";
+import { useState, useTransition, useRef, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useMasterKeyboardNav } from "@/hooks/use-master-keyboard-nav";
 import { MasterLayout } from "@/components/masters/master-layout";
@@ -118,7 +118,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
               <label className="text-xs text-slate-600">Customer Name *</label>
               <Input ref={firstFieldRef} placeholder="Full name" value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
               {isDuplicateName && (
-                <p className="text-xs text-red-500 mt-0.5">A customer named "{form.customer_name.trim()}" already exists.</p>
+                <p className="text-xs text-red-500 mt-0.5">A customer named &ldquo;{form.customer_name.trim()}&rdquo; already exists.</p>
               )}
             </div>
             <div className="space-y-1.5">

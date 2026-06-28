@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -8,15 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PrintButton } from "@/components/pdf/print-button";
-import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
-import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
 import { formatCode } from "@/lib/utils";
-import { deleteInvoice, getInvoices } from "@/lib/actions/invoices.actions";
+import { deleteInvoice, getInvoices, getInvoiceCounts } from "@/lib/actions/invoices.actions";
 import type { InvoiceRow } from "@/types";
 import { useFY } from "@/lib/financial-year";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, Loader2 } from "lucide-react";
 import { INVOICE_STATUS } from "@/lib/constants";
+import { useDebounce } from "@/hooks/use-debounce";
 
 interface Props {
   initialRows: InvoiceRow[];
@@ -30,61 +29,66 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
   const router = useRouter();
   const { activeFY } = useFY();
   const [rows, setRows] = useState<InvoiceRow[]>(initialRows);
+  const [counts, setCounts] = useState({ all: 0, draft: 0, finalized: 0 });
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    getInvoices(activeFY).then(setRows);
-  }, [activeFY]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 350);
+
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; bill_number: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const filtered = useMemo(() => {
-    let result = rows;
+  // Load tab counts once per FY — separate lightweight query
+  useEffect(() => {
+    getInvoiceCounts(activeFY).then(setCounts);
+  }, [activeFY]);
 
-    if (statusFilter !== "all") result = result.filter((r) => r.status === statusFilter);
+  // Re-fetch filtered rows whenever FY or any filter changes
+  const fetchRows = useCallback(() => {
+    setIsLoading(true);
+    getInvoices(activeFY, {
+      search: debouncedSearch || undefined,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    })
+      .then((data) => { setRows(data); })
+      .finally(() => setIsLoading(false));
+  }, [activeFY, debouncedSearch, statusFilter, dateFrom, dateTo]);
 
-    if (dateFrom) result = result.filter((r) => r.bill_date >= dateFrom);
-    if (dateTo) result = result.filter((r) => r.bill_date <= dateTo + "T23:59:59");
-
-    if (search.trim()) {
-      const s = search.toLowerCase().trim();
-      result = result.filter(
-        (r) =>
-          r.bill_number.toLowerCase().includes(s) ||
-          r.vehicle_name?.toLowerCase().includes(s) ||
-          r.customer_name?.toLowerCase().includes(s) ||
-          r.material_name?.toLowerCase().includes(s) ||
-          formatCode("M", r.material_no).toLowerCase().includes(s) ||
-          (r.job_ref_no ?? "").toLowerCase().includes(s)
-      );
-    }
-
-    return result;
-  }, [rows, statusFilter, dateFrom, dateTo, search]);
+  useEffect(() => {
+    fetchRows();
+  }, [fetchRows]);
 
   // Deduplicate: one row per invoice (first item only)
   const invoiceRows = useMemo(
-    () => filtered.filter((row, idx, arr) => arr.findIndex((r) => r.id === row.id) === idx),
-    [filtered]
+    () => rows.filter((row, idx, arr) => arr.findIndex((r) => r.id === row.id) === idx),
+    [rows]
   );
+
   const hasDraft = invoiceRows.some((r) => r.status === INVOICE_STATUS.DRAFT);
+
   // Item count per invoice id (for the "+N more" badge)
   const itemCounts = useMemo(() => {
     const map = new Map<string, number>();
-    for (const r of filtered) map.set(r.id, (map.get(r.id) ?? 0) + 1);
+    for (const r of rows) map.set(r.id, (map.get(r.id) ?? 0) + 1);
     return map;
-  }, [filtered]);
-
-  // Count per status tab (unique invoices, not items)
-  const counts = useMemo(() => {
-    const uniqueIds = new Set(rows.map((r) => r.id));
-    const draftIds = new Set(rows.filter((r) => r.status === INVOICE_STATUS.DRAFT).map((r) => r.id));
-    const finalizedIds = new Set(rows.filter((r) => r.status === INVOICE_STATUS.FINALIZED).map((r) => r.id));
-    return { all: uniqueIds.size, draft: draftIds.size, finalized: finalizedIds.size };
   }, [rows]);
+
+  // Group rows by invoice id for PDF generation (one page per invoice)
+  const groupedForPdf = useMemo(() => {
+    const map = new Map<string, InvoiceRow[]>();
+    for (const r of rows) {
+      if (!map.has(r.id)) map.set(r.id, []);
+      map.get(r.id)!.push(r);
+    }
+    return Array.from(map.values());
+  }, [rows]);
+
+  const filteredInvoiceCount = invoiceRows.length;
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -92,7 +96,8 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
     try {
       await deleteInvoice(deleteTarget.id);
       toast.success(`${deleteTarget.bill_number} deleted.`);
-      router.refresh();
+      fetchRows();
+      getInvoiceCounts(activeFY).then(setCounts);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to delete.");
     } finally {
@@ -132,22 +137,6 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
     a.click();
     URL.revokeObjectURL(url);
   }
-
-  // Group rows by invoice id for PDF generation (one page per invoice)
-  const groupedForPdf = useMemo(() => {
-    const map = new Map<string, InvoiceRow[]>();
-    for (const r of filtered) {
-      if (!map.has(r.id)) map.set(r.id, []);
-      map.get(r.id)!.push(r);
-    }
-    return Array.from(map.values());
-  }, [filtered]);
-
-  // Unique invoice IDs in filtered set (for count display)
-  const filteredInvoiceCount = useMemo(
-    () => new Set(filtered.map((r) => r.id)).size,
-    [filtered]
-  );
 
   return (
     <div className="p-6 flex flex-col gap-4 h-full">
@@ -194,32 +183,38 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search bill#, vehicle, customer, material..."
+          placeholder="Search bill#, vehicle, customer..."
           className="h-8 text-xs w-64"
         />
 
         <div className="ml-auto flex items-center gap-2">
           <PrintButton
             label={`Insurance PDF (${filteredInvoiceCount})`}
-            disabled={filtered.length === 0}
-            getDocument={() => (
-              <InsuranceInvoiceDocument
-                groups={groupedForPdf}
-                fy={fy}
-                companySetting={companySetting}
-              />
-            )}
+            disabled={rows.length === 0}
+            getDocument={async () => {
+              const { InsuranceInvoiceDocument } = await import("@/components/pdf/insurance-invoice-pdf");
+              return (
+                <InsuranceInvoiceDocument
+                  groups={groupedForPdf}
+                  fy={fy}
+                  companySetting={companySetting}
+                />
+              );
+            }}
           />
           <PrintButton
             label={`Customer PDF (${filteredInvoiceCount})`}
-            disabled={filtered.length === 0}
-            getDocument={() => (
-              <CustomerInvoiceDocument
-                groups={groupedForPdf}
-                fy={fy}
-                companySetting={companySetting}
-              />
-            )}
+            disabled={rows.length === 0}
+            getDocument={async () => {
+              const { CustomerInvoiceDocument } = await import("@/components/pdf/customer-invoice-pdf");
+              return (
+                <CustomerInvoiceDocument
+                  groups={groupedForPdf}
+                  fy={fy}
+                  companySetting={companySetting}
+                />
+              );
+            }}
           />
           <Button
             size="sm"
@@ -241,7 +236,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
 
       {/* ── Table ────────────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg flex flex-col">
-        <div className="overflow-auto flex-1">
+        <div className={`overflow-auto flex-1 transition-opacity duration-150 ${isLoading ? "opacity-50" : ""}`}>
           <table className="min-w-max text-sm w-full">
             <thead className="bg-slate-50 sticky top-0 z-10">
               <tr>
@@ -263,10 +258,17 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
               </tr>
             </thead>
             <tbody>
-              {invoiceRows.length === 0 ? (
+              {invoiceRows.length === 0 && !isLoading ? (
                 <tr>
                   <td colSpan={hasDraft ? 15 : 14} className="px-3 py-12 text-center text-slate-700">
                     No invoices found.
+                  </td>
+                </tr>
+              ) : isLoading && invoiceRows.length === 0 ? (
+                <tr>
+                  <td colSpan={hasDraft ? 15 : 14} className="px-3 py-12 text-center text-slate-700">
+                    <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                    Loading…
                   </td>
                 </tr>
               ) : (
@@ -356,7 +358,10 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
 
         {invoiceRows.length > 0 && (
           <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-700 bg-slate-50 rounded-b-lg flex items-center justify-between">
-            <span>{filteredInvoiceCount} invoice{filteredInvoiceCount !== 1 ? "s" : ""}</span>
+            <span className="flex items-center gap-2">
+              {isLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+              {filteredInvoiceCount} invoice{filteredInvoiceCount !== 1 ? "s" : ""}
+            </span>
           </div>
         )}
       </div>

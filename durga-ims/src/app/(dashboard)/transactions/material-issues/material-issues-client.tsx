@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useMemo, useRef } from "react";
+import { useState, useEffect, useTransition, useMemo, useRef, useCallback } from "react";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/material-issues.actions";
 import { useDebounce } from "@/hooks/use-debounce";
 import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
+import { rowsReducer, type RowAction } from "@/lib/utils/rows-reducer";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,6 @@ import { determineGstType } from "@/types";
 import type { MaterialIssueWithDetails, LineItemDraft } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { PrintButton } from "@/components/pdf/print-button";
-import { MISlipDocument } from "@/components/pdf/mi-slip-pdf";
 import { CloneVehicleDialog } from "@/components/forms/CloneVehicleDialog";
 
 const todayISO = new Date().toISOString().split("T")[0];
@@ -217,6 +217,11 @@ export function MaterialIssuesClient({
   const debouncedMargin = useDebounce(marginPct, 300);
   const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
   const [isDirty, setIsDirty] = useState(false);
+  // Stable dispatch for TransactionGrid — delegates to rowsReducer via functional setRows
+  const gridDispatch = useCallback((action: RowAction): void => {
+    setRows((prev) => rowsReducer(prev, action));
+    if (action.type !== "SET_ALL") setIsDirty(true);
+  }, []);
   const [pendingFY, setPendingFY] = useState<string | null>(null);
 
   // Dialog states
@@ -661,7 +666,7 @@ export function MaterialIssuesClient({
             )}
             <TransactionGrid
               rows={rows}
-              onChange={(r) => { setRows(r); setIsDirty(true); }}
+              dispatch={gridDispatch}
               suppliers={[]}
               materials={materials}
               taxRates={taxRates}
@@ -700,7 +705,10 @@ export function MaterialIssuesClient({
               {loadedRecord && (
                 <>
                   <PrintButton
-                    getDocument={() => <MISlipDocument slip={loadedRecord} companySetting={companySetting} />}
+                    getDocument={async () => {
+                      const { MISlipDocument } = await import("@/components/pdf/mi-slip-pdf");
+                      return <MISlipDocument slip={loadedRecord} companySetting={companySetting} />;
+                    }}
                     label="Print"
                   />
                   <Button variant="outline" className="h-10 px-5" onClick={() => setCloneDialogOpen(true)} disabled={isPending}>

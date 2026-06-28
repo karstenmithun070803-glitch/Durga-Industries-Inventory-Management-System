@@ -10,8 +10,9 @@ import {
   vehicles,
 } from "@/lib/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { getCurrentFY } from "@/lib/fy";
+import { unstable_cache } from "next/cache";
 import { INVOICE_STATUS, PO_STATUS } from "@/lib/constants";
+import { CACHE_TAGS } from "@/lib/cache";
 
 export interface DashboardStats {
   lowStockCount: number;
@@ -25,8 +26,9 @@ export interface DashboardStats {
   recentInvoices: { id: string; bill_number: string; customer_name: string | null; bill_date: string }[];
 }
 
-export async function getDashboardStats(): Promise<DashboardStats> {
-  const fy = getCurrentFY();
+export const getDashboardStats = unstable_cache(
+  async (financialYear: string): Promise<DashboardStats> => {
+  const fy = financialYear;
 
   const [
     salesRow,
@@ -176,4 +178,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       customer_name: r.customer_name,
     })),
   };
-}
+},
+["dashboard-stats"],
+{ tags: [CACHE_TAGS.dashboard], revalidate: 120 }
+);

@@ -1,16 +1,20 @@
 "use client";
 
-import { useRef, useCallback, useEffect, useMemo, useState } from "react";
+import React, { useRef, useCallback, useEffect, useMemo, useState } from "react";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { getLastMaterialRate } from "@/lib/actions/purchase-orders.actions";
 import { formatCode } from "@/lib/utils";
 import { determineGstType } from "@/types";
 import type { LineItemDraft } from "@/types";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useKeyboardGrid } from "@/hooks/use-keyboard-grid";
+import { newRow } from "@/lib/utils/row-calc";
+import type { RowAction } from "@/lib/utils/rows-reducer";
+
+// Re-export so parent components that haven't migrated yet still compile
+export { newRow };
 
 interface SupplierOption {
   id: string;
@@ -31,6 +35,7 @@ interface MaterialOption {
   purchase_unit_id: string | null;
   sales_unit_id?: string | null;
   current_stock?: string;
+  lastRate?: string | null; // pre-fetched last purchase rate — avoids per-selection server round-trip
 }
 
 interface TaxRateOption {
@@ -52,7 +57,7 @@ interface ContractorOption {
 
 interface Props {
   rows: LineItemDraft[];
-  onChange: (rows: LineItemDraft[]) => void;
+  dispatch: React.Dispatch<RowAction>;
   suppliers: SupplierOption[];
   materials: MaterialOption[];
   taxRates: TaxRateOption[];
@@ -81,67 +86,443 @@ const STATIC_COL_CONFIG = {
   invoice:          { columnCount: 4, qtyCol: 1, lastDataColIndex: 2 },
 } as const;
 
-export function newRow(): LineItemDraft {
-  return {
-    _key: crypto.randomUUID(),
-    material_id: "",
-    material_name: "",
-    material_no: 0,
-    hsn_code: "",
-    supplier_id: "",
-    supplier_name: "",
-    gst_type: "IGST",
-    qty: "",
-    unit_id: "",
-    unit_name: "",
-    rate: "",
-    tax_percentage: "",
-    cgst_amount: "0",
-    sgst_amount: "0",
-    igst_amount: "0",
-    amount: "0",
-    rateBlank: false,
-    zeroRateConfirmed: false,
-    contractor_id: "",
-    contractor_name: "",
-    affects_inventory: true,
-  };
+// ─── TransactionRow ──────────────────────────────────────────────────────────
+
+interface RowProps {
+  row: LineItemDraft;
+  rowIndex: number;
+  // which column (if any) has an open combobox in this row; null = none
+  openComboboxCol: number | null;
+  dispatch: React.Dispatch<RowAction>;
+  // pre-computed label lists (stable useMemo refs from parent)
+  materialOptions: { value: string; label: string }[];
+  supplierOptions: { value: string; label: string }[];
+  contractorOptions: { value: string; label: string }[];
+  // raw arrays for handlers
+  materials: MaterialOption[];
+  suppliers: SupplierOption[];
+  contractors: ContractorOption[];
+  taxRates: TaxRateOption[];
+  units: UnitOption[];
+  usedMaterialIds: Set<string>;
+  // config (stable for the lifetime of the form)
+  isIssueMode: boolean;
+  isInvoiceMode: boolean;
+  isHeaderGstMode: boolean;
+  effectiveGstType: string | undefined;
+  readOnly: boolean;
+  showTaxColumns: boolean;
+  showStageColumn: boolean;
+  // pre-computed column indices (stable)
+  colMaterial: number;
+  colSupplierOrContractor: number;
+  colAffectsStock: number;
+  colQty: number;
+  colRate: number;
+  colTax: number;
+  colDelete: number;
+  // stable callbacks from parent
+  onKeyDown: (e: React.KeyboardEvent<Element>, rowIndex: number, colIndex: number, comboboxOpen: boolean) => void;
+  focusCell: (row: number, col: number) => void;
+  setOpenComboboxCell: React.Dispatch<React.SetStateAction<{ row: number; col: number } | null>>;
 }
 
-function calcAmountsForRow(
-  qty: string,
-  rate: string,
-  taxPct: string,
-  gstType: string
-): { amount: string; cgst_amount: string; sgst_amount: string; igst_amount: string } {
-  const q = parseFloat(qty) || 0;
-  const r = parseFloat(rate) || 0;
-  const t = parseFloat(taxPct) || 0;
-  const amount = q * r;
-  const roundTwo = (n: number) => Math.round(n * 100) / 100;
+const TransactionRow = React.memo(
+  function TransactionRow({
+    row,
+    rowIndex,
+    openComboboxCol,
+    dispatch,
+    materialOptions,
+    supplierOptions,
+    contractorOptions,
+    materials,
+    suppliers,
+    contractors,
+    taxRates,
+    units,
+    usedMaterialIds,
+    isIssueMode,
+    isInvoiceMode,
+    isHeaderGstMode,
+    effectiveGstType,
+    readOnly,
+    showTaxColumns,
+    showStageColumn,
+    colMaterial,
+    colSupplierOrContractor,
+    colAffectsStock,
+    colQty,
+    colRate,
+    colTax,
+    colDelete,
+    onKeyDown,
+    focusCell,
+    setOpenComboboxCell,
+  }: RowProps) {
+    const isOpen = (col: number) => openComboboxCol === col;
 
-  if (gstType === "CGST_SGST") {
-    const half = roundTwo((amount * (t / 100)) / 2);
-    return {
-      amount: amount.toFixed(2),
-      cgst_amount: half.toFixed(2),
-      sgst_amount: half.toFixed(2),
-      igst_amount: "0.00",
-    };
-  } else {
-    const igst = roundTwo(amount * (t / 100));
-    return {
-      amount: amount.toFixed(2),
-      cgst_amount: "0.00",
-      sgst_amount: "0.00",
-      igst_amount: igst.toFixed(2),
-    };
-  }
-}
+    // Stable — dispatch is stable from useReducer; isHeaderGstMode and effectiveGstType
+    // are derived from mode/gstType props that don't change during the form's lifetime
+    const update = useCallback(
+      (key: string, patch: Partial<LineItemDraft>) => {
+        dispatch({
+          type: "UPDATE",
+          key,
+          patch,
+          gstForCalc: isHeaderGstMode ? (effectiveGstType ?? null) : null,
+        });
+      },
+      [dispatch, isHeaderGstMode, effectiveGstType]
+    );
+
+    function handleMaterialSelect(key: string, materialId: string) {
+      const mat = materials.find((m) => m.id === materialId);
+      if (!mat) return;
+
+      if (!isIssueMode && usedMaterialIds.has(materialId)) {
+        toast.warning(`${mat.name} is already in this PO`);
+      }
+
+      const preferredUnitId = mat.purchase_unit_id;
+      const unit = preferredUnitId ? units.find((u) => u.id === preferredUnitId) : null;
+      const taxPct =
+        mat.tax_percentage ??
+        (mat.tax_rate_id ? taxRates.find((t) => t.id === mat.tax_rate_id)?.tax_percentage : null) ??
+        "0";
+
+      const lastRate = mat.lastRate ?? null;
+      const rateBlank = lastRate === null;
+
+      update(key, {
+        material_id: materialId,
+        material_name: mat.name,
+        material_no: mat.material_no,
+        hsn_code: mat.hsn_code ?? "",
+        unit_id: preferredUnitId ?? "",
+        unit_name: unit?.unit_name ?? "",
+        tax_percentage: taxPct,
+        rate: lastRate ?? "",
+        baseRate: lastRate ?? "",
+        rateBlank,
+        zeroRateConfirmed: false,
+        ...(isHeaderGstMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
+      });
+    }
+
+    function handleSupplierSelect(key: string, supplierId: string) {
+      const sup = suppliers.find((s) => s.id === supplierId);
+      if (!sup) return;
+      const gst = determineGstType(sup.gstin, sup.state);
+      update(key, {
+        supplier_id: supplierId,
+        supplier_name: sup.name,
+        gst_type: gst,
+      });
+    }
+
+    function handleContractorSelect(key: string, contractorId: string) {
+      if (!contractorId) {
+        update(key, { contractor_id: "", contractor_name: "" });
+        return;
+      }
+      const con = contractors.find((c) => c.id === contractorId);
+      if (!con) return;
+      update(key, {
+        contractor_id: contractorId,
+        contractor_name: con.name,
+      });
+    }
+
+    function handleDelete() {
+      dispatch({ type: "DELETE", key: row._key });
+      setTimeout(() => focusCell(Math.max(0, rowIndex - 1), 0), 10);
+    }
+
+    const showZeroWarning = !row.rateBlank && row.rate === "0" && !row.zeroRateConfirmed;
+
+    const fmt2 = (v: string) =>
+      parseFloat(v || "0").toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+    return (
+      <tr className="border-t border-slate-100">
+        <td className="px-3 py-1.5 text-slate-600">{rowIndex + 1}</td>
+        {showStageColumn && (
+          <td className="px-3 py-1.5 font-mono text-xs text-slate-700 whitespace-nowrap">
+            {row.stage_name || "—"}
+          </td>
+        )}
+
+        {/* Material Code — read-only, auto-filled */}
+        <td className="px-3 py-1.5 font-mono text-sm text-slate-700 whitespace-nowrap">
+          {row.material_no ? formatCode("M", row.material_no) : "—"}
+        </td>
+
+        {/* Material Name combobox */}
+        <td className="px-3 py-1.5">
+          {readOnly ? (
+            <span className="text-slate-800">{row.material_name}</span>
+          ) : (
+            <Combobox
+              options={materialOptions}
+              value={row.material_id}
+              onChange={(v) => handleMaterialSelect(row._key, v)}
+              placeholder="Select material..."
+              searchPlaceholder="Search materials..."
+              onOpenChange={(open) =>
+                setOpenComboboxCell(open ? { row: rowIndex, col: colMaterial } : null)
+              }
+              gridRow={rowIndex}
+              gridCol={colMaterial}
+              onGridKeyDown={(e) => onKeyDown(e, rowIndex, colMaterial, false)}
+            />
+          )}
+        </td>
+
+        {/* HSN — read-only, auto-filled, issue mode and invoice mode */}
+        {(isIssueMode || isInvoiceMode) && (
+          <td className="px-3 py-1.5 font-mono text-sm text-slate-600 whitespace-nowrap">
+            {row.hsn_code || "—"}
+          </td>
+        )}
+
+        {/* Supplier combobox — PO mode only */}
+        {!isIssueMode && !isInvoiceMode && (
+          <td className="px-3 py-1.5">
+            {readOnly ? (
+              <span className="text-slate-600">{row.supplier_name || "—"}</span>
+            ) : (
+              <Combobox
+                options={supplierOptions}
+                value={row.supplier_id}
+                onChange={(v) => handleSupplierSelect(row._key, v)}
+                placeholder="Select supplier..."
+                searchPlaceholder="Search suppliers..."
+                onOpenChange={(open) =>
+                  setOpenComboboxCell(open ? { row: rowIndex, col: colSupplierOrContractor } : null)
+                }
+                gridRow={rowIndex}
+                gridCol={colSupplierOrContractor}
+                onGridKeyDown={(e) => onKeyDown(e, rowIndex, colSupplierOrContractor, false)}
+              />
+            )}
+          </td>
+        )}
+
+        {/* Contractor combobox — issue mode only (optional, nullable) */}
+        {isIssueMode && (
+          <td className="px-3 py-1.5">
+            {readOnly ? (
+              <span className="text-slate-600">{row.contractor_name || "—"}</span>
+            ) : (
+              <Combobox
+                options={contractorOptions}
+                value={row.contractor_id}
+                onChange={(v) => handleContractorSelect(row._key, v)}
+                placeholder="None"
+                searchPlaceholder="Search contractors..."
+                onOpenChange={(open) =>
+                  setOpenComboboxCell(open ? { row: rowIndex, col: colSupplierOrContractor } : null)
+                }
+                gridRow={rowIndex}
+                gridCol={colSupplierOrContractor}
+                onGridKeyDown={(e) => onKeyDown(e, rowIndex, colSupplierOrContractor, false)}
+              />
+            )}
+          </td>
+        )}
+
+        {/* Affects Stock checkbox — issue mode only */}
+        {isIssueMode && (
+          <td className="px-3 py-1.5 text-center">
+            {readOnly ? (
+              <span
+                className={`inline-block w-4 h-4 rounded-sm border ${
+                  row.affects_inventory
+                    ? "bg-emerald-500 border-emerald-600"
+                    : "bg-slate-100 border-slate-300"
+                }`}
+                title={row.affects_inventory ? "Affects stock" : "Does not affect stock"}
+              />
+            ) : (
+              <input
+                type="checkbox"
+                checked={row.affects_inventory}
+                onChange={(e) =>
+                  update(row._key, { affects_inventory: e.target.checked })
+                }
+                onKeyDown={(e) => onKeyDown(e, rowIndex, colAffectsStock, isOpen(colAffectsStock))}
+                data-grid-row={rowIndex}
+                data-grid-col={colAffectsStock}
+                className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                title="Uncheck if this item should not reduce warehouse stock"
+              />
+            )}
+          </td>
+        )}
+
+        {/* Qty */}
+        <td className="px-3 py-1.5">
+          {readOnly ? (
+            <span className="text-slate-800">{row.qty}</span>
+          ) : (
+            <Input
+              type="number"
+              className={`w-20 h-8 text-sm ${
+                !row.qty || parseFloat(row.qty) <= 0
+                  ? "border-red-300 focus-visible:ring-red-400"
+                  : ""
+              }`}
+              value={row.qty}
+              onChange={(e) => update(row._key, { qty: e.target.value })}
+              onKeyDown={(e) => onKeyDown(e, rowIndex, colQty, isOpen(colQty))}
+              data-grid-row={rowIndex}
+              data-grid-col={colQty}
+              min="0"
+              step="any"
+            />
+          )}
+        </td>
+
+        {/* Unit — read-only, auto-filled */}
+        <td className="px-3 py-1.5 whitespace-nowrap">
+          {row.material_id && !row.unit_name ? (
+            <span
+              className="text-sm text-amber-600"
+              title={
+                isHeaderGstMode
+                  ? "No sales or purchase unit set — edit in Materials master"
+                  : "No purchase unit set — edit in Materials master"
+              }
+            >
+              ⚠ Not set
+            </span>
+          ) : (
+            <span className="text-slate-600">{row.unit_name || "—"}</span>
+          )}
+        </td>
+
+        {/* Rate */}
+        <td className="px-3 py-1.5">
+          {readOnly ? (
+            <span className="text-slate-800">{row.rate}</span>
+          ) : (
+            <div className="space-y-0.5">
+              <Input
+                type="number"
+                className={`w-24 h-8 text-sm ${row.rateBlank ? "bg-yellow-50 border-yellow-300" : ""} ${
+                  showZeroWarning ? "border-amber-400" : ""
+                }`}
+                value={row.rate}
+                onChange={(e) =>
+                  update(row._key, { rate: e.target.value, baseRate: e.target.value, rateBlank: false })
+                }
+                onKeyDown={(e) => onKeyDown(e, rowIndex, colRate, isOpen(colRate))}
+                data-grid-row={rowIndex}
+                data-grid-col={colRate}
+                min="0"
+                step="any"
+                placeholder={row.rateBlank ? "No history" : ""}
+                title={row.rateBlank ? "No purchase history — enter rate manually" : ""}
+              />
+              {row.rateBlank && (
+                <p className="text-sm text-amber-600 whitespace-nowrap">First purchase — enter rate</p>
+              )}
+              {showZeroWarning && (
+                <label className="flex items-center gap-1 text-sm text-amber-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={row.zeroRateConfirmed}
+                    onChange={(e) =>
+                      update(row._key, { zeroRateConfirmed: e.target.checked })
+                    }
+                    className="w-3 h-3"
+                  />
+                  Zero cost — confirm?
+                </label>
+              )}
+            </div>
+          )}
+        </td>
+
+        {/* Tax % — hidden in invoice mode unless showTaxColumns */}
+        {(!isInvoiceMode || showTaxColumns) && (
+          <td className="px-3 py-1.5">
+            {readOnly ? (
+              <span className="text-slate-800">{row.tax_percentage}</span>
+            ) : (
+              <Input
+                type="number"
+                className="w-16 h-8 text-sm"
+                value={row.tax_percentage}
+                onChange={(e) => update(row._key, { tax_percentage: e.target.value })}
+                onKeyDown={(e) => onKeyDown(e, rowIndex, colTax, isOpen(colTax))}
+                data-grid-row={rowIndex}
+                data-grid-col={colTax}
+                min="0"
+                max="100"
+                step="any"
+              />
+            )}
+          </td>
+        )}
+
+        {/* Tax Amt — invoice mode with showTaxColumns: combined tax per line (read-only), shown before Amount */}
+        {isInvoiceMode && showTaxColumns && (
+          <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
+            {fmt2(
+              (parseFloat(row.cgst_amount || "0") +
+               parseFloat(row.sgst_amount || "0") +
+               parseFloat(row.igst_amount || "0")).toFixed(2)
+            )}
+          </td>
+        )}
+
+        {/* Amount — tax-inclusive display; stored amount is pre-tax */}
+        <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">
+          {fmt2(
+            (parseFloat(row.amount || "0") +
+             parseFloat(row.cgst_amount || "0") +
+             parseFloat(row.sgst_amount || "0") +
+             parseFloat(row.igst_amount || "0")).toFixed(2)
+          )}
+        </td>
+
+        {!readOnly && (
+          <td className="px-3 py-1.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-slate-700 hover:text-red-500 hover:bg-red-50"
+              onClick={handleDelete}
+              onKeyDown={(e) => onKeyDown(e, rowIndex, colDelete, false)}
+              data-grid-row={rowIndex}
+              data-grid-col={colDelete}
+              type="button"
+              tabIndex={-1}
+              title="Delete row (Enter)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </td>
+        )}
+      </tr>
+    );
+  },
+  (prev, next) =>
+    prev.row === next.row &&
+    prev.openComboboxCol === next.openComboboxCol &&
+    prev.rowIndex === next.rowIndex
+);
+
+// ─── TransactionGrid ─────────────────────────────────────────────────────────
 
 export function TransactionGrid({
   rows,
-  onChange,
+  dispatch,
   suppliers,
   materials,
   taxRates,
@@ -176,8 +557,8 @@ export function TransactionGrid({
   const [openComboboxCell, setOpenComboboxCell] = useState<{ row: number; col: number } | null>(null);
 
   const appendEmptyRow = useCallback(() => {
-    onChange([...rows, newRow()]);
-  }, [rows, onChange]);
+    dispatch({ type: "APPEND", row: newRow() });
+  }, [dispatch]);
 
   const { handleKeyDown, focusCell } = useKeyboardGrid({
     gridRef,
@@ -192,106 +573,9 @@ export function TransactionGrid({
     if (!isHeaderGstMode || !effectiveGstType) return;
     if (effectiveGstType === prevGstTypeRef.current) return;
     prevGstTypeRef.current = effectiveGstType;
-    const recalculated = rows.map((r) => {
-      const amounts = calcAmountsForRow(r.qty, r.rate, r.tax_percentage, effectiveGstType);
-      return { ...r, gst_type: effectiveGstType, ...amounts };
-    });
-    onChange(recalculated);
+    dispatch({ type: "RECALC_GST", gstType: effectiveGstType });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveGstType]); // intentionally excludes rows/onChange to prevent loop
-
-  const update = useCallback(
-    (key: string, patch: Partial<LineItemDraft>) => {
-      onChange(
-        rows.map((r) => {
-          if (r._key !== key) return r;
-          const updated = { ...r, ...patch };
-          const gstForCalc = (isHeaderGstMode ? effectiveGstType : null) ?? updated.gst_type;
-          const amounts = calcAmountsForRow(updated.qty, updated.rate, updated.tax_percentage, gstForCalc);
-          return { ...updated, gst_type: gstForCalc, ...amounts };
-        })
-      );
-    },
-    [rows, onChange, effectiveGstType]
-  );
-
-  async function handleMaterialSelect(key: string, materialId: string, rowIndex: number) {
-    const mat = materials.find((m) => m.id === materialId);
-    if (!mat) return;
-
-    // In PO mode warn on duplicate; in issue mode server validates (contractor+rate combo)
-    if (!isIssueMode) {
-      const existing = rows.find((r) => r._key !== key && r.material_id === materialId);
-      if (existing) toast.warning(`${mat.name} is already in this PO`);
-    }
-
-    // Issue / invoice mode: prefer sales unit → fallback purchase unit → amber warning
-    // PO mode: always use purchase unit
-    const preferredUnitId = mat.purchase_unit_id;
-
-    const unit = preferredUnitId ? units.find((u) => u.id === preferredUnitId) : null;
-    // Prefer tax_percentage embedded on the material (issue mode, from DB JOIN)
-    // Fall back to taxRates array lookup (PO mode)
-    const taxPct =
-      mat.tax_percentage ??
-      (mat.tax_rate_id ? taxRates.find((t) => t.id === mat.tax_rate_id)?.tax_percentage : null) ??
-      "0";
-
-    const lastRate = await getLastMaterialRate(materialId);
-    const rateBlank = lastRate === null;
-
-    update(key, {
-      material_id: materialId,
-      material_name: mat.name,
-      material_no: mat.material_no,
-      hsn_code: mat.hsn_code ?? "",
-      unit_id: preferredUnitId ?? "",
-      unit_name: unit?.unit_name ?? "",
-      tax_percentage: taxPct,
-      rate: lastRate ?? "",
-      baseRate: lastRate ?? "",
-      rateBlank,
-      zeroRateConfirmed: false,
-      // In issue/invoice mode, apply header gstType; in PO mode gst_type set by supplier select
-      ...(isHeaderGstMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
-    });
-
-    // After material selection, focus returns to the material cell (col 0).
-    // The user navigates to the next column with → arrow key.
-  }
-
-  function handleSupplierSelect(key: string, supplierId: string) {
-    const sup = suppliers.find((s) => s.id === supplierId);
-    if (!sup) return;
-    const gstType = determineGstType(sup.gstin, sup.state);
-    update(key, {
-      supplier_id: supplierId,
-      supplier_name: sup.name,
-      gst_type: gstType,
-    });
-  }
-
-  function handleContractorSelect(key: string, contractorId: string) {
-    if (!contractorId) {
-      update(key, { contractor_id: "", contractor_name: "" });
-      return;
-    }
-    const con = contractors.find((c) => c.id === contractorId);
-    if (!con) return;
-    update(key, {
-      contractor_id: contractorId,
-      contractor_name: con.name,
-    });
-  }
-
-  function deleteRow(key: string) {
-    const deletedIndex = rows.findIndex((r) => r._key === key);
-    const next = rows.filter((r) => r._key !== key);
-    onChange(next.length === 0 ? [newRow()] : next);
-    // Restore focus to the row above (or row 0 if we deleted row 0)
-    const targetRow = Math.max(0, deletedIndex - 1);
-    setTimeout(() => focusCell(targetRow, 0), 10);
-  }
+  }, [effectiveGstType]); // intentionally excludes dispatch to prevent loop
 
   const materialOptions = useMemo(
     () => materials.map((m) => ({
@@ -320,11 +604,20 @@ export function TransactionGrid({
     [contractors]
   );
 
-  const fmt2 = (v: string) =>
-    parseFloat(v || "0").toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+  // For duplicate-material warning in PO mode — only re-computed when rows change
+  const usedMaterialIds = useMemo(
+    () => new Set(rows.filter((r) => r.material_id).map((r) => r.material_id)),
+    [rows]
+  );
+
+  // Stable column indices per mode (derived once from mode + showTaxColumns)
+  const colMaterial = 0;
+  const colSupplierOrContractor = 1;
+  const colAffectsStock = isIssueMode ? 2 : -1;
+  const colQty = qtyCol;
+  const colRate = isInvoiceMode ? 2 : isIssueMode ? 4 : 3;
+  const colTax = isIssueMode ? 5 : mode === "purchase-order" ? 4 : (isInvoiceMode && showTaxColumns) ? 3 : -1;
+  const colDelete = lastDataColIndex + 1;
 
   return (
     <div className="overflow-auto">
@@ -368,290 +661,43 @@ export function TransactionGrid({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => {
-            const isOpen = (col: number) =>
-              openComboboxCell?.row === i && openComboboxCell?.col === col;
-
-            const showZeroWarning = !row.rateBlank && row.rate === "0" && !row.zeroRateConfirmed;
-
-            // Column indices depend on mode (see COL_CONFIG at top of file)
-            // PO:               Material=0, Supplier=1, Qty=2, Rate=3, Tax%=4, Delete=5
-            // MI:               Material=0, Contractor=1, AffectsStock=2, Qty=3, Rate=4, Tax%=5, Delete=6
-            // Invoice (base):   Material=0, Qty=1, Rate=2, Delete=3
-            // Invoice+showTax:  Material=0, Qty=1, Rate=2, Tax%=3, Delete=4
-            const colMaterial = 0;
-            const colSupplierOrContractor = 1;
-            const colAffectsStock = isIssueMode ? 2 : -1;
-            const colQty = qtyCol;
-            const colRate = isInvoiceMode ? 2 : isIssueMode ? 4 : 3;
-            const colTax = isIssueMode ? 5 : mode === "purchase-order" ? 4 : (isInvoiceMode && showTaxColumns) ? 3 : -1;
-            const colDelete = lastDataColIndex + 1;
-
-            return (
-              <tr key={row._key} className="border-t border-slate-100">
-                <td className="px-3 py-1.5 text-slate-600">{i + 1}</td>
-                {showStageColumn && (
-                  <td className="px-3 py-1.5 font-mono text-xs text-slate-700 whitespace-nowrap">
-                    {row.stage_name || "—"}
-                  </td>
-                )}
-
-                {/* Material Code — read-only, auto-filled */}
-                <td className="px-3 py-1.5 font-mono text-sm text-slate-700 whitespace-nowrap">
-                  {row.material_no ? formatCode("M", row.material_no) : "—"}
-                </td>
-
-                {/* Material Name combobox */}
-                <td className="px-3 py-1.5">
-                  {readOnly ? (
-                    <span className="text-slate-800">{row.material_name}</span>
-                  ) : (
-                    <Combobox
-                      options={materialOptions}
-                      value={row.material_id}
-                      onChange={(v) => handleMaterialSelect(row._key, v, i)}
-                      placeholder="Select material..."
-                      searchPlaceholder="Search materials..."
-                      onOpenChange={(open) =>
-                        setOpenComboboxCell(open ? { row: i, col: colMaterial } : null)
-                      }
-                      gridRow={i}
-                      gridCol={colMaterial}
-                      onGridKeyDown={(e) => handleKeyDown(e, i, colMaterial, false)}
-                    />
-                  )}
-                </td>
-
-                {/* HSN — read-only, auto-filled, issue mode and invoice mode */}
-                {(isIssueMode || isInvoiceMode) && (
-                  <td className="px-3 py-1.5 font-mono text-sm text-slate-600 whitespace-nowrap">
-                    {row.hsn_code || "—"}
-                  </td>
-                )}
-
-                {/* Supplier combobox — PO mode only */}
-                {!isIssueMode && !isInvoiceMode && (
-                  <td className="px-3 py-1.5">
-                    {readOnly ? (
-                      <span className="text-slate-600">{row.supplier_name || "—"}</span>
-                    ) : (
-                      <Combobox
-                        options={supplierOptions}
-                        value={row.supplier_id}
-                        onChange={(v) => handleSupplierSelect(row._key, v)}
-                        placeholder="Select supplier..."
-                        searchPlaceholder="Search suppliers..."
-                        onOpenChange={(open) =>
-                          setOpenComboboxCell(open ? { row: i, col: colSupplierOrContractor } : null)
-                        }
-                        gridRow={i}
-                        gridCol={colSupplierOrContractor}
-                        onGridKeyDown={(e) => handleKeyDown(e, i, colSupplierOrContractor, false)}
-                      />
-                    )}
-                  </td>
-                )}
-
-                {/* Contractor combobox — issue mode only (optional, nullable) */}
-                {isIssueMode && (
-                  <td className="px-3 py-1.5">
-                    {readOnly ? (
-                      <span className="text-slate-600">{row.contractor_name || "—"}</span>
-                    ) : (
-                      <Combobox
-                        options={contractorOptions}
-                        value={row.contractor_id}
-                        onChange={(v) => handleContractorSelect(row._key, v)}
-                        placeholder="None"
-                        searchPlaceholder="Search contractors..."
-                        onOpenChange={(open) =>
-                          setOpenComboboxCell(open ? { row: i, col: colSupplierOrContractor } : null)
-                        }
-                        gridRow={i}
-                        gridCol={colSupplierOrContractor}
-                        onGridKeyDown={(e) => handleKeyDown(e, i, colSupplierOrContractor, false)}
-                      />
-                    )}
-                  </td>
-                )}
-
-                {/* Affects Stock checkbox — issue mode only */}
-                {isIssueMode && (
-                  <td className="px-3 py-1.5 text-center">
-                    {readOnly ? (
-                      <span
-                        className={`inline-block w-4 h-4 rounded-sm border ${
-                          row.affects_inventory
-                            ? "bg-emerald-500 border-emerald-600"
-                            : "bg-slate-100 border-slate-300"
-                        }`}
-                        title={row.affects_inventory ? "Affects stock" : "Does not affect stock"}
-                      />
-                    ) : (
-                      <input
-                        type="checkbox"
-                        checked={row.affects_inventory}
-                        onChange={(e) =>
-                          update(row._key, { affects_inventory: e.target.checked })
-                        }
-                        onKeyDown={(e) => handleKeyDown(e, i, colAffectsStock, isOpen(colAffectsStock))}
-                        data-grid-row={i}
-                        data-grid-col={colAffectsStock}
-                        className="w-4 h-4 accent-emerald-600 cursor-pointer"
-                        title="Uncheck if this item should not reduce warehouse stock"
-                      />
-                    )}
-                  </td>
-                )}
-
-                {/* Qty */}
-                <td className="px-3 py-1.5">
-                  {readOnly ? (
-                    <span className="text-slate-800">{row.qty}</span>
-                  ) : (
-                    <Input
-                      type="number"
-                      className={`w-20 h-8 text-sm ${
-                        !row.qty || parseFloat(row.qty) <= 0
-                          ? "border-red-300 focus-visible:ring-red-400"
-                          : ""
-                      }`}
-                      value={row.qty}
-                      onChange={(e) => update(row._key, { qty: e.target.value })}
-                      onKeyDown={(e) => handleKeyDown(e, i, colQty, isOpen(colQty))}
-                      data-grid-row={i}
-                      data-grid-col={colQty}
-                      min="0"
-                      step="any"
-                    />
-                  )}
-                </td>
-
-                {/* Unit — read-only, auto-filled */}
-                <td className="px-3 py-1.5 whitespace-nowrap">
-                  {row.material_id && !row.unit_name ? (
-                    <span
-                      className="text-sm text-amber-600"
-                      title={
-                        isHeaderGstMode
-                          ? "No sales or purchase unit set — edit in Materials master"
-                          : "No purchase unit set — edit in Materials master"
-                      }
-                    >
-                      ⚠ Not set
-                    </span>
-                  ) : (
-                    <span className="text-slate-600">{row.unit_name || "—"}</span>
-                  )}
-                </td>
-
-                {/* Rate */}
-                <td className="px-3 py-1.5">
-                  {readOnly ? (
-                    <span className="text-slate-800">{row.rate}</span>
-                  ) : (
-                    <div className="space-y-0.5">
-                      <Input
-                        type="number"
-                        className={`w-24 h-8 text-sm ${row.rateBlank ? "bg-yellow-50 border-yellow-300" : ""} ${
-                          showZeroWarning ? "border-amber-400" : ""
-                        }`}
-                        value={row.rate}
-                        onChange={(e) =>
-                          update(row._key, { rate: e.target.value, baseRate: e.target.value, rateBlank: false })
-                        }
-                        onKeyDown={(e) => handleKeyDown(e, i, colRate, isOpen(colRate))}
-                        data-grid-row={i}
-                        data-grid-col={colRate}
-                        min="0"
-                        step="any"
-                        placeholder={row.rateBlank ? "No history" : ""}
-                        title={row.rateBlank ? "No purchase history — enter rate manually" : ""}
-                      />
-                      {row.rateBlank && (
-                        <p className="text-sm text-amber-600 whitespace-nowrap">First purchase — enter rate</p>
-                      )}
-                      {showZeroWarning && (
-                        <label className="flex items-center gap-1 text-sm text-amber-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={row.zeroRateConfirmed}
-                            onChange={(e) =>
-                              update(row._key, { zeroRateConfirmed: e.target.checked })
-                            }
-                            className="w-3 h-3"
-                          />
-                          Zero cost — confirm?
-                        </label>
-                      )}
-                    </div>
-                  )}
-                </td>
-
-                {/* Tax % — hidden in invoice mode unless showTaxColumns */}
-                {(!isInvoiceMode || showTaxColumns) && (
-                  <td className="px-3 py-1.5">
-                    {readOnly ? (
-                      <span className="text-slate-800">{row.tax_percentage}</span>
-                    ) : (
-                      <Input
-                        type="number"
-                        className="w-16 h-8 text-sm"
-                        value={row.tax_percentage}
-                        onChange={(e) => update(row._key, { tax_percentage: e.target.value })}
-                        onKeyDown={(e) => handleKeyDown(e, i, colTax, isOpen(colTax))}
-                        data-grid-row={i}
-                        data-grid-col={colTax}
-                        min="0"
-                        max="100"
-                        step="any"
-                      />
-                    )}
-                  </td>
-                )}
-
-                {/* Tax Amt — invoice mode with showTaxColumns: combined tax per line (read-only), shown before Amount */}
-                {isInvoiceMode && showTaxColumns && (
-                  <td className="px-3 py-1.5 text-right text-slate-600 tabular-nums">
-                    {fmt2(
-                      (parseFloat(row.cgst_amount || "0") +
-                       parseFloat(row.sgst_amount || "0") +
-                       parseFloat(row.igst_amount || "0")).toFixed(2)
-                    )}
-                  </td>
-                )}
-
-                {/* Amount — tax-inclusive display; stored amount is pre-tax */}
-                <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">
-                  {fmt2(
-                    (parseFloat(row.amount || "0") +
-                     parseFloat(row.cgst_amount || "0") +
-                     parseFloat(row.sgst_amount || "0") +
-                     parseFloat(row.igst_amount || "0")).toFixed(2)
-                  )}
-                </td>
-
-                {!readOnly && (
-                  <td className="px-3 py-1.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-slate-700 hover:text-red-500 hover:bg-red-50"
-                      onClick={() => deleteRow(row._key)}
-                      onKeyDown={(e) => handleKeyDown(e, i, colDelete, false)}
-                      data-grid-row={i}
-                      data-grid-col={colDelete}
-                      type="button"
-                      tabIndex={-1}
-                      title="Delete row (Enter)"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </td>
-                )}
-              </tr>
-            );
-          })}
+          {rows.map((row, i) => (
+            <TransactionRow
+              key={row._key}
+              row={row}
+              rowIndex={i}
+              openComboboxCol={
+                openComboboxCell?.row === i ? openComboboxCell.col : null
+              }
+              dispatch={dispatch}
+              materialOptions={materialOptions}
+              supplierOptions={supplierOptions}
+              contractorOptions={contractorOptions}
+              materials={materials}
+              suppliers={suppliers}
+              contractors={contractors}
+              taxRates={taxRates}
+              units={units}
+              usedMaterialIds={usedMaterialIds}
+              isIssueMode={isIssueMode}
+              isInvoiceMode={isInvoiceMode}
+              isHeaderGstMode={isHeaderGstMode}
+              effectiveGstType={effectiveGstType}
+              readOnly={readOnly}
+              showTaxColumns={showTaxColumns}
+              showStageColumn={showStageColumn}
+              colMaterial={colMaterial}
+              colSupplierOrContractor={colSupplierOrContractor}
+              colAffectsStock={colAffectsStock}
+              colQty={colQty}
+              colRate={colRate}
+              colTax={colTax}
+              colDelete={colDelete}
+              onKeyDown={handleKeyDown}
+              focusCell={focusCell}
+              setOpenComboboxCell={setOpenComboboxCell}
+            />
+          ))}
         </tbody>
       </table>
 
@@ -661,7 +707,7 @@ export function TransactionGrid({
             variant="outline"
             size="sm"
             className="text-sm h-8"
-            onClick={() => onChange([...rows, newRow()])}
+            onClick={appendEmptyRow}
             type="button"
           >
             + Add Row

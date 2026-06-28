@@ -1,11 +1,11 @@
 "use server";
 
-import { revalidatePath, unstable_cache } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { purchaseOrders, purchaseOrderItems, materials, stockLedger, materialIssueItems } from "@/lib/db/schema";
 import { suppliers, units } from "@/lib/db/schema";
-import { eq, and, max, desc, inArray } from "drizzle-orm";
+import { eq, and, max, desc, inArray, sql, gte, lte, or, ilike } from "drizzle-orm";
 import type { PurchaseOrderWithDetails, PurchaseOrderItemWithDetails } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -59,7 +59,17 @@ async function fetchPOItemsForIds(poIds: string[]) {
     .where(inArray(purchaseOrderItems.po_id, poIds));
 }
 
-export async function getPurchaseOrders(financialYear: string) {
+interface POListParams {
+  search?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export async function getPurchaseOrders(financialYear: string, params: POListParams = {}) {
+  const { search, status, dateFrom, dateTo } = params;
+  const q = search ? `%${search}%` : null;
+
   const headers = await db
     .select({
       id: purchaseOrders.id,
@@ -72,7 +82,14 @@ export async function getPurchaseOrders(financialYear: string) {
       supplier_bill_date: purchaseOrders.supplier_bill_date,
     })
     .from(purchaseOrders)
-    .where(eq(purchaseOrders.financial_year, financialYear))
+    .leftJoin(suppliers, eq(purchaseOrders.supplier_id, suppliers.id))
+    .where(and(
+      eq(purchaseOrders.financial_year, financialYear),
+      status && status !== "all" ? eq(purchaseOrders.status, status) : undefined,
+      dateFrom ? gte(purchaseOrders.po_date, new Date(dateFrom)) : undefined,
+      dateTo ? lte(purchaseOrders.po_date, new Date(dateTo + "T23:59:59")) : undefined,
+      q ? or(ilike(suppliers.name, q)) : undefined,
+    ))
     .orderBy(desc(purchaseOrders.po_date), desc(purchaseOrders.po_number));
 
   if (headers.length === 0) return [];
@@ -177,6 +194,91 @@ export async function getPurchaseOrderById(id: string): Promise<PurchaseOrderWit
 }
 
 // ---------------------------------------------------------------------------
+// READ — batch fetch multiple POs (for batch print)
+// ---------------------------------------------------------------------------
+
+export async function getPurchaseOrdersByIds(ids: string[]): Promise<PurchaseOrderWithDetails[]> {
+  if (ids.length === 0) return [];
+
+  const headers = await db
+    .select({
+      id: purchaseOrders.id,
+      po_number: purchaseOrders.po_number,
+      po_date: purchaseOrders.po_date,
+      supplier_id: purchaseOrders.supplier_id,
+      total_amount: purchaseOrders.total_amount,
+      status: purchaseOrders.status,
+      financial_year: purchaseOrders.financial_year,
+      affects_stock: purchaseOrders.affects_stock,
+      supplier_bill_no: purchaseOrders.supplier_bill_no,
+      supplier_bill_date: purchaseOrders.supplier_bill_date,
+      created_at: purchaseOrders.created_at,
+      updated_at: purchaseOrders.updated_at,
+    })
+    .from(purchaseOrders)
+    .where(inArray(purchaseOrders.id, ids))
+    .orderBy(purchaseOrders.po_number);
+
+  if (headers.length === 0) return [];
+
+  const itemRows = await db
+    .select({
+      id: purchaseOrderItems.id,
+      po_id: purchaseOrderItems.po_id,
+      material_id: purchaseOrderItems.material_id,
+      material_name: materials.name,
+      material_no: materials.material_no,
+      hsn_code: materials.hsn_code,
+      supplier_id: purchaseOrderItems.supplier_id,
+      supplier_name: suppliers.name,
+      qty: purchaseOrderItems.qty,
+      unit_id: purchaseOrderItems.unit_id,
+      unit_name: units.unit_name,
+      rate: purchaseOrderItems.rate,
+      tax_percentage: purchaseOrderItems.tax_percentage,
+      cgst_amount: purchaseOrderItems.cgst_amount,
+      sgst_amount: purchaseOrderItems.sgst_amount,
+      igst_amount: purchaseOrderItems.igst_amount,
+      amount: purchaseOrderItems.amount,
+      gst_type: purchaseOrderItems.gst_type,
+    })
+    .from(purchaseOrderItems)
+    .leftJoin(materials, eq(purchaseOrderItems.material_id, materials.id))
+    .leftJoin(suppliers, eq(purchaseOrderItems.supplier_id, suppliers.id))
+    .leftJoin(units, eq(purchaseOrderItems.unit_id, units.id))
+    .where(inArray(purchaseOrderItems.po_id, ids));
+
+  const itemsByPo = new Map<string, PurchaseOrderItemWithDetails[]>();
+  for (const r of itemRows) {
+    const item: PurchaseOrderItemWithDetails = {
+      id: r.id,
+      po_id: r.po_id,
+      material_id: r.material_id,
+      material_name: r.material_name ?? "",
+      material_no: r.material_no ?? 0,
+      hsn_code: r.hsn_code ?? null,
+      supplier_id: r.supplier_id ?? null,
+      supplier_name: r.supplier_name ?? null,
+      qty: r.qty,
+      unit_id: r.unit_id ?? null,
+      unit_name: r.unit_name ?? null,
+      rate: r.rate,
+      tax_percentage: r.tax_percentage,
+      cgst_amount: r.cgst_amount,
+      sgst_amount: r.sgst_amount,
+      igst_amount: r.igst_amount,
+      amount: r.amount,
+      gst_type: r.gst_type ?? null,
+    };
+    const list = itemsByPo.get(r.po_id) ?? [];
+    list.push(item);
+    itemsByPo.set(r.po_id, list);
+  }
+
+  return headers.map((h) => ({ ...h, items: itemsByPo.get(h.id) ?? [] }));
+}
+
+// ---------------------------------------------------------------------------
 // READ — dropdown data (active only, cached)
 // ---------------------------------------------------------------------------
 
@@ -199,20 +301,34 @@ export const getActiveSuppliers = unstable_cache(
 );
 
 export const getActiveMaterials = unstable_cache(
-  async () =>
-    db
-      .select({
-        id: materials.id,
-        material_no: materials.material_no,
-        name: materials.name,
-        hsn_code: materials.hsn_code,
-        tax_rate_id: materials.tax_rate_id,
-        purchase_unit_id: materials.purchase_unit_id,
-        current_stock: materials.current_stock,
-      })
-      .from(materials)
-      .where(eq(materials.is_active, true))
-      .orderBy(materials.name),
+  async () => {
+    const [mats, rates] = await Promise.all([
+      db
+        .select({
+          id: materials.id,
+          material_no: materials.material_no,
+          name: materials.name,
+          hsn_code: materials.hsn_code,
+          tax_rate_id: materials.tax_rate_id,
+          purchase_unit_id: materials.purchase_unit_id,
+          current_stock: materials.current_stock,
+        })
+        .from(materials)
+        .where(eq(materials.is_active, true))
+        .orderBy(materials.name),
+      db.execute<{ material_id: string; rate: string }>(sql`
+        SELECT DISTINCT ON (poi.material_id)
+          poi.material_id,
+          poi.rate
+        FROM purchase_order_items poi
+        INNER JOIN purchase_orders po ON poi.po_id = po.id
+        WHERE po.status = 'Received'
+        ORDER BY poi.material_id, po.po_date DESC
+      `),
+    ]);
+    const rateMap = new Map(rates.map((r) => [r.material_id, r.rate]));
+    return mats.map((m) => ({ ...m, lastRate: rateMap.get(m.id) ?? null }));
+  },
   ["po-active-materials"],
   { tags: [CACHE_TAGS.materials], revalidate: false }
 );
@@ -333,6 +449,27 @@ function itemValues(poId: string, item: LineItemInput) {
 }
 
 // ---------------------------------------------------------------------------
+// Batch-update materials.current_stock for multiple rows in one SQL statement.
+// Replaces N individual UPDATE round-trips with a single VALUES-join UPDATE.
+// ---------------------------------------------------------------------------
+async function batchUpdateMaterials(
+  tx: { execute: typeof db.execute },
+  updates: Array<{ id: string; newStock: number }>
+): Promise<void> {
+  if (updates.length === 0) return;
+  await tx.execute(sql`
+    UPDATE materials
+    SET current_stock = v.stock::text,
+        updated_at    = NOW()
+    FROM (VALUES ${sql.join(
+      updates.map(u => sql`(${u.id}::uuid, ${u.newStock.toFixed(4)}::numeric)`),
+      sql`, `
+    )}) AS v(id, stock)
+    WHERE materials.id = v.id
+  `);
+}
+
+// ---------------------------------------------------------------------------
 // WRITE — create Draft PO
 // ---------------------------------------------------------------------------
 
@@ -417,32 +554,34 @@ export async function receivePurchaseOrder(id: string): Promise<void> {
       .where(eq(purchaseOrders.id, id));
 
     if (po.affects_stock) {
-      for (const item of items) {
-        const [mat] = await tx
-          .select({ current_stock: materials.current_stock })
-          .from(materials)
-          .where(eq(materials.id, item.material_id));
+      const matStocks = await tx
+        .select({ id: materials.id, current_stock: materials.current_stock })
+        .from(materials)
+        .where(inArray(materials.id, items.map((i) => i.material_id)));
+      const stockMap = new Map(matStocks.map((m) => [m.id, parseFloat(m.current_stock)]));
 
-        const newStock = (parseFloat(mat.current_stock) + parseFloat(item.qty)).toString();
+      await batchUpdateMaterials(tx, items.map(item => ({
+        id: item.material_id,
+        newStock: stockMap.get(item.material_id)! + parseFloat(item.qty),
+      })));
 
-        await tx
-          .update(materials)
-          .set({ current_stock: newStock, updated_at: new Date() })
-          .where(eq(materials.id, item.material_id));
-
-        await tx.insert(stockLedger).values({
+      await tx.insert(stockLedger).values(
+        items.map((item) => ({
           material_id: item.material_id,
           transaction_type: "PO_INWARD",
           reference_id: id,
           reference_type: "purchase_order",
           qty_change: item.qty,
-          stock_after: newStock,
-        });
-      }
+          stock_after: (stockMap.get(item.material_id)! + parseFloat(item.qty)).toFixed(4),
+          rate_at_time: item.rate,
+        }))
+      );
     }
   });
 
   revalidatePath("/transactions/purchase-orders");
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 // ---------------------------------------------------------------------------
@@ -466,28 +605,27 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
 
     // Reverse old stock (only if the PO originally updated stock)
     if (po.affects_stock) {
-      for (const item of oldItems) {
-        const [mat] = await tx
-          .select({ current_stock: materials.current_stock })
-          .from(materials)
-          .where(eq(materials.id, item.material_id));
+      const oldMatStocks = await tx
+        .select({ id: materials.id, current_stock: materials.current_stock })
+        .from(materials)
+        .where(inArray(materials.id, oldItems.map((i) => i.material_id)));
+      const oldStockMap = new Map(oldMatStocks.map((m) => [m.id, parseFloat(m.current_stock)]));
 
-        const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
+      await batchUpdateMaterials(tx, oldItems.map(item => ({
+        id: item.material_id,
+        newStock: oldStockMap.get(item.material_id)! - parseFloat(item.qty),
+      })));
 
-        await tx
-          .update(materials)
-          .set({ current_stock: newStock, updated_at: new Date() })
-          .where(eq(materials.id, item.material_id));
-
-        await tx.insert(stockLedger).values({
+      await tx.insert(stockLedger).values(
+        oldItems.map((item) => ({
           material_id: item.material_id,
           transaction_type: "REVERSAL",
           reference_id: id,
           reference_type: "purchase_order",
           qty_change: (-parseFloat(item.qty)).toString(),
-          stock_after: newStock,
-        });
-      }
+          stock_after: (oldStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4),
+        }))
+      );
     }
 
     // Update header date, total, affects_stock, and derived supplier
@@ -511,32 +649,34 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
 
     // Apply new stock (only if new affects_stock is true)
     if (data.affects_stock) {
-      for (const item of data.items) {
-        const [mat] = await tx
-          .select({ current_stock: materials.current_stock })
-          .from(materials)
-          .where(eq(materials.id, item.material_id));
+      const newMatStocks = await tx
+        .select({ id: materials.id, current_stock: materials.current_stock })
+        .from(materials)
+        .where(inArray(materials.id, data.items.map((i) => i.material_id)));
+      const newStockMap = new Map(newMatStocks.map((m) => [m.id, parseFloat(m.current_stock)]));
 
-        const newStock = (parseFloat(mat.current_stock) + parseFloat(item.qty)).toString();
+      await batchUpdateMaterials(tx, data.items.map(item => ({
+        id: item.material_id,
+        newStock: newStockMap.get(item.material_id)! + parseFloat(item.qty),
+      })));
 
-        await tx
-          .update(materials)
-          .set({ current_stock: newStock, updated_at: new Date() })
-          .where(eq(materials.id, item.material_id));
-
-        await tx.insert(stockLedger).values({
+      await tx.insert(stockLedger).values(
+        data.items.map((item) => ({
           material_id: item.material_id,
           transaction_type: "PO_INWARD",
           reference_id: id,
           reference_type: "purchase_order",
           qty_change: item.qty,
-          stock_after: newStock,
-        });
-      }
+          stock_after: (newStockMap.get(item.material_id)! + parseFloat(item.qty)).toFixed(4),
+          rate_at_time: item.rate,
+        }))
+      );
     }
   });
 
   revalidatePath("/transactions/purchase-orders");
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 // ---------------------------------------------------------------------------
@@ -587,34 +727,35 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
         .from(purchaseOrderItems)
         .where(eq(purchaseOrderItems.po_id, id));
 
-      for (const item of poItems) {
-        const [mat] = await tx
-          .select({ current_stock: materials.current_stock })
-          .from(materials)
-          .where(eq(materials.id, item.material_id));
+      const delMatStocks = await tx
+        .select({ id: materials.id, current_stock: materials.current_stock })
+        .from(materials)
+        .where(inArray(materials.id, poItems.map((i) => i.material_id)));
+      const delStockMap = new Map(delMatStocks.map((m) => [m.id, parseFloat(m.current_stock)]));
 
-        const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
+      await batchUpdateMaterials(tx, poItems.map(item => ({
+        id: item.material_id,
+        newStock: delStockMap.get(item.material_id)! - parseFloat(item.qty),
+      })));
 
-        await tx
-          .update(materials)
-          .set({ current_stock: newStock, updated_at: new Date() })
-          .where(eq(materials.id, item.material_id));
-
-        await tx.insert(stockLedger).values({
+      await tx.insert(stockLedger).values(
+        poItems.map((item) => ({
           material_id: item.material_id,
           transaction_type: "REVERSAL",
           reference_id: id,
           reference_type: "purchase_order",
           qty_change: (-parseFloat(item.qty)).toString(),
-          stock_after: newStock,
-        });
-      }
+          stock_after: (delStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4),
+        }))
+      );
     }
 
     await tx.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
   });
 
   revalidatePath("/transactions/purchase-orders");
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 // ---------------------------------------------------------------------------
@@ -693,31 +834,30 @@ export async function revertPOToDraft(
         .from(purchaseOrderItems)
         .where(eq(purchaseOrderItems.po_id, poId));
 
-      for (const item of poItems) {
-        const [mat] = await tx
-          .select({ current_stock: materials.current_stock })
-          .from(materials)
-          .where(eq(materials.id, item.material_id));
+      const revertMatStocks = await tx
+        .select({ id: materials.id, current_stock: materials.current_stock })
+        .from(materials)
+        .where(inArray(materials.id, poItems.map((i) => i.material_id)));
+      const revertStockMap = new Map(revertMatStocks.map((m) => [m.id, parseFloat(m.current_stock)]));
 
-        const newStock = (parseFloat(mat.current_stock) - parseFloat(item.qty)).toString();
+      await batchUpdateMaterials(tx, poItems.map(item => ({
+        id: item.material_id,
+        newStock: revertStockMap.get(item.material_id)! - parseFloat(item.qty),
+      })));
 
-        await tx
-          .update(materials)
-          .set({ current_stock: newStock, updated_at: new Date() })
-          .where(eq(materials.id, item.material_id));
-
-        await tx.insert(stockLedger).values({
+      await tx.insert(stockLedger).values(
+        poItems.map((item) => ({
           material_id: item.material_id,
           transaction_type: "REVERSAL",
           reference_id: poId,
           reference_type: "purchase_order",
           qty_change: (-parseFloat(item.qty)).toString(),
-          stock_after: newStock,
+          stock_after: (revertStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4),
           rate_at_time: item.rate,
           adjusted_by: userEmail,
           reason: `PO #${po.po_number} reverted to Draft`,
-        });
-      }
+        }))
+      );
     }
 
     await tx
@@ -732,5 +872,7 @@ export async function revertPOToDraft(
   });
 
   revalidatePath("/transactions/purchase-orders");
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }

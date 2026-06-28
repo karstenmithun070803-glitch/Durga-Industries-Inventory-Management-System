@@ -17,7 +17,6 @@ import type {
 import { updateVehicleMargin } from "@/lib/actions/material-issues.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { PrintButton } from "@/components/pdf/print-button";
-import { StageWiseCostingDocument } from "@/components/pdf/stage-wise-costing-pdf";
 
 function buildFYOptions(defaultFY: string) {
   const [startYear] = defaultFY.split("-").map(Number);
@@ -264,18 +263,21 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
             <PrintButton
               label="Print"
               disabled={!hasData}
-              getDocument={() => (
-                <StageWiseCostingDocument
-                  stageRows={displayStageRows}
-                  materialRows={displayMaterialRows}
-                  rptType={rptType}
-                  vehicleName={vehicleLabel}
-                  fy={fy}
-                  marginPct={marginPct}
-                  companySetting={companySetting}
-                  asOfDate={asOfDate || undefined}
-                />
-              )}
+              getDocument={async () => {
+                const { StageWiseCostingDocument } = await import("@/components/pdf/stage-wise-costing-pdf");
+                return (
+                  <StageWiseCostingDocument
+                    stageRows={displayStageRows}
+                    materialRows={displayMaterialRows}
+                    rptType={rptType}
+                    vehicleName={vehicleLabel}
+                    fy={fy}
+                    marginPct={marginPct}
+                    companySetting={companySetting}
+                    asOfDate={asOfDate || undefined}
+                  />
+                );
+              }}
             />
           </div>
 

@@ -10,7 +10,6 @@ import { getInvoiceSummaryReport } from "@/lib/actions/reports.actions";
 import type { InvoiceSummaryRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { PrintButton } from "@/components/pdf/print-button";
-import { InvoiceSummaryReportDocument } from "@/components/pdf/invoice-summary-report-pdf";
 
 function buildFYOptions(defaultFY: string) {
   const [startYear] = defaultFY.split("-").map(Number);
@@ -208,16 +207,19 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
             </Button>
             <PrintButton
               label="Print"
-              getDocument={() => (
-                <InvoiceSummaryReportDocument
-                  rows={rows}
-                  fy={fy}
-                  statusFilter={status}
-                  dateFrom={dateFrom}
-                  dateTo={dateTo}
-                  companySetting={companySetting}
-                />
-              )}
+              getDocument={async () => {
+                const { InvoiceSummaryReportDocument } = await import("@/components/pdf/invoice-summary-report-pdf");
+                return (
+                  <InvoiceSummaryReportDocument
+                    rows={rows}
+                    fy={fy}
+                    statusFilter={status}
+                    dateFrom={dateFrom}
+                    dateTo={dateTo}
+                    companySetting={companySetting}
+                  />
+                );
+              }}
             />
           </div>
 

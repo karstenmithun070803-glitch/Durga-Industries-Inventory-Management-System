@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PrintButton } from "@/components/pdf/print-button";
-import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
 import type { InsuranceBillWithItems } from "@/types";
 import {
   saveInsuranceBill,
@@ -806,14 +805,17 @@ export function InsuranceForm({
 
           <PrintButton
             label="Print Insurance"
-            getDocument={() => (
-              <InsuranceInvoiceDocument
-                groups={[pdfRows]}
-                fy={fy}
-                companySetting={companySetting}
-                showTaxColumns={includeTax}
-              />
-            )}
+            getDocument={async () => {
+              const { InsuranceInvoiceDocument } = await import("@/components/pdf/insurance-invoice-pdf");
+              return (
+                <InsuranceInvoiceDocument
+                  groups={[pdfRows]}
+                  fy={fy}
+                  companySetting={companySetting}
+                  showTaxColumns={includeTax}
+                />
+              );
+            }}
           />
         </div>
       </div>

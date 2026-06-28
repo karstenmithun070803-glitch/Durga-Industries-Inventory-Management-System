@@ -10,7 +10,6 @@ import { getVehicleComparisonData } from "@/lib/actions/reports.actions";
 import type { VehicleComparisonRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { PrintButton } from "@/components/pdf/print-button";
-import { VehicleComparisonDocument } from "@/components/pdf/vehicle-comparison-pdf";
 
 function buildFYOptions(defaultFY: string) {
   const [startYear] = defaultFY.split("-").map(Number);
@@ -210,18 +209,21 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
             <PrintButton
               label="Print"
               disabled={!hasData}
-              getDocument={() => (
-                <VehicleComparisonDocument
-                  rows={displayRows}
-                  v1Name={v1Label}
-                  v2Name={v2Label}
-                  fy={fy}
-                  stageName={stageLabel}
-                  hideAmounts={hideAmounts}
-                  showDiffOnly={showDiffOnly}
-                  companySetting={companySetting}
-                />
-              )}
+              getDocument={async () => {
+                const { VehicleComparisonDocument } = await import("@/components/pdf/vehicle-comparison-pdf");
+                return (
+                  <VehicleComparisonDocument
+                    rows={displayRows}
+                    v1Name={v1Label}
+                    v2Name={v2Label}
+                    fy={fy}
+                    stageName={stageLabel}
+                    hideAmounts={hideAmounts}
+                    showDiffOnly={showDiffOnly}
+                    companySetting={companySetting}
+                  />
+                );
+              }}
             />
           </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -42,6 +42,8 @@ interface ComboboxProps {
   onGridKeyDown?: (e: React.KeyboardEvent) => void;
   /** When true, pressing ↓ on a closed combobox opens it (use for identifier dropdowns at top of screens) */
   openOnArrowDown?: boolean;
+  /** Max options rendered in the DOM at once — prevents layout thrashing with large lists (default 150) */
+  maxDisplay?: number;
 }
 
 export function Combobox({
@@ -57,10 +59,28 @@ export function Combobox({
   gridCol,
   onGridKeyDown,
   openOnArrowDown = false,
+  maxDisplay = 150,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const selected = options.find((o) => o.value === value);
+
+  // Limit DOM nodes: filter manually then slice, so cmdk never renders >maxDisplay items.
+  // When search is empty, always ensure the selected item appears even if outside the slice.
+  const displayOptions = useMemo(() => {
+    if (!search) {
+      const sliced = options.slice(0, maxDisplay);
+      if (value && !sliced.find((o) => o.value === value)) {
+        const sel = options.find((o) => o.value === value);
+        if (sel) return [...sliced, sel];
+      }
+      return sliced;
+    }
+    const q = search.toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(q)).slice(0, maxDisplay);
+  }, [options, search, value, maxDisplay]);
+
+  const showOverflowHint = options.length > maxDisplay && !search;
 
   useEffect(() => {
     if (!value) setSearch("");
@@ -76,6 +96,7 @@ export function Combobox({
       // ↓ opens dropdown (identifier dropdowns only)
       if (e.key === "ArrowDown" && openOnArrowDown) {
         e.preventDefault();
+        e.stopPropagation();
         handleOpenChange(true);
         return;
       }
@@ -87,6 +108,7 @@ export function Combobox({
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
+        role="combobox"
         className={cn(
           buttonVariants({ variant: "outline" }),
           "w-full justify-between h-9 font-normal",
@@ -102,7 +124,7 @@ export function Combobox({
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
       <PopoverContent className="w-[var(--anchor-width)] p-0" align="start">
-        <Command>
+        <Command shouldFilter={false}>
           <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
@@ -116,7 +138,7 @@ export function Combobox({
                   Clear selection
                 </CommandItem>
               )}
-              {options.map((option) => (
+              {displayOptions.map((option) => (
                 <CommandItem
                   key={option.value}
                   value={option.label}
@@ -132,6 +154,11 @@ export function Combobox({
                 </CommandItem>
               ))}
             </CommandGroup>
+            {showOverflowHint && (
+              <p className="px-3 py-2 text-xs text-center text-muted-foreground border-t border-slate-100">
+                Showing {maxDisplay} of {options.length} — type to search
+              </p>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

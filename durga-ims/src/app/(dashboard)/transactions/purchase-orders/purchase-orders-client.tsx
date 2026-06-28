@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useTransition, useRef } from "react";
+import { useState, useEffect, useTransition, useRef, useReducer, useCallback } from "react";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import {
   getPurchaseOrderById,
+  getPurchaseOrdersByIds,
   getPOsForDropdown,
   createPurchaseOrder,
   updatePurchaseOrder,
@@ -14,6 +15,7 @@ import {
   revertPOToDraft,
 } from "@/lib/actions/purchase-orders.actions";
 import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
+import { rowsReducer, type RowAction } from "@/lib/utils/rows-reducer";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,7 +29,6 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PrintButton } from "@/components/pdf/print-button";
-import { PORegisterDocument } from "@/components/pdf/po-register-pdf";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useFormSectionNav } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
@@ -231,8 +232,12 @@ export function PurchaseOrdersClient({
   const [affectsStock, setAffectsStock] = useState(true);
   const [supplierBillNo, setSupplierBillNo] = useState("");
   const [supplierBillDate, setSupplierBillDate] = useState("");
-  const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
+  const [rows, dispatch] = useReducer(rowsReducer, undefined, () => [newRow()]);
   const [isDirty, setIsDirty] = useState(false);
+  const dispatchWithDirty = useCallback((action: RowAction) => {
+    if (action.type !== "SET_ALL") setIsDirty(true);
+    dispatch(action);
+  }, [dispatch]);
 
   // Dialog state
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
@@ -295,9 +300,9 @@ export function PurchaseOrdersClient({
     setBatchLoading(true);
     setBatchPOs([]);
 
-    Promise.all(targets.map((d) => getPurchaseOrderById(d.id)))
+    getPurchaseOrdersByIds(targets.map((d) => d.id))
       .then((results) => {
-        if (!cancelled) setBatchPOs(results.filter(Boolean) as PurchaseOrderWithDetails[]);
+        if (!cancelled) setBatchPOs(results);
       })
       .finally(() => {
         if (!cancelled) setBatchLoading(false);
@@ -333,7 +338,7 @@ export function PurchaseOrdersClient({
     setAffectsStock(true);
     setSupplierBillNo("");
     setSupplierBillDate("");
-    setRows([newRow()]);
+    dispatch({ type: "SET_ALL", rows: [newRow()] });
     setIsDirty(false);
   }
 
@@ -343,7 +348,7 @@ export function PurchaseOrdersClient({
     setAffectsStock(po.affects_stock);
     setSupplierBillNo(po.supplier_bill_no ?? "");
     setSupplierBillDate(po.supplier_bill_date ? toISODate(po.supplier_bill_date) : "");
-    setRows(poItemsToRows(po));
+    dispatch({ type: "SET_ALL", rows: poItemsToRows(po) });
     setIsDirty(false);
   }
 
@@ -624,8 +629,6 @@ export function PurchaseOrdersClient({
   }));
 
   // Batch print: filter POs in range by po_number
-  const printFromNum = printFromId ? (dropdownItems.find((d) => d.id === printFromId)?.poNumber ?? 0) : 0;
-  const printToNum = printToId ? (dropdownItems.find((d) => d.id === printToId)?.poNumber ?? 0) : 0;
 
   // PDF adapter: convert loadedPO → flat rows for PORegisterDocument
   function buildPDFRows(): PDFItemRow[] {
@@ -750,6 +753,7 @@ export function PurchaseOrdersClient({
                       value={filterSupplier}
                       onChange={handleFilterSupplierChange}
                       placeholder="Select supplier…"
+                      openOnArrowDown
                     />
                     {eitherFilterActive && !isListOpen && (
                       <div
@@ -878,7 +882,7 @@ export function PurchaseOrdersClient({
               )}
               <TransactionGrid
                 rows={rows}
-                onChange={(r) => { setRows(r); setIsDirty(true); }}
+                dispatch={dispatchWithDirty}
                 suppliers={suppliers}
                 materials={materials}
                 taxRates={taxRates}
@@ -956,14 +960,17 @@ export function PurchaseOrdersClient({
 
                 {loadedPO && (
                   <PrintButton
-                    getDocument={() => (
-                      <PORegisterDocument
-                        rows={buildPDFRows()}
-                        fy={activeFY}
-                        showRates
-                        companySetting={companySetting}
-                      />
-                    )}
+                    getDocument={async () => {
+                      const { PORegisterDocument } = await import("@/components/pdf/po-register-pdf");
+                      return (
+                        <PORegisterDocument
+                          rows={buildPDFRows()}
+                          fy={activeFY}
+                          showRates
+                          companySetting={companySetting}
+                        />
+                      );
+                    }}
                     label="Print"
                   />
                 )}
@@ -1018,14 +1025,17 @@ export function PurchaseOrdersClient({
               />
             </div>
             <PrintButton
-              getDocument={() => (
-                <PORegisterDocument
-                  rows={buildBatchPDFRows()}
-                  fy={activeFY}
-                  showRates
-                  companySetting={companySetting}
-                />
-              )}
+              getDocument={async () => {
+                const { PORegisterDocument } = await import("@/components/pdf/po-register-pdf");
+                return (
+                  <PORegisterDocument
+                    rows={buildBatchPDFRows()}
+                    fy={activeFY}
+                    showRates
+                    companySetting={companySetting}
+                  />
+                );
+              }}
               disabled={(!printByDate && (!printFromId || !printToId)) || batchLoading}
               label={batchLoading ? "Loading…" : `Print POs${batchPOs.length > 0 ? ` (${batchPOs.length})` : ""}`}
             />

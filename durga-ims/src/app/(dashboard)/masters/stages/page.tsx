@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 import { getStagesWithMaterials } from "@/lib/actions/stages.actions";
 import { getActiveMaterials, getActiveUnits } from "@/lib/actions/purchase-orders.actions";
 import { StagesClient } from "./stages-client";

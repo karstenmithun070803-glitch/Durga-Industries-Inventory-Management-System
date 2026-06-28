@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, useReducer } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useFormSectionNav } from "@/hooks/use-form-section-nav";
@@ -10,9 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TransactionGrid, newRow, calcRowTotals } from "@/components/forms/TransactionGrid";
+import { rowsReducer, type RowAction } from "@/lib/utils/rows-reducer";
 import { PrintButton } from "@/components/pdf/print-button";
-import { CustomerInvoiceDocument } from "@/components/pdf/customer-invoice-pdf";
-import { InsuranceInvoiceDocument } from "@/components/pdf/insurance-invoice-pdf";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import { determineGstType } from "@/types";
@@ -251,7 +250,11 @@ export function InvoiceClient({
   const [materialMargin, setMaterialMargin] = useState("");
   const debouncedMargin = useDebounce(materialMargin, 300);
   const [includeTax, setIncludeTax] = useState(false);
-  const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
+  const [rows, dispatch] = useReducer(rowsReducer, undefined, () => [newRow()]);
+  const dispatchWithDirty = useCallback((action: RowAction) => {
+    if (action.type !== "SET_ALL") setIsDirty(true);
+    dispatch(action);
+  }, [dispatch]);
 
   // ── Insurance state ───────────────────────────────────────────────────────
   const [insuranceBillId, setInsuranceBillId] = useState<string | null>(null);
@@ -297,8 +300,9 @@ export function InvoiceClient({
   useEffect(() => {
     if (rows.length === 0) return;
     const marginFactor = 1 + parseFloat(debouncedMargin || "0") / 100;
-    setRows((prev) =>
-      prev.map((row) => {
+    dispatch({
+      type: "SET_ALL",
+      rows: rows.map((row) => {
         const base = parseFloat(row.baseRate || row.rate || "0");
         const newRate = (base * marginFactor).toFixed(4);
         const qty = parseFloat(row.qty || "0");
@@ -313,8 +317,8 @@ export function InvoiceClient({
           igst = ((amt * taxPct) / 100).toFixed(2);
         }
         return { ...row, rate: newRate, amount: newAmount, cgst_amount: cgst, sgst_amount: sgst, igst_amount: igst };
-      })
-    );
+      }),
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedMargin]);
 
@@ -339,7 +343,7 @@ export function InvoiceClient({
       setBillNumber(inv.bill_number);
       setMaterialMargin(inv.material_margin ?? "");
       setIncludeTax(inv.include_tax ?? false);
-      setRows(inv.items.length ? itemsFromInvoice(inv.items, inv.material_margin ?? "0") : [newRow()]);
+      dispatch({ type: "SET_ALL", rows: inv.items.length ? itemsFromInvoice(inv.items, inv.material_margin ?? "0") : [newRow()] });
       setIsDirty(false);
 
       // Load insurance bill
@@ -371,7 +375,7 @@ export function InvoiceClient({
     const v = vehicles.find((x) => x.id === vid);
     setVehicleId(vid);
     setSelectedVehicle(v ?? null);
-    setRows([newRow()]);
+    dispatch({ type: "SET_ALL", rows: [newRow()] });
     setIsDirty(true);
 
     if (!v) return;
@@ -409,7 +413,7 @@ export function InvoiceClient({
             }))
           )
         );
-        setRows(populated.length ? populated : [newRow()]);
+        dispatch({ type: "SET_ALL", rows: populated.length ? populated : [newRow()] });
         toast.info(`Auto-populated ${populated.length} item${populated.length !== 1 ? "s" : ""} from ${slipsWithItems.length} slip${slipsWithItems.length !== 1 ? "s" : ""}.`);
       }
     } catch {
@@ -459,7 +463,7 @@ export function InvoiceClient({
     setBillNumber("—");
     setMaterialMargin("");
     setIncludeTax(false);
-    setRows([newRow()]);
+    dispatch({ type: "SET_ALL", rows: [newRow()] });
     setInsuranceBillId(null);
     setInsuranceBillStatus(null);
     setInsuranceBill(null);
@@ -566,7 +570,7 @@ export function InvoiceClient({
       setCurrentInvoice(updated);
       setIsNewMode(false);
       setBillNumber(updated.bill_number);
-      setRows(itemsFromInvoice(updated.items, updated.material_margin ?? "0"));
+      dispatch({ type: "SET_ALL", rows: itemsFromInvoice(updated.items, updated.material_margin ?? "0") });
       setIsDirty(false);
       toast.success(`${updated.bill_number} finalized.`);
       const newDropdown = await getInvoicesForDropdown(activeFY);
@@ -671,25 +675,24 @@ export function InvoiceClient({
       {
         id: "vehicle",
         ref: vehicleSectionRef,
-        isDisabled: () => !isEditable,
         onActivate: () => {
-          vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
+          const el = vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]');
+          (el ?? vehicleSectionRef.current)?.focus();
         },
       },
       {
         id: "date",
         ref: dateSectionRef,
-        isDisabled: () => !isEditable,
         onActivate: () => {
-          dateSectionRef.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
+          const el = dateSectionRef.current?.querySelector<HTMLInputElement>('input[type="date"]');
+          (el ?? dateSectionRef.current)?.focus();
         },
       },
       {
         id: "headerRow",
         ref: headerRowSectionRef,
-        isDisabled: () => !isEditable,
         onActivate: () => {
-          marginInputRef.current?.focus();
+          (marginInputRef.current ?? headerRowSectionRef.current)?.focus();
           marginInputRef.current?.select();
         },
         onDeactivate: () => marginInputRef.current?.blur(),
@@ -863,7 +866,7 @@ export function InvoiceClient({
                     {billNumber}
                   </div>
                 </div>
-                <div ref={dateSectionRef}>
+                <div ref={dateSectionRef} tabIndex={-1}>
                   <label className="text-xs text-slate-600 block mb-1">Bill Date</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">
@@ -894,7 +897,7 @@ export function InvoiceClient({
 
               {/* Row 2: Vehicle */}
               <div className="grid grid-cols-2 gap-4">
-                <div ref={vehicleSectionRef}>
+                <div ref={vehicleSectionRef} tabIndex={-1}>
                   <label className="text-xs text-slate-600 block mb-1">Vehicle / Job</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">
@@ -965,6 +968,7 @@ export function InvoiceClient({
                 ref={headerRowSectionRef}
                 className="grid grid-cols-3 gap-4 items-end"
                 onKeyDown={handleHeaderRowKeyDown}
+                tabIndex={-1}
               >
                 <div>
                   <label className="text-xs text-slate-600 block mb-1">Material Margin %</label>
@@ -1009,7 +1013,7 @@ export function InvoiceClient({
               </div>
               <TransactionGrid
                 rows={rows}
-                onChange={(r) => { setRows(r); setIsDirty(true); }}
+                dispatch={dispatchWithDirty}
                 suppliers={[]}
                 materials={materials}
                 taxRates={taxRates}
@@ -1118,14 +1122,17 @@ export function InvoiceClient({
                 {currentInvoice && currentInvoice.items.length > 0 && (
                   <PrintButton
                     label="Print Customer"
-                    getDocument={() => (
-                      <CustomerInvoiceDocument
-                        groups={[buildPdfRows(currentInvoice)]}
-                        fy={activeFY}
-                        companySetting={companySetting}
-                        showTaxColumns={includeTax}
-                      />
-                    )}
+                    getDocument={async () => {
+                      const { CustomerInvoiceDocument } = await import("@/components/pdf/customer-invoice-pdf");
+                      return (
+                        <CustomerInvoiceDocument
+                          groups={[buildPdfRows(currentInvoice)]}
+                          fy={activeFY}
+                          companySetting={companySetting}
+                          showTaxColumns={includeTax}
+                        />
+                      );
+                    }}
                   />
                 )}
 
@@ -1153,14 +1160,17 @@ export function InvoiceClient({
                     {insuranceBill && currentInvoice && (
                       <PrintButton
                         label="Print Insurance"
-                        getDocument={() => (
-                          <InsuranceInvoiceDocument
-                            groups={[buildPdfRows(currentInvoice)]}
-                            fy={activeFY}
-                            companySetting={companySetting}
-                            showTaxColumns={includeTax}
-                          />
-                        )}
+                        getDocument={async () => {
+                          const { InsuranceInvoiceDocument } = await import("@/components/pdf/insurance-invoice-pdf");
+                          return (
+                            <InsuranceInvoiceDocument
+                              groups={[buildPdfRows(currentInvoice)]}
+                              fy={activeFY}
+                              companySetting={companySetting}
+                              showTaxColumns={includeTax}
+                            />
+                          );
+                        }}
                       />
                     )}
                   </>

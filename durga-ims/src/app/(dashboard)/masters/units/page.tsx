@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 import { getAllUnits } from "@/lib/actions/units.actions";
 import { UnitsClient } from "./units-client";
 

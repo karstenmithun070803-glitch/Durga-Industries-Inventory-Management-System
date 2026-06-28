@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 import { getAllMaterials } from "@/lib/actions/materials.actions";
 import { getAllTaxRates } from "@/lib/actions/tax.actions";
 import { getAllUnits } from "@/lib/actions/units.actions";

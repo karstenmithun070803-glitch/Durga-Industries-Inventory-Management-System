@@ -15,8 +15,8 @@ import {
   materialIssues,
   materialIssueItems,
 } from "@/lib/db/schema";
-import { eq, and, sql, desc, asc, like, notExists, ne, inArray } from "drizzle-orm";
-import { revalidatePath, unstable_cache } from "next/cache";
+import { eq, and, sql, desc, asc, like, notExists, ne, inArray, gte, lte, or, ilike } from "drizzle-orm";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { fyDateRange } from "@/lib/fy";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +25,6 @@ import type {
   InvoiceItemWithDetails,
   InvoiceRow,
   InsuranceBillWithItems,
-  InvoiceInsuranceItem,
   InvoiceDropdownItem,
 } from "@/types";
 import { INVOICE_STATUS, PAYMENT_STATUS } from "@/lib/constants";
@@ -358,22 +357,36 @@ export const getActiveTaxRatesWithPrefix = unstable_cache(
 );
 
 export const getActiveInvoiceMaterials = unstable_cache(
-  async () =>
-    db
-      .select({
-        id: materials.id,
-        material_no: materials.material_no,
-        name: materials.name,
-        hsn_code: materials.hsn_code,
-        tax_rate_id: materials.tax_rate_id,
-        tax_percentage: taxRates.tax_percentage,
-        sales_unit_id: materials.sales_unit_id,
-        purchase_unit_id: materials.purchase_unit_id,
-      })
-      .from(materials)
-      .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
-      .where(eq(materials.is_active, true))
-      .orderBy(materials.material_no),
+  async () => {
+    const [mats, rates] = await Promise.all([
+      db
+        .select({
+          id: materials.id,
+          material_no: materials.material_no,
+          name: materials.name,
+          hsn_code: materials.hsn_code,
+          tax_rate_id: materials.tax_rate_id,
+          tax_percentage: taxRates.tax_percentage,
+          sales_unit_id: materials.sales_unit_id,
+          purchase_unit_id: materials.purchase_unit_id,
+        })
+        .from(materials)
+        .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
+        .where(eq(materials.is_active, true))
+        .orderBy(materials.material_no),
+      db.execute<{ material_id: string; rate: string }>(sql`
+        SELECT DISTINCT ON (poi.material_id)
+          poi.material_id,
+          poi.rate
+        FROM purchase_order_items poi
+        INNER JOIN purchase_orders po ON poi.po_id = po.id
+        WHERE po.status = 'Received'
+        ORDER BY poi.material_id, po.po_date DESC
+      `),
+    ]);
+    const rateMap = new Map(rates.map((r) => [r.material_id, r.rate]));
+    return mats.map((m) => ({ ...m, lastRate: rateMap.get(m.id) ?? null }));
+  },
   ["inv-active-materials"],
   { tags: [CACHE_TAGS.materials], revalidate: false }
 );
@@ -382,7 +395,36 @@ export const getActiveInvoiceMaterials = unstable_cache(
 // Read — list + detail
 // ---------------------------------------------------------------------------
 
-export async function getInvoices(financialYear: string): Promise<InvoiceRow[]> {
+interface InvoiceListParams {
+  search?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export async function getInvoiceCounts(
+  financialYear: string
+): Promise<{ all: number; draft: number; finalized: number }> {
+  const result = await db
+    .select({ status: invoices.status, count: sql<number>`count(*)::int` })
+    .from(invoices)
+    .where(and(eq(invoices.financial_year, financialYear), ne(invoices.status, INVOICE_STATUS.CANCELLED)))
+    .groupBy(invoices.status);
+  const map = Object.fromEntries(result.map((r) => [r.status, r.count]));
+  return {
+    all: result.reduce((s, r) => s + r.count, 0),
+    draft: map[INVOICE_STATUS.DRAFT] ?? 0,
+    finalized: map[INVOICE_STATUS.FINALIZED] ?? 0,
+  };
+}
+
+export async function getInvoices(
+  financialYear: string,
+  params: InvoiceListParams = {}
+): Promise<InvoiceRow[]> {
+  const { search, status, dateFrom, dateTo } = params;
+  const q = search ? `%${search}%` : null;
+
   const rows = await db
     .select({
       // header
@@ -435,7 +477,18 @@ export async function getInvoices(financialYear: string): Promise<InvoiceRow[]> 
     .innerJoin(vehicles, eq(invoices.vehicle_id, vehicles.id))
     .leftJoin(customers, eq(vehicles.customer_id, customers.id))
     .leftJoin(units, eq(invoiceItems.unit_id, units.id))
-    .where(and(eq(invoices.financial_year, financialYear), ne(invoices.status, INVOICE_STATUS.CANCELLED)))
+    .where(and(
+      eq(invoices.financial_year, financialYear),
+      ne(invoices.status, INVOICE_STATUS.CANCELLED),
+      status && status !== "all" ? eq(invoices.status, status) : undefined,
+      dateFrom ? gte(invoices.bill_date, new Date(dateFrom)) : undefined,
+      dateTo ? lte(invoices.bill_date, new Date(dateTo + "T23:59:59")) : undefined,
+      q ? or(
+        ilike(invoices.bill_number, q),
+        ilike(invoices.customer_name, q),
+        ilike(vehicles.vehicle_name, q),
+      ) : undefined,
+    ))
     .orderBy(desc(invoices.bill_date), desc(invoices.bill_number));
 
   return rows.map((r) => ({
@@ -657,6 +710,7 @@ export async function createInvoice(data: InvoiceHeaderInput): Promise<string> {
   }
 
   revalidatePath("/invoice");
+  revalidateTag(CACHE_TAGS.dashboard);
   return invoiceId;
 }
 
@@ -761,6 +815,7 @@ export async function finalizeInvoice(id: string): Promise<void> {
 
   await db.update(invoices).set({ status: INVOICE_STATUS.FINALIZED }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 export async function revertInvoiceToDraft(id: string): Promise<void> {
@@ -774,6 +829,7 @@ export async function revertInvoiceToDraft(id: string): Promise<void> {
 
   await db.update(invoices).set({ status: INVOICE_STATUS.DRAFT }).where(eq(invoices.id, id));
   revalidatePath("/invoice");
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 export async function deleteInvoice(id: string): Promise<void> {
@@ -800,6 +856,7 @@ export async function deleteInvoice(id: string): Promise<void> {
   // CASCADE deletes invoice_items and invoice_slip_links
   await db.delete(invoices).where(eq(invoices.id, id));
   revalidatePath("/invoice");
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 export async function cancelInvoice(id: string): Promise<void> {
@@ -840,6 +897,7 @@ export async function cancelInvoice(id: string): Promise<void> {
     }).where(eq(invoices.id, id));
   });
   revalidatePath("/invoice");
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 export async function markInvoicePayment(
@@ -875,30 +933,36 @@ export async function markInvoicePayment(
 // ---------------------------------------------------------------------------
 
 export async function getInvoicesForDropdown(fy: string): Promise<InvoiceDropdownItem[]> {
-  const rows = await db
-    .select({
-      id: invoices.id,
-      bill_number: invoices.bill_number,
-      bill_date: invoices.bill_date,
-      status: invoices.status,
-      net_amount: invoices.net_amount,
-      vehicle_name: vehicles.vehicle_name,
-      customer_name: invoices.customer_name,
-    })
-    .from(invoices)
-    .leftJoin(vehicles, eq(invoices.vehicle_id, vehicles.id))
-    .where(and(eq(invoices.financial_year, fy), ne(invoices.status, INVOICE_STATUS.CANCELLED)))
-    .orderBy(desc(invoices.bill_date), desc(invoices.bill_number));
+  return unstable_cache(
+    async () => {
+      const rows = await db
+        .select({
+          id: invoices.id,
+          bill_number: invoices.bill_number,
+          bill_date: invoices.bill_date,
+          status: invoices.status,
+          net_amount: invoices.net_amount,
+          vehicle_name: vehicles.vehicle_name,
+          customer_name: invoices.customer_name,
+        })
+        .from(invoices)
+        .leftJoin(vehicles, eq(invoices.vehicle_id, vehicles.id))
+        .where(and(eq(invoices.financial_year, fy), ne(invoices.status, INVOICE_STATUS.CANCELLED)))
+        .orderBy(desc(invoices.bill_date), desc(invoices.bill_number));
 
-  return rows.map((r) => ({
-    id: r.id,
-    billNumber: r.bill_number,
-    date: (r.bill_date as unknown as Date).toISOString().split("T")[0],
-    status: r.status,
-    vehicleName: r.vehicle_name,
-    customerName: r.customer_name,
-    netAmount: r.net_amount,
-  }));
+      return rows.map((r) => ({
+        id: r.id,
+        billNumber: r.bill_number,
+        date: (r.bill_date as unknown as Date).toISOString().split("T")[0],
+        status: r.status,
+        vehicleName: r.vehicle_name,
+        customerName: r.customer_name,
+        netAmount: r.net_amount,
+      }));
+    },
+    ["invoices-dropdown", fy],
+    { tags: [CACHE_TAGS.dashboard], revalidate: false }
+  )();
 }
 
 // ---------------------------------------------------------------------------

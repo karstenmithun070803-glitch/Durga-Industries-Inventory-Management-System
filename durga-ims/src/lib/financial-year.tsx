@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react";
 import { getCurrentFY } from "@/lib/fy";
 
 const SESSION_KEY = "durga-ims-active-fy";
@@ -29,8 +29,13 @@ export function FYProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem(SESSION_KEY, activeFY);
   }, [activeFY]);
 
+  const value = useMemo(
+    () => ({ activeFY, setActiveFY, isCurrentFY: activeFY === currentFY }),
+    [activeFY, currentFY]
+  );
+
   return (
-    <FYContext.Provider value={{ activeFY, setActiveFY, isCurrentFY: activeFY === currentFY }}>
+    <FYContext.Provider value={value}>
       {children}
     </FYContext.Provider>
   );

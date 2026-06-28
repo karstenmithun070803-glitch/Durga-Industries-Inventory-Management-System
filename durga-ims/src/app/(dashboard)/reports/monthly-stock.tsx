@@ -10,7 +10,6 @@ import { fyDateRange } from "@/lib/fy";
 import type { MonthlyStockRow } from "@/lib/actions/reports.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { PrintButton } from "@/components/pdf/print-button";
-import { MonthlyStockReportDocument } from "@/components/pdf/monthly-stock-report-pdf";
 
 function fmtQty(v: number) {
   return v.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
@@ -264,17 +263,20 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             </Button>
             <PrintButton
               label="Print"
-              getDocument={() => (
-                <MonthlyStockReportDocument
-                  rows={rows}
-                  fromMonth={fromMonth}
-                  toMonth={toMonth}
-                  showDetails={showDetails}
-                  showPrices={showPrices}
-                  materialName={materialId ? materials.find((m) => m.id === materialId)?.name : undefined}
-                  companySetting={companySetting}
-                />
-              )}
+              getDocument={async () => {
+                const { MonthlyStockReportDocument } = await import("@/components/pdf/monthly-stock-report-pdf");
+                return (
+                  <MonthlyStockReportDocument
+                    rows={rows}
+                    fromMonth={fromMonth}
+                    toMonth={toMonth}
+                    showDetails={showDetails}
+                    showPrices={showPrices}
+                    materialName={materialId ? materials.find((m) => m.id === materialId)?.name : undefined}
+                    companySetting={companySetting}
+                  />
+                );
+              }}
             />
           </div>
 

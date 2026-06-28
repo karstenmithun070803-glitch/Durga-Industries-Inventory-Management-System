@@ -10,10 +10,8 @@ import {
   units,
   taxRates,
   materialIssues,
-  purchaseOrderItems,
-  purchaseOrders,
 } from "@/lib/db/schema";
-import { eq, and, count, desc, sql } from "drizzle-orm";
+import { eq, and, count, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,50 +104,51 @@ export const getStagesForDropdown = unstable_cache(
   { tags: [CACHE_TAGS.stages], revalidate: false }
 );
 
-// Not cached — called at runtime for New VMI grid pre-fill (Phase 5)
-export async function getStageMaterials(stageId: string) {
-  const items = await db
-    .select({
-      id: stageMaterials.id,
-      material_id: stageMaterials.material_id,
-      material_name: materials.name,
-      material_no: materials.material_no,
-      default_qty: stageMaterials.default_qty,
-      unit_id: stageMaterials.unit_id,
-      unit_name: units.unit_name,
-      hsn_code: materials.hsn_code,
-      tax_rate_id: materials.tax_rate_id,
-      tax_percentage: taxRates.tax_percentage,
-      purchase_unit_id: materials.purchase_unit_id,
-    })
-    .from(stageMaterials)
-    .innerJoin(materials, eq(stageMaterials.material_id, materials.id))
-    .innerJoin(units, eq(stageMaterials.unit_id, units.id))
-    .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
-    .where(and(eq(stageMaterials.stage_id, stageId), eq(materials.is_active, true)));
+// Cached — invalidated when stage master or material rates change.
+// Uses a single DISTINCT ON query for all rates instead of N per-material round-trips.
+export const getStageMaterials = unstable_cache(
+  async (stageId: string) => {
+    const items = await db
+      .select({
+        id: stageMaterials.id,
+        material_id: stageMaterials.material_id,
+        material_name: materials.name,
+        material_no: materials.material_no,
+        default_qty: stageMaterials.default_qty,
+        unit_id: stageMaterials.unit_id,
+        unit_name: units.unit_name,
+        hsn_code: materials.hsn_code,
+        tax_rate_id: materials.tax_rate_id,
+        tax_percentage: taxRates.tax_percentage,
+        purchase_unit_id: materials.purchase_unit_id,
+      })
+      .from(stageMaterials)
+      .innerJoin(materials, eq(stageMaterials.material_id, materials.id))
+      .innerJoin(units, eq(stageMaterials.unit_id, units.id))
+      .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
+      .where(and(eq(stageMaterials.stage_id, stageId), eq(materials.is_active, true)));
 
-  // Attach last PO rate for each material
-  const withRates = await Promise.all(
-    items.map(async (item) => {
-      const [rateRow] = await db
-        .select({ rate: purchaseOrderItems.rate })
-        .from(purchaseOrderItems)
-        .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
-        .where(
-          and(
-            eq(purchaseOrderItems.material_id, item.material_id),
-            eq(purchaseOrders.status, "Received")
-          )
-        )
-        .orderBy(desc(purchaseOrders.po_date))
-        .limit(1);
+    if (items.length === 0) return [];
 
-      return { ...item, last_po_rate: rateRow?.rate ?? null };
-    })
-  );
+    // One batch query for all material rates instead of N parallel per-material queries
+    const materialIds = items.map((i) => i.material_id);
+    const rateRows = await db.execute<{ material_id: string; rate: string }>(sql`
+      SELECT DISTINCT ON (poi.material_id)
+        poi.material_id,
+        poi.rate
+      FROM purchase_order_items poi
+      INNER JOIN purchase_orders po ON poi.po_id = po.id
+      WHERE po.status = 'Received'
+        AND poi.material_id = ANY(${materialIds})
+      ORDER BY poi.material_id, po.po_date DESC
+    `);
 
-  return withRates;
-}
+    const rateMap = new Map(Array.from(rateRows).map((r) => [r.material_id, r.rate]));
+    return items.map((item) => ({ ...item, last_po_rate: rateMap.get(item.material_id) ?? null }));
+  },
+  ["stage-materials"],
+  { tags: [CACHE_TAGS.stages, CACHE_TAGS.materials], revalidate: false }
+);
 
 // ---------------------------------------------------------------------------
 // Stage code auto-generation (numeric MAX to handle S999 → S1000 correctly)

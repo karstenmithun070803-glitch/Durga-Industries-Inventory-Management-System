@@ -21,8 +21,8 @@ export function MasterLayout({ title, formPanel, tablePanel }: Props) {
       return;
     }
 
-    const isDown = e.key === "ArrowDown" || e.key === "Enter";
-    const isUp = e.key === "ArrowUp";
+    const isDown = e.key === "ArrowDown" || e.key === "Enter" || e.key === "ArrowRight";
+    const isUp = e.key === "ArrowUp" || e.key === "ArrowLeft";
     if (!isDown && !isUp) return;
 
     // Let Enter fire normally on buttons (combobox triggers, submit, etc.)

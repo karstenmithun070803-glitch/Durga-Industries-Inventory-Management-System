@@ -13,4 +13,5 @@ export const CACHE_TAGS = {
   taxRates:    "tax-rates",
   settings:    "settings",
   stages:      "stages",
+  dashboard:   "dashboard-stats",
 } as const;

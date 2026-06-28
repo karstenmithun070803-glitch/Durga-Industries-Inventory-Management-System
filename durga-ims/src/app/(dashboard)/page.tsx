@@ -82,7 +82,7 @@ function RecentTable({
 export default async function HomePage() {
   const fy = getCurrentFY();
   const [stats, vehicles, companySetting] = await Promise.all([
-    getDashboardStats(),
+    getDashboardStats(fy),
     getVehiclesForJobSearch(),
     getCompanySettings(),
   ]);

@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import { Combobox } from "@/components/ui/combobox";
 import { PrintButton } from "@/components/pdf/print-button";
-import { JobCostDocument } from "@/components/pdf/job-cost-pdf";
 import { getJobCostData } from "@/lib/actions/stock.actions";
 import type { VehicleSearchRow, JobCostResult } from "@/lib/actions/stock.actions";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
@@ -125,9 +124,10 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
               <div className="mt-3 flex justify-end">
                 <PrintButton
                   label="Print Job Cost PDF"
-                  getDocument={() => (
-                    <JobCostDocument result={result} companySetting={companySetting} />
-                  )}
+                  getDocument={async () => {
+                    const { JobCostDocument } = await import("@/components/pdf/job-cost-pdf");
+                    return <JobCostDocument result={result} companySetting={companySetting} />;
+                  }}
                 />
               </div>
             </>

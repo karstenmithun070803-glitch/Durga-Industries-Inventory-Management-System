@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useMemo, useEffect } from "react";
+import { useState, useTransition, useRef, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useMasterKeyboardNav } from "@/hooks/use-master-keyboard-nav";
 import { MasterLayout } from "@/components/masters/master-layout";
@@ -121,7 +121,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
               <label className="text-xs text-slate-600">Material Name *</label>
               <Input ref={firstFieldRef} placeholder="e.g. 25*3MM ANGLE" value={form.name} onChange={(e) => set("name", e.target.value)} />
               {isDuplicateName && (
-                <p className="text-xs text-red-500 mt-0.5">A material named "{form.name.trim().toUpperCase()}" already exists.</p>
+                <p className="text-xs text-red-500 mt-0.5">A material named &ldquo;{form.name.trim().toUpperCase()}&rdquo; already exists.</p>
               )}
             </div>
             <div className="space-y-1.5">

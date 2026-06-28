@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useMemo, useEffect } from "react";
+import { useState, useTransition, useRef, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useMasterKeyboardNav } from "@/hooks/use-master-keyboard-nav";
 import { MasterLayout } from "@/components/masters/master-layout";
@@ -119,7 +119,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
               <label className="text-xs text-slate-600">Supplier Name *</label>
               <Input ref={firstFieldRef} placeholder="Company name" value={form.name} onChange={(e) => set("name", e.target.value)} />
               {isDuplicateName && (
-                <p className="text-xs text-red-500 mt-0.5">A supplier named "{form.name.trim()}" already exists.</p>
+                <p className="text-xs text-red-500 mt-0.5">A supplier named &ldquo;{form.name.trim()}&rdquo; already exists.</p>
               )}
             </div>
             <div className="space-y-1.5">

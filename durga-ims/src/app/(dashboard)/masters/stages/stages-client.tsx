@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useMemo, useEffect } from "react";
+import { useState, useTransition, useRef, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useMasterKeyboardNav } from "@/hooks/use-master-keyboard-nav";
 import { Input } from "@/components/ui/input";

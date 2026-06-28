@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 import { getAllSuppliers } from "@/lib/actions/suppliers.actions";
 import { SuppliersClient } from "./suppliers-client";
 

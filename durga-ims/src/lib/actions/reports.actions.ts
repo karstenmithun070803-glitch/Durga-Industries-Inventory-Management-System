@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import {
   invoices,
@@ -49,7 +51,8 @@ export async function getInvoiceSummaryReport(params: {
   dateTo?: string;
 }): Promise<InvoiceSummaryRow[]> {
   const { fy, status, vehicleId, customerId, dateFrom, dateTo } = params;
-
+  return unstable_cache(
+    async () => {
   const rows = await db
     .select({
       id: invoices.id,
@@ -121,6 +124,10 @@ export async function getInvoiceSummaryReport(params: {
       net_amount: parseFloat(r.net_amount ?? "0"),
     };
   });
+    },
+    ["report-invoice-summary", fy, status ?? "", vehicleId ?? "", customerId ?? "", dateFrom ?? "", dateTo ?? ""],
+    { tags: [CACHE_TAGS.dashboard], revalidate: 120 }
+  )();
 }
 
 // ---------------------------------------------------------------------------
@@ -158,7 +165,8 @@ export async function getPurchaseReport(params: {
   dateTo?: string;
 }): Promise<PurchaseReportRow[]> {
   const { fy, status, supplierId, materialId, dateFrom, dateTo } = params;
-
+  return unstable_cache(
+    async () => {
   const rows = await db
     .select({
       item_id: purchaseOrderItems.id,
@@ -226,6 +234,10 @@ export async function getPurchaseReport(params: {
       status: r.status,
     };
   });
+    },
+    ["report-purchase", fy, status ?? "", supplierId ?? "", materialId ?? "", dateFrom ?? "", dateTo ?? ""],
+    { tags: [CACHE_TAGS.dashboard], revalidate: 120 }
+  )();
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +265,8 @@ export async function getMonthlyStockReport(params: {
   materialId?: string;
 }): Promise<MonthlyStockRow[]> {
   const { fromDate, toDate, materialId } = params;
+  return unstable_cache(
+    async () => {
   const from = new Date(fromDate + "T00:00:00+05:30");
   const to = new Date(toDate + "T23:59:59+05:30");
 
@@ -382,6 +396,10 @@ export async function getMonthlyStockReport(params: {
       standard_cost: mat.standard_cost !== null ? parseFloat(mat.standard_cost) : null,
     };
   });
+    },
+    ["report-monthly-stock", fromDate, toDate, materialId ?? ""],
+    { tags: [CACHE_TAGS.materials], revalidate: 120 }
+  )();
 }
 
 // ---------------------------------------------------------------------------
@@ -434,6 +452,8 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string, asO
   if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
   if (asOfDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Invalid asOfDate");
 
+  return unstable_cache(
+    async () => {
   const [rows, storedMargin] = await Promise.all([
     db
       .select({
@@ -472,6 +492,10 @@ export async function getStageWiseCostingData(vehicleId: string, fy: string, asO
     })),
     storedMargin,
   };
+    },
+    ["report-stage-costing", vehicleId, fy, asOfDate ?? ""],
+    { tags: [CACHE_TAGS.dashboard], revalidate: 120 }
+  )();
 }
 
 export async function getMaterialWiseCostingData(vehicleId: string, fy: string, asOfDate?: string): Promise<MaterialWiseCostingResult> {
@@ -480,6 +504,8 @@ export async function getMaterialWiseCostingData(vehicleId: string, fy: string, 
   if (!/^\d{4}-\d{2,4}$/.test(fy)) throw new Error("Invalid FY format");
   if (asOfDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) throw new Error("Invalid asOfDate");
 
+  return unstable_cache(
+    async () => {
   const [rows, storedMargin] = await Promise.all([
     db
       .select({
@@ -516,6 +542,10 @@ export async function getMaterialWiseCostingData(vehicleId: string, fy: string, 
     })),
     storedMargin,
   };
+    },
+    ["report-material-costing", vehicleId, fy, asOfDate ?? ""],
+    { tags: [CACHE_TAGS.dashboard], revalidate: 120 }
+  )();
 }
 
 // ---------------------------------------------------------------------------
@@ -559,7 +589,8 @@ export async function getVehicleComparisonData(
   // Normalize: undefined → null so Drizzle sends SQL NULL
   const stageParam = stageId ?? null;
 
-  // No cache — must reflect latest issued slips
+  return unstable_cache(
+    async () => {
   // FULL OUTER JOIN not supported by Drizzle query builder — uses Drizzle sql tag (safe parameterization)
   const result = await db.execute(sql`
     WITH v1 AS (
@@ -623,5 +654,9 @@ export async function getVehicleComparisonData(
     amt2: parseFloat(r.amt2 ?? "0"),
     diff: Math.round(parseFloat(r.diff ?? "0") * 1000) / 1000,
   }));
+    },
+    ["report-vehicle-comparison", v1Id, v2Id, fy, stageId ?? ""],
+    { tags: [CACHE_TAGS.dashboard], revalidate: 120 }
+  )();
 }
 

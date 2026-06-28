@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useMemo, useRef } from "react";
+import { useState, useEffect, useTransition, useMemo, useRef, useCallback } from "react";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import {
@@ -12,6 +12,7 @@ import {
 import { useDebounce } from "@/hooks/use-debounce";
 import { getStageMaterials } from "@/lib/actions/stages.actions";
 import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
+import { rowsReducer, type RowAction } from "@/lib/utils/rows-reducer";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,6 @@ import { determineGstType } from "@/types";
 import type { MaterialIssueWithDetails, LineItemDraft, GstType } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { PrintButton } from "@/components/pdf/print-button";
-import { MISlipDocument } from "@/components/pdf/mi-slip-pdf";
 import { CloneVehicleDialog } from "@/components/forms/CloneVehicleDialog";
 
 const todayISO = new Date().toISOString().split("T")[0];
@@ -269,6 +269,37 @@ export function NewVMIClient({
   const debouncedMargin = useDebounce(marginPct, 300);
   const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
   const [isDirty, setIsDirty] = useState(false);
+
+  // Refs for stable gridDispatch without stale closures in async handlers
+  const activeStageIdRef = useRef(activeStageId);
+  activeStageIdRef.current = activeStageId;
+  const stagesRef = useRef(stages);
+  stagesRef.current = stages;
+
+  // Stable dispatch passed to TransactionGrid — handles stage-aware APPEND and DELETE
+  const gridDispatch = useCallback((action: RowAction): void => {
+    setRows((prev) => {
+      if (action.type === "APPEND") {
+        const stageId = activeStageIdRef.current;
+        const stageName = stagesRef.current.find((s) => s.id === stageId)?.stage_name ?? "";
+        return [...prev, stageId ? { ...action.row, stage_id: stageId, stage_name: stageName } : action.row];
+      }
+      if (action.type === "DELETE") {
+        const stageId = activeStageIdRef.current;
+        const next = prev.filter((r) => r._key !== action.key);
+        if (stageId) {
+          const stageRows = next.filter((r) => r.stage_id === stageId);
+          if (stageRows.length === 0) {
+            const stageName = stagesRef.current.find((s) => s.id === stageId)?.stage_name ?? "";
+            return [...next, { ...newRow(), stage_id: stageId, stage_name: stageName }];
+          }
+        }
+        return next.length ? next : [newRow()];
+      }
+      return rowsReducer(prev, action);
+    });
+    if (action.type !== "SET_ALL") setIsDirty(true);
+  }, []); // stable — all mutable values read via refs
   const [pendingFY, setPendingFY] = useState<string | null>(null);
 
   // Dialog states
@@ -618,6 +649,7 @@ export function NewVMIClient({
   }
 
   // Called after loadVehicleRecord finds no existing record — doesn't set isDirty
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleSelectAllStagesFor(_vehId: string) {
     if (stages.length === 0) return;
     setLoadingStageIds((prev) => { const s = new Set(prev); stages.forEach((st) => s.add(st.id)); return s; });
@@ -1051,22 +1083,7 @@ export function NewVMIClient({
             )}
             <TransactionGrid
               rows={activeStageId !== null ? rows.filter((r) => r.stage_id === activeStageId) : rows}
-              onChange={(updatedRows) => {
-                if (activeStageId !== null) {
-                  const tagged = updatedRows.map((r) =>
-                    r.stage_id
-                      ? r
-                      : { ...r, stage_id: activeStageId, stage_name: stages.find((s) => s.id === activeStageId)?.stage_name ?? "" }
-                  );
-                  setRows((prev) => [
-                    ...prev.filter((r) => r.stage_id !== activeStageId),
-                    ...tagged,
-                  ]);
-                } else {
-                  setRows(updatedRows);
-                }
-                setIsDirty(true);
-              }}
+              dispatch={gridDispatch}
               suppliers={[]}
               materials={materials}
               taxRates={taxRates}
@@ -1111,7 +1128,10 @@ export function NewVMIClient({
               {loadedRecord && (
                 <>
                   <PrintButton
-                    getDocument={() => <MISlipDocument slip={loadedRecord} companySetting={companySetting} />}
+                    getDocument={async () => {
+                      const { MISlipDocument } = await import("@/components/pdf/mi-slip-pdf");
+                      return <MISlipDocument slip={loadedRecord} companySetting={companySetting} />;
+                    }}
                     label="Print"
                   />
                   <Button variant="outline" className="h-10 px-5" onClick={() => setCloneDialogOpen(true)} disabled={isPending}>
