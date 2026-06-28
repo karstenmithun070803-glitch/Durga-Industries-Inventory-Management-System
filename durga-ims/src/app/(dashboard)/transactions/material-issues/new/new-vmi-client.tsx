@@ -10,7 +10,7 @@ import {
   getVehicleIssueDatesForFY,
 } from "@/lib/actions/material-issues.actions";
 import { useDebounce } from "@/hooks/use-debounce";
-import { getStageMaterials } from "@/lib/actions/stages.actions";
+import { getStageMaterials, getAllStageMaterials } from "@/lib/actions/stages.actions";
 import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
 import { rowsReducer, type RowAction } from "@/lib/utils/rows-reducer";
 import { Combobox } from "@/components/ui/combobox";
@@ -596,9 +596,8 @@ export function NewVMIClient({
     if (unchecked.length === 0) return;
     setLoadingStageIds((prev) => { const s = new Set(prev); unchecked.forEach((st) => s.add(st.id)); return s; });
     try {
-      const results = await Promise.all(
-        unchecked.map((st) => getStageMaterials(st.id).then((mats) => ({ stage: st, mats })))
-      );
+      const grouped = await getAllStageMaterials();
+      const results = unchecked.map((st) => ({ stage: st, mats: grouped[st.id] ?? [] }));
       const factor = 1 + parseFloat(marginPct || "0") / 100;
       const newRows: LineItemDraft[] = results.flatMap(({ stage, mats }) =>
         mats.map((m) => {
@@ -654,9 +653,8 @@ export function NewVMIClient({
     if (stages.length === 0) return;
     setLoadingStageIds((prev) => { const s = new Set(prev); stages.forEach((st) => s.add(st.id)); return s; });
     try {
-      const results = await Promise.all(
-        stages.map((st) => getStageMaterials(st.id).then((mats) => ({ stage: st, mats })))
-      );
+      const grouped = await getAllStageMaterials();
+      const results = stages.map((st) => ({ stage: st, mats: grouped[st.id] ?? [] }));
       const newRows: LineItemDraft[] = results.flatMap(({ stage, mats }) =>
         mats.map((m) => {
           const baseRate = m.last_po_rate ?? "0";

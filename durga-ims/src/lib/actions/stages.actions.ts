@@ -161,6 +161,68 @@ export const getStageMaterials = unstable_cache(
   { tags: [CACHE_TAGS.stages, CACHE_TAGS.materials], revalidate: false }
 );
 
+export type StageMaterialResult = Awaited<ReturnType<typeof getStageMaterials>>[number];
+
+// Returns ALL active stage materials grouped by stage_id in a single call.
+// Use this for bulk loads (auto-populate on new job) instead of N getStageMaterials() calls.
+export const getAllStageMaterials = unstable_cache(
+  async (): Promise<Record<string, StageMaterialResult[]>> => {
+    const allStages = await db
+      .select({ id: stages.id })
+      .from(stages)
+      .where(eq(stages.is_active, true));
+
+    if (allStages.length === 0) return {};
+
+    const stageIds = allStages.map((s) => s.id);
+
+    const allItems = await db
+      .select({
+        stage_id: stageMaterials.stage_id,
+        id: stageMaterials.id,
+        material_id: stageMaterials.material_id,
+        material_name: materials.name,
+        material_no: materials.material_no,
+        default_qty: stageMaterials.default_qty,
+        unit_id: stageMaterials.unit_id,
+        unit_name: units.unit_name,
+        hsn_code: materials.hsn_code,
+        tax_rate_id: materials.tax_rate_id,
+        tax_percentage: taxRates.tax_percentage,
+        purchase_unit_id: materials.purchase_unit_id,
+      })
+      .from(stageMaterials)
+      .innerJoin(materials, eq(stageMaterials.material_id, materials.id))
+      .innerJoin(units, eq(stageMaterials.unit_id, units.id))
+      .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))
+      .where(and(inArray(stageMaterials.stage_id, stageIds), eq(materials.is_active, true)));
+
+    if (allItems.length === 0) return {};
+
+    const materialIds = Array.from(new Set(allItems.map((i) => i.material_id)));
+    const rateRows = await db
+      .select({ material_id: purchaseOrderItems.material_id, rate: purchaseOrderItems.rate })
+      .from(purchaseOrderItems)
+      .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
+      .where(and(eq(purchaseOrders.status, "Received"), inArray(purchaseOrderItems.material_id, materialIds)))
+      .orderBy(desc(purchaseOrders.po_date));
+
+    const rateMap = new Map<string, string>();
+    for (const r of rateRows) {
+      if (!rateMap.has(r.material_id)) rateMap.set(r.material_id, r.rate);
+    }
+
+    const grouped: Record<string, StageMaterialResult[]> = {};
+    for (const item of allItems) {
+      if (!grouped[item.stage_id]) grouped[item.stage_id] = [];
+      grouped[item.stage_id].push({ ...item, last_po_rate: rateMap.get(item.material_id) ?? null });
+    }
+    return grouped;
+  },
+  ["all-stage-materials"],
+  { tags: [CACHE_TAGS.stages, CACHE_TAGS.materials], revalidate: false }
+);
+
 // ---------------------------------------------------------------------------
 // Stage code auto-generation (numeric MAX to handle S999 → S1000 correctly)
 // ---------------------------------------------------------------------------
