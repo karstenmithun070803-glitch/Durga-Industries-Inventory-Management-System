@@ -698,6 +698,7 @@ export function MaterialIssuesClient({
                 className="h-10 px-5 bg-blue-600 hover:bg-blue-700"
                 onClick={handleSave}
                 disabled={isPending || isLoading || !isDirty}
+                data-testid="mi-save-btn"
               >
                 {isPending ? "Saving…" : hasExistingRecord ? "Save & Reapply" : "Issue"}
               </Button>
@@ -758,7 +759,7 @@ export function MaterialIssuesClient({
 
       {/* Issue confirmation (first save) */}
       <Dialog open={issueConfirmOpen} onOpenChange={setIssueConfirmOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent data-testid="issue-confirm-dialog" className="max-w-md">
           <DialogHeader>
             <DialogTitle>Issue & Deduct Stock?</DialogTitle>
             <DialogDescription>
@@ -767,7 +768,7 @@ export function MaterialIssuesClient({
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIssueConfirmOpen(false)} disabled={isPending}>Cancel</Button>
-            <Button onClick={confirmIssue} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={confirmIssue} disabled={isPending} className="bg-blue-600 hover:bg-blue-700" data-testid="issue-confirm-btn">
               {isPending ? "Processing…" : "Issue & Deduct Stock"}
             </Button>
           </DialogFooter>

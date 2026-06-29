@@ -819,7 +819,7 @@ export function PurchaseOrdersClient({
                     {formatCode("PO-", loadedPO.po_number, 4)}
                   </div>
                   {poStatus && (
-                    <span className={`px-2 py-0.5 rounded text-sm font-medium ${
+                    <span data-testid="po-status-badge" className={`px-2 py-0.5 rounded text-sm font-medium ${
                       poStatus === "Received" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
                     }`}>
                       {poStatus}
@@ -920,6 +920,7 @@ export function PurchaseOrdersClient({
                   className="h-10 px-5"
                   onClick={handleSave}
                   disabled={isPending || isLoading}
+                  data-testid="po-save-btn"
                 >
                   {isPending ? "Saving…" : "Save"}
                 </Button>
@@ -941,6 +942,7 @@ export function PurchaseOrdersClient({
                     className="h-10 px-5 bg-emerald-600 hover:bg-emerald-700"
                     onClick={handleMarkAsReceived}
                     disabled={isPending}
+                    data-testid="po-receive-btn"
                   >
                     {isPending ? "Processing…" : "Mark as Received"}
                   </Button>
@@ -953,6 +955,7 @@ export function PurchaseOrdersClient({
                     className="h-10 px-5 text-amber-700 border-amber-300 hover:bg-amber-50"
                     onClick={handleRevertToDraft}
                     disabled={isPending}
+                    data-testid="po-revert-btn"
                   >
                     Revert to Draft
                   </Button>
@@ -1045,7 +1048,7 @@ export function PurchaseOrdersClient({
 
       {/* ── Mark as Received dialog ── */}
       <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent data-testid="receive-confirm-dialog" className="max-w-md">
           <DialogHeader>
             <DialogTitle>
               Mark {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : "new PO"} as Received?
@@ -1079,6 +1082,7 @@ export function PurchaseOrdersClient({
               onClick={confirmReceive}
               disabled={isPending}
               className="bg-emerald-600 hover:bg-emerald-700"
+              data-testid="receive-confirm-btn"
             >
               {isPending ? "Processing…" : "Mark as Received"}
             </Button>

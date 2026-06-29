@@ -44,6 +44,7 @@ export function PrintButton({ getDocument, disabled, label = "Print" }: PrintBut
       onClick={handlePrint}
       disabled={disabled || isGenerating}
       title={label}
+      data-testid="print-btn"
     >
       <Printer className="w-3.5 h-3.5" />
       {isGenerating ? "Generating…" : label}

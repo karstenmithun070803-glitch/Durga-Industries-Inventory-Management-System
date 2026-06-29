@@ -440,6 +440,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             onChange={(e) => { setSearch(e.target.value); setHighlightedIndex(-1); }}
             placeholder="Search material name or code..."
             className="h-8 text-xs w-56 ml-2"
+            data-testid="stock-search"
             {...searchProps}
           />
           <Button
@@ -603,7 +604,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
 
       {/* ── Stock History Drawer ── */}
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent className="w-[560px] sm:max-w-[560px] overflow-y-auto">
+        <SheetContent data-testid="stock-ledger-drawer" className="w-[560px] sm:max-w-[560px] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="text-base">
               Stock History — {historyMaterial?.name}

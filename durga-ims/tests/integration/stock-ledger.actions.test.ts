@@ -1,7 +1,7 @@
 // ============================================================
 // Phase: 2
 // Category: Integration
-// Tests: Stock ledger consistency invariant
+// Tests: Stock ledger actions — consistency invariant
 // Invariant: materials.current_stock == latest stock_ledger.stock_after for each material
 // Source: src/lib/db/schema.ts (materials, stockLedger tables)
 // Requires: .env.test pointing to a test database (run npm run db:test:push first)

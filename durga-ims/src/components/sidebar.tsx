@@ -178,6 +178,7 @@ export function Sidebar() {
           <div className="relative">
             <button
               onClick={() => setFyOpen((v) => !v)}
+              data-testid="fy-selector"
               className="w-full flex items-center justify-between bg-slate-800 border border-slate-600 text-slate-200 text-xs rounded px-2 py-1 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
             >
               <span>FY {activeFY}</span>

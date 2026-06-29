@@ -890,7 +890,7 @@ export function InvoiceClient({
                 </div>
                 <div>
                   <label className="text-xs text-slate-600 block mb-1">Status</label>
-                  <div className={`h-9 px-3 flex items-center rounded border text-sm font-medium ${
+                  <div data-testid="invoice-status-badge" className={`h-9 px-3 flex items-center rounded border text-sm font-medium ${
                     isDraft ? "bg-slate-50 border-slate-200 text-slate-600" :
                     isFinalized ? "bg-blue-50 border-blue-200 text-blue-700" :
                     isCancelled ? "bg-red-50 border-red-200 text-red-700" :
@@ -1097,6 +1097,7 @@ export function InvoiceClient({
                     size="sm"
                     onClick={handleSave}
                     disabled={isSaving}
+                    data-testid="invoice-save-btn"
                   >
                     {isSaving ? "Saving…" : isNewMode ? "Save as Draft" : "Save"}
                   </Button>
@@ -1108,6 +1109,7 @@ export function InvoiceClient({
                     onClick={handleFinalize}
                     disabled={isSaving}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    data-testid="invoice-finalize-btn"
                   >
                     Finalize
                   </Button>
@@ -1119,6 +1121,7 @@ export function InvoiceClient({
                     size="sm"
                     onClick={handleRevertToDraft}
                     disabled={isSaving}
+                    data-testid="invoice-revert-btn"
                   >
                     Revert to Draft
                   </Button>

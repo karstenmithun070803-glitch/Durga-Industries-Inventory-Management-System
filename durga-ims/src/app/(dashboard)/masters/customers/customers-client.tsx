@@ -116,7 +116,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Customer" : "Add Customer"}</p>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Customer Name *</label>
-              <Input ref={firstFieldRef} placeholder="Full name" value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
+              <Input ref={firstFieldRef} data-testid="customer-name-input" placeholder="Full name" value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
               {isDuplicateName && (
                 <p className="text-xs text-red-500 mt-0.5">A customer named &ldquo;{form.customer_name.trim()}&rdquo; already exists.</p>
               )}
@@ -158,17 +158,17 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
               />
             </div>
             <div className="flex gap-2 pt-1">
-              <Button ref={saveRef} onClick={handleSubmit} disabled={isPending || isDuplicateName || !form.customer_name.trim()} className="flex-1">{editing ? "Update" : "Add"}</Button>
+              <Button ref={saveRef} data-testid="customer-save-btn" onClick={handleSubmit} disabled={isPending || isDuplicateName || !form.customer_name.trim()} className="flex-1">{editing ? "Update" : "Add"}</Button>
               {editing && <Button variant="outline" onClick={resetForm}>Cancel</Button>}
             </div>
             {editing && (
               <div className="pt-3 border-t border-slate-200 mt-1">
                 {editing.is_active ? (
-                  <Button type="button" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
+                  <Button type="button" data-testid="customer-deactivate-btn" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
                     <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
                   </Button>
                 ) : (
-                  <Button type="button" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
+                  <Button type="button" data-testid="customer-reactivate-btn" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
                     <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
                   </Button>
                 )}
@@ -194,7 +194,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                 className="max-w-sm"
               />
               {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
+                <Button data-testid="inactive-only-btn" variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
                   {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
                 </Button>
               )}

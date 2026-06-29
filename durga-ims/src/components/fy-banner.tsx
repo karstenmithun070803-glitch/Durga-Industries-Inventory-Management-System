@@ -8,7 +8,7 @@ export function FYBanner() {
   if (isCurrentFY) return null;
 
   return (
-    <div className="w-full bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2 shrink-0">
+    <div data-testid="fy-banner" className="w-full bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2 shrink-0">
       <span className="text-amber-600 text-sm">📅</span>
       <p className="text-amber-800 text-sm font-medium">
         Viewing Historical Data — FY {activeFY}.{" "}
