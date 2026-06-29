@@ -50,6 +50,18 @@ Format:
 
 ---
 
+## OBS-5-001 — Report queries have no LIMIT on result rows
+
+- **Phase found:** Phase 5
+- **Category:** Data / Architecture
+- **File:** `src/lib/actions/reports.actions.ts` — `getInvoiceSummaryReport()`, `getPurchaseReport()`, `getMonthlyStockReport()`
+- **What was observed:** All three report functions aggregate and return ALL rows for the selected financial year with no LIMIT clause. At current data volumes (≤300 invoices/FY, ≤500 POs/FY), report queries complete in under 3 seconds. The absence of a LIMIT is not a problem today.
+- **Why this is not a bug:** The measured report page load time was 2156ms — well within the 5000ms threshold. Report data is also cached at `revalidate: 120`, so the query runs at most once every 2 minutes. No user-facing slowness.
+- **Developer note:** If the business grows to 2000+ records per FY, the reports page will slow down. At that point, add server-side pagination or a date-range pre-filter to `getInvoiceSummaryReport()`. For now, leave as-is per RULE 1.
+- **Evidence:** `tests/performance/list-page-load-times.spec.ts` → Test 16 (`Reports page loads within threshold`) — 2156ms measured, threshold 5000ms.
+
+---
+
 ## OBS-4-001 — PO number race condition surfaces raw Postgres error to user
 
 - **Phase found:** Phase 4

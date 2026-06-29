@@ -24,6 +24,16 @@ export default defineConfig({
       },
       dependencies: ["setup"],
     },
+    {
+      name: "performance",
+      testDir: "tests/performance",
+      timeout: 60_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/user.json",
+      },
+      dependencies: ["setup"],
+    },
   ],
   webServer: {
     command: "npm run dev",

@@ -54,3 +54,16 @@ Bugs that have been fixed and verified.
   ```
 - **Verified by:** `tests/edge-cases/security-input-sanitization.test.ts` — B2 tests pass post-fix
 - **Date fixed:** 2026-06-29
+
+---
+
+## FIX-5-001 — Missing loading.tsx on invoice edit and view sub-routes
+
+- **Phase found:** Phase 5
+- **Severity:** Low
+- **Category:** UX
+- **Files:** `src/app/(dashboard)/invoice/[id]/edit/loading.tsx` and `src/app/(dashboard)/invoice/[id]/view/loading.tsx`
+- **What happened:** Both invoice sub-routes were missing `loading.tsx` files. Without them, Next.js App Router showed a blank screen while the server component fetched invoice data. All sibling routes (`/invoice/[id]/loading.tsx`, `/invoice/new/loading.tsx`) already had loading states; only edit and view were missing.
+- **Fix:** Added both files with `<FormPageSkeleton />` — the same pattern used by the existing `/invoice/[id]/loading.tsx`.
+- **Verified by:** `tests/performance/large-dataset-handling.spec.ts` — Test 7 (`invoice/[id]/edit has a loading.tsx` and `invoice/[id]/view has a loading.tsx`) — both pass post-fix.
+- **Date fixed:** 2026-06-29

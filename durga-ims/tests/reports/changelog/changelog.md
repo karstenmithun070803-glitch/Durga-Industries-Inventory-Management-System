@@ -3,6 +3,22 @@
 All code changes made during the testing process are logged here.
 Format: date, phase, bug fixed, files changed, why, risk level.
 
+## 2026-06-29 — Phase 5 Fixes
+
+### FIX-5-001: Added missing loading.tsx for invoice edit and view routes
+
+- **Files changed:**
+  - `src/app/(dashboard)/invoice/[id]/edit/loading.tsx` — created (2 lines)
+  - `src/app/(dashboard)/invoice/[id]/view/loading.tsx` — created (2 lines)
+- **Why:** Both invoice sub-routes were missing `loading.tsx` files. Next.js App Router shows a blank page while server components fetch data when no `loading.tsx` is present. The parent `/invoice/[id]/loading.tsx` existed, but the edit and view children did not inherit it — each nested route needs its own file.
+- **Test that caught it:** `tests/performance/large-dataset-handling.spec.ts` → Test 7 ("invoice/[id]/edit has a loading.tsx" and "invoice/[id]/view has a loading.tsx") — both failed before fix.
+- **Risk level:** Zero. Adding `loading.tsx` is purely additive — it provides a loading skeleton where previously there was none. No existing logic, data fetching, or component behavior is affected.
+- **Verified:** Re-ran `npm run test:perf -- --project=performance` — all 38 tests pass post-fix.
+
+No other application code was modified in Phase 5.
+
+---
+
 ## 2026-06-29 — Phase 4 Fixes
 
 ### FIX: BUG-4-001 — Negative rate allowed in PO items server-side

@@ -7,9 +7,9 @@
 | 2     | DB Integration     | ✅ COMPLETE  | 67    | 67   | 0    | See phase-2 report| 1 cand.    | 2026-06-29 |
 | 3     | E2E Happy Paths    | ✅ COMPLETE  | 30    | 25   | 0    | Auth, masters, PO, stock, FY, validation, visual | 0 | 2026-06-29 |
 | 4     | Edge Cases + Sec   | ✅ COMPLETE  | 27    | 27   | 0    | 7 features        | 2 (fixed)  | 2026-06-29 |
-| 5     | Performance        | ⏳ PENDING   | ~12   | —    | —    | —                 | —          | —          |
+| 5     | Performance        | ✅ COMPLETE  | 40    | 38   | 0    | 16 features/pages | 0 (1 UX gap fixed) | 2026-06-29 |
 
-**Total so far:** 252 tests | 247 pass | 0 fail (5 skipped — data availability) | 3 bugs found + 1 candidate | 3 bugs fixed | data-testid additions only
+**Total:** 292 tests | 285 pass | 0 fail (7 skipped — data availability) | 3 bugs found + 1 candidate | 3 bugs fixed | 1 UX gap fixed (loading.tsx)
 
 ---
 
