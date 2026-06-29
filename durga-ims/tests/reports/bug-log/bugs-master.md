@@ -67,3 +67,47 @@ Format:
 - **Fix applied:** None — RULE 1: do not touch working code until test confirms real-world bug
 - **Fix verified:** N/A
 - **Regression check:** N/A
+
+---
+
+## BUG-4-001 — No server-side validation: negative rate in PO items
+
+- **Phase found:** Phase 4
+- **Severity:** Medium
+- **Category:** Data / Security
+- **File:** `src/lib/actions/purchase-orders.actions.ts` → `validateItems()` (line ~400)
+- **What was expected:** `createPurchaseOrder()` with `rate: "-50"` should throw a validation error before touching the DB.
+- **What actually happened:** PO was inserted with `rate: "-50"` in `purchaseOrderItems`. When the PO is received, `stock_after` records a negative-rate purchase in the stock ledger, corrupting financial reports.
+- **Test name:** `createPurchaseOrder — B1: negative rate validation > throws validation error when item rate is negative (-50)` (`tests/integration/phase4-negative-rate-qty.test.ts`)
+- **Reproduction:** Call `createPurchaseOrder({ items: [{ rate: "-50", qty: "10", supplier_id: "...", ... }] })` — pre-fix: no error thrown, record inserted.
+- **Evidence:**
+  - **Test:** `tests/integration/phase4-negative-rate-qty.test.ts` (B1 describe block)
+  - **Output (pre-fix):** Test failed — no exception thrown, PO inserted with rate = -50.
+  - **Screenshot:** N/A
+- **Impact:** User submitting via browser DevTools with negative rate corrupts the financial ledger. PO receipt flow would record negative-value stock entries.
+- **Status:** Fixed
+- **Fix applied:** Added `if (parseFloat(item.rate || "0") < 0) throw new Error("Rate cannot be negative.")` in `validateItems()` in `purchase-orders.actions.ts`.
+- **Fix verified:** Yes — B1 tests pass post-fix
+- **Regression check:** Run `npm run test:integration` — all prior tests must still pass
+
+---
+
+## BUG-4-002 — No server-side validation: zero/negative quantity in PO items
+
+- **Phase found:** Phase 4
+- **Severity:** Medium
+- **Category:** Data / Security
+- **File:** `src/lib/actions/purchase-orders.actions.ts` → `validateItems()` (line ~400)
+- **What was expected:** `createPurchaseOrder()` with `qty: "0"` or `qty: "-5"` should throw before touching the DB.
+- **What actually happened:** PO was inserted. When received with `qty: "-5"`, `receivePurchaseOrder()` calls `batchUpdateMaterials` with `newStock = currentStock + (-5)` — stock DECREASES from a PO receipt. This is a silent data corruption bug.
+- **Test name:** `createPurchaseOrder — B2: zero and negative quantity validation > throws validation error when item qty is zero` (`tests/integration/phase4-negative-rate-qty.test.ts`)
+- **Reproduction:** Submit `createPurchaseOrder({ items: [{ qty: "-5", rate: "100", ... }] })` — pre-fix: PO inserted, and receiving it REDUCES stock by 5 instead of increasing it.
+- **Evidence:**
+  - **Test:** `tests/integration/phase4-negative-rate-qty.test.ts` (B2 describe block)
+  - **Output (pre-fix):** Test failed — no exception thrown for qty=0 or qty=-5.
+  - **Screenshot:** N/A
+- **Impact:** A user sending `qty: "-5"` causes a PO receipt to REDUCE stock, creating an undetectable discrepancy between ledger and physical inventory.
+- **Status:** Fixed
+- **Fix applied:** Added `if (parseFloat(item.qty || "0") <= 0) throw new Error("All quantities must be greater than zero.")` in `validateItems()` in `purchase-orders.actions.ts`.
+- **Fix verified:** Yes — B2 tests pass post-fix
+- **Regression check:** Run `npm run test:integration` — all prior tests must still pass

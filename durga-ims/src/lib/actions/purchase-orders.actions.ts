@@ -402,6 +402,12 @@ function validateItems(items: LineItemInput[]) {
   for (const item of items) {
     if (!item.supplier_id) throw new Error("All items must have a supplier selected.");
   }
+  for (const item of items) {
+    if (parseFloat(item.qty || "0") <= 0) throw new Error("All quantities must be greater than zero.");
+  }
+  for (const item of items) {
+    if (parseFloat(item.rate || "0") < 0) throw new Error("Rate cannot be negative.");
+  }
   const seen = new Set<string>();
   for (const item of items) {
     const rate = parseFloat(item.rate || "0").toFixed(2);

@@ -49,3 +49,15 @@ Format:
 - **Developer note:** If the DB is ever accessed by non-application clients (direct SQL, migrations, scripts), a CHECK constraint on `stock_after` would be worth adding. Leave as-is for now.
 
 ---
+
+## OBS-4-001 — PO number race condition surfaces raw Postgres error to user
+
+- **Phase found:** Phase 4
+- **Category:** UX / Concurrency
+- **File:** `src/lib/actions/purchase-orders.actions.ts` → `getNextPONumber()`
+- **What was observed:** `getNextPONumber()` uses `MAX(po_number) + 1` without a row lock. In the unlikely event two users create a PO simultaneously, the second insert hits the DB UNIQUE constraint `(po_number, financial_year)` and a raw Postgres error (`duplicate key value violates unique constraint "po_number_fy_unique"`) propagates to the caller.
+- **Why this is not a bug:** For a 4-user internal tool, simultaneous PO creation is virtually impossible in practice. The constraint fires correctly — no data corruption occurs. Only the UX quality of the error message is in question.
+- **Evidence:** NONE — race simulated via direct DB insert, not a real concurrent request. The constraint fires correctly; only error message quality is in question.
+- **Developer note:** If concurrency requirements increase, fix by using a DB SEQUENCE or wrapping `getNextPONumber()` in a `pg_advisory_xact_lock`. For now, logged as AD-4-001 in `architectural-decisions/decisions.md`.
+
+---

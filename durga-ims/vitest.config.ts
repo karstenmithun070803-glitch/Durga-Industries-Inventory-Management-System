@@ -10,7 +10,11 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
-    include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
+    include: [
+      "tests/unit/**/*.test.ts",
+      "tests/integration/**/*.test.ts",
+      "tests/edge-cases/**/*.test.ts",
+    ],
     setupFiles: ["tests/setup.ts"],
   },
 });

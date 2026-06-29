@@ -3,6 +3,30 @@
 All code changes made during the testing process are logged here.
 Format: date, phase, bug fixed, files changed, why, risk level.
 
+## 2026-06-29 — Phase 4 Fixes
+
+### FIX: BUG-4-001 — Negative rate allowed in PO items server-side
+
+- **Files changed:**
+  - `src/lib/actions/purchase-orders.actions.ts` — added `rate < 0` guard to `validateItems()` (~line 408)
+- **Why:** `validateItems()` checked for zero-rate confirmation but had no `rate >= 0` check. A user could submit a negative rate via DevTools; it would reach the DB and corrupt financial ledger values.
+- **Test that caught it:** `tests/edge-cases/security-input-sanitization.test.ts` → "throws validation error when item rate is negative (-50)"
+- **Risk level:** Low (only affects users who deliberately manipulate form fields)
+- **Verified:** Re-ran `security-input-sanitization.test.ts` — all B1 tests pass
+
+### FIX: BUG-4-002 — Zero/negative quantity allowed in PO items server-side
+
+- **Files changed:**
+  - `src/lib/actions/purchase-orders.actions.ts` — added `qty <= 0` guard to `validateItems()` (~line 405)
+- **Why:** PO validation checked supplier, duplicates, and zero-rate, but not `qty > 0`. Submitting `qty: "-5"` via DevTools caused a PO receipt to REDUCE stock rather than increase it, creating an undetectable inventory discrepancy.
+- **Test that caught it:** `tests/edge-cases/security-input-sanitization.test.ts` → "throws validation error when item qty is zero"
+- **Risk level:** Medium (a negative-qty PO receipt corrupts stock ledger silently)
+- **Verified:** Re-ran `security-input-sanitization.test.ts` — all B2 tests pass
+
+No other application code was modified in Phase 4.
+
+---
+
 ## 2026-06-29 — Phase 1 Fixes
 
 ### FIX: BUG-1-001 — formatActionError() trailing period in error output
