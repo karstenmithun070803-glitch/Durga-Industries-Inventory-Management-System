@@ -1362,7 +1362,7 @@ export async function cloneVehicleMaterialIssue(
       // Batch UPDATE materials stock — one statement instead of N round-trips
       await tx.execute(sql`
         UPDATE materials
-        SET current_stock = v.stock::text
+        SET current_stock = v.stock::numeric
         FROM (VALUES ${sql.join(
           inventoryItems.map(item => sql`(${item.material_id}::uuid, ${(currentStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4)}::numeric)`),
           sql`, `

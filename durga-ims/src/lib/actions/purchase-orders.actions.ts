@@ -465,7 +465,7 @@ async function batchUpdateMaterials(
   if (updates.length === 0) return;
   await tx.execute(sql`
     UPDATE materials
-    SET current_stock = v.stock::text,
+    SET current_stock = v.stock::numeric,
         updated_at    = NOW()
     FROM (VALUES ${sql.join(
       updates.map(u => sql`(${u.id}::uuid, ${u.newStock.toFixed(4)}::numeric)`),
