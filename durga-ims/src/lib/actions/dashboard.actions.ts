@@ -140,9 +140,13 @@ export const getDashboardStats = unstable_cache(
   for (const r of stockRows) {
     const poRate = rateMap.get(r.id) ?? null;
     const effectiveRate = poRate ?? r.standard_cost;
-    if (effectiveRate !== null) {
-      totalStockValue += parseFloat(r.current_stock) * parseFloat(effectiveRate);
-      if (!poRate) standardCostCount++;
+    if (effectiveRate != null) {
+      const rate = parseFloat(String(effectiveRate));
+      const stock = parseFloat(String(r.current_stock));
+      if (Number.isFinite(rate) && Number.isFinite(stock)) {
+        totalStockValue += stock * rate;
+        if (!poRate) standardCostCount++;
+      }
     } else {
       materialsExcludedFromValue++;
     }

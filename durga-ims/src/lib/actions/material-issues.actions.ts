@@ -16,7 +16,7 @@ import {
   stages,
 } from "@/lib/db/schema";
 import { eq, and, sql, desc, max, asc, inArray, gte, lte, or, ilike } from "drizzle-orm";
-import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { fyDateRange } from "@/lib/fy";
 import type { MaterialIssueWithDetails, MaterialIssueItemWithDetails, MaterialIssueRow } from "@/types";
@@ -569,8 +569,6 @@ export async function createMaterialIssue(data: IssueHeaderInput): Promise<strin
     throw e;
   }
 
-  revalidatePath("/transactions/material-issues");
-  revalidatePath("/transactions/material-issues/new");
   return newId;
 }
 
@@ -613,8 +611,6 @@ export async function updateMaterialIssue(id: string, data: IssueHeaderInput): P
     })
     .where(eq(materialIssues.id, id));
 
-  revalidatePath("/transactions/material-issues");
-  revalidatePath("/transactions/material-issues/new");
 }
 
 // ---------------------------------------------------------------------------
@@ -685,8 +681,6 @@ export async function issueMaterialIssue(id: string): Promise<number | null> {
     }
   });
 
-  revalidatePath("/transactions/material-issues");
-  revalidatePath("/transactions/material-issues/new");
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
   return issue.slip_number;
@@ -801,8 +795,6 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
       .where(eq(materialIssues.id, id));
   });
 
-  revalidatePath("/transactions/material-issues");
-  revalidatePath("/transactions/material-issues/new");
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
 }
@@ -871,8 +863,6 @@ export async function deleteMaterialIssue(id: string): Promise<void> {
     });
   }
 
-  revalidatePath("/transactions/material-issues");
-  revalidatePath("/transactions/material-issues/new");
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
 }
@@ -958,8 +948,6 @@ export async function cloneOldMaterialIssue(
     newSlipNumber = slipNum;
   });
 
-  revalidatePath("/transactions/material-issues");
-  revalidatePath("/transactions/material-issues/new");
   return { newSlipId, newSlipNumber };
 }
 
@@ -1218,8 +1206,6 @@ export async function saveVehicleMaterialIssue(
       return issue.id;
     });
 
-    revalidatePath("/transactions/material-issues");
-    revalidatePath("/transactions/material-issues/new");
     revalidateTag(CACHE_TAGS.materials);
     revalidateTag(CACHE_TAGS.dashboard);
     return { id: newId, isNew: true };
@@ -1400,8 +1386,6 @@ export async function cloneVehicleMaterialIssue(
     newIssueId = issue.id;
   });
 
-  revalidatePath("/transactions/material-issues");
-  revalidatePath("/transactions/material-issues/new");
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
   return { newIssueId };
@@ -1486,8 +1470,6 @@ export async function cloneNewMaterialIssue(
     newSlipNumber = slipNum;
   });
 
-  revalidatePath("/transactions/material-issues");
-  revalidatePath("/transactions/material-issues/new");
   return { newSlipId, newSlipNumber };
 }
 
@@ -1601,6 +1583,4 @@ export async function updateVehicleMargin(
     `);
   });
 
-  revalidatePath("/transactions/material-issues/new");
-  revalidatePath("/reports");
 }

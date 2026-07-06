@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { purchaseOrders, purchaseOrderItems, materials, stockLedger, materialIssueItems } from "@/lib/db/schema";
@@ -502,7 +502,6 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
     await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(po.id, item)));
   }
 
-  revalidatePath("/transactions/purchase-orders");
   return po.id;
 }
 
@@ -531,7 +530,6 @@ export async function updatePurchaseOrder(id: string, data: Omit<POHeaderInput, 
     await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item)));
   }
 
-  revalidatePath("/transactions/purchase-orders");
 }
 
 // ---------------------------------------------------------------------------
@@ -585,7 +583,6 @@ export async function receivePurchaseOrder(id: string): Promise<void> {
     }
   });
 
-  revalidatePath("/transactions/purchase-orders");
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
 }
@@ -680,7 +677,6 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
     }
   });
 
-  revalidatePath("/transactions/purchase-orders");
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
 }
@@ -699,7 +695,6 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
 
   if (po.status === "Draft") {
     await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
-    revalidatePath("/transactions/purchase-orders");
     return;
   }
 
@@ -759,7 +754,6 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
     await tx.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
   });
 
-  revalidatePath("/transactions/purchase-orders");
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
 }
@@ -877,7 +871,6 @@ export async function revertPOToDraft(
       .where(eq(purchaseOrders.id, poId));
   });
 
-  revalidatePath("/transactions/purchase-orders");
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
