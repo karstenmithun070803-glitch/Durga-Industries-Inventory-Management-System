@@ -116,11 +116,10 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
     new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
 
   function downloadCsv() {
-    const headers = ["Bill #", "Date", "Vehicle", "Job Ref", "Customer", "GSTIN", "Net Amount", "Status"];
+    const headers = ["Bill #", "Date", "Job Ref", "Customer", "GSTIN", "Net Amount", "Status"];
     const csvRows = invoiceRows.map((r) => [
       r.bill_number,
       fmtDate(r.bill_date),
-      r.vehicle_name ?? "",
       r.job_ref_no ?? "",
       r.customer_name ?? "",
       r.customer_gstin ?? "",
@@ -243,7 +242,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 sticky left-0 z-20 bg-slate-50 w-10 whitespace-nowrap">S.No</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 sticky left-10 z-20 bg-slate-50 w-28 whitespace-nowrap border-r border-slate-200">Bill #</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">Date</th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">Vehicle/Job</th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-28">Job Ref</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-40">Customer</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-20">Mat. Code</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap w-40">Material</th>
@@ -289,8 +288,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                       <td className="px-3 py-2.5 whitespace-nowrap text-xs">
                         <span className="font-mono text-slate-600">
                           {r.job_ref_no}
-                        </span>{" "}
-                        <span className="text-slate-700">{r.vehicle_name ?? "—"}</span>
+                        </span>
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 text-xs">
                         {r.customer_name ?? "—"}

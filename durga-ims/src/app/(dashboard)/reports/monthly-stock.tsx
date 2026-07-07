@@ -263,6 +263,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             </Button>
             <PrintButton
               label="Print"
+              hotkey="mod+p"
               getDocument={async () => {
                 const { MonthlyStockReportDocument } = await import("@/components/pdf/monthly-stock-report-pdf");
                 return (

@@ -26,7 +26,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
   const margin = parseFloat(slip.margin_percentage || "0");
   const mf = showAdvRate ? 1 + margin / 100 : 1;
 
-  const docLabel = `Job: ${slip.job_ref_no}${slip.vehicle_name ? ` — ${slip.vehicle_name}` : ""}`;
+  const docLabel = `Job: ${slip.job_ref_no}`;
 
   const subtotal = slip.items.reduce((s, r) => s + parseFloat(r.amount || "0") * mf, 0);
   const cgstTotal = slip.items.reduce((s, r) => s + parseFloat(r.cgst_amount || "0") * mf, 0);
@@ -38,7 +38,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
     <Document title={`${docLabel} — Material Issue`}>
       <Page size="A4" style={styles.page}>
         {showAdvRate && (
-          <Text style={{ fontSize: 8, color: "#555", textAlign: "right", marginBottom: 3 }}>
+          <Text style={{ fontSize: 9.5, color: "#555", textAlign: "right", marginBottom: 3 }}>
             INTERNAL COPY — ADVANCE RATES (incl. {margin}% margin)
           </Text>
         )}
@@ -62,7 +62,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
             <View style={styles.infoLine}>
               <Text style={styles.infoLineLabelMI}>VEHICLE / JOB</Text>
               <Text style={styles.infoLineValue}>
-                : {slip.vehicle_name ?? ""} ({slip.job_ref_no})
+                : {slip.job_ref_no}
               </Text>
             </View>
             <View style={styles.infoLine}>

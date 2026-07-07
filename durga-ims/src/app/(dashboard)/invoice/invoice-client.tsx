@@ -47,7 +47,7 @@ import { InsuranceForm } from "./insurance-form";
 interface VehicleOption {
   id: string;
   job_ref_no: string;
-  vehicle_name: string | null;
+  type: string;
   customer_id: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
@@ -172,7 +172,6 @@ function buildPdfRows(inv: InvoiceWithDetails): InvoiceRow[] {
     cancelled_by: inv.cancelled_by ?? null,
     cancelled_at: inv.cancelled_at ?? null,
     vehicle_id: inv.vehicle_id,
-    vehicle_name: inv.vehicle_name,
     job_ref_no: inv.job_ref_no,
     customer_id: inv.customer_id,
     customer_name: inv.customer_name,
@@ -758,15 +757,20 @@ export function InvoiceClient({
     const dateStr = d.date ? d.date.split("-").reverse().join("/") : "";
     return {
       value: d.id,
-      label: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""}${d.customerName ? ` — ${d.customerName}` : ""} (${d.status})${dateStr ? ` ${dateStr}` : ""}`,
-      displayLabel: `${d.billNumber}${d.vehicleName ? ` — ${d.vehicleName}` : ""} (${d.status})${dateStr ? ` ${dateStr}` : ""}`,
+      label: `${d.billNumber}${d.customerName ? ` — ${d.customerName}` : ""} (${d.status})${dateStr ? ` ${dateStr}` : ""}`,
+      displayLabel: `${d.billNumber} (${d.status})${dateStr ? ` ${dateStr}` : ""}`,
     };
   });
 
-  const vehicleOptions = vehicles.map((v) => ({
-    value: v.id,
-    label: `${v.job_ref_no}${v.vehicle_name ? ` — ${v.vehicle_name}` : ""}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
-  }));
+  const vehicleOptions = vehicles
+    .filter(v => {
+      if (vehicleId && v.id === vehicleId) return true;
+      return isNewMode ? v.type === "New" : v.type === "Old";
+    })
+    .map(v => ({
+      value: v.id,
+      label: `${v.job_ref_no}${v.customer_name ? ` — ${v.customer_name}` : ""}`,
+    }));
 
   const isCancelled = invoiceStatus === "CANCELLED";
   const isEditable = !isFinalized && !isCancelled;
@@ -780,7 +784,6 @@ export function InvoiceClient({
         parentInvoice={{
           billNumber: currentInvoice.bill_number,
           jobRefNo: currentInvoice.job_ref_no ?? "",
-          vehicleName: currentInvoice.vehicle_name,
           customerName: currentInvoice.customer_name,
           gstin: currentInvoice.customer_gstin,
           state: currentInvoice.customer_state,
@@ -908,7 +911,7 @@ export function InvoiceClient({
                   <label className="text-xs text-slate-600 block mb-1">Vehicle / Job</label>
                   {!isEditable ? (
                     <div className="h-9 px-3 flex items-center text-sm text-slate-700">
-                      {currentInvoice?.job_ref_no ?? ""}{currentInvoice?.vehicle_name ? ` — ${currentInvoice.vehicle_name}` : ""}
+                      {currentInvoice?.job_ref_no ?? ""}
                     </div>
                   ) : (
                     <Combobox
@@ -1132,6 +1135,7 @@ export function InvoiceClient({
                 {currentInvoice && currentInvoice.items.length > 0 && (
                   <PrintButton
                     label="Print Customer"
+                    hotkey="mod+p"
                     getDocument={async () => {
                       const { CustomerInvoiceDocument } = await import("@/components/pdf/customer-invoice-pdf");
                       return (
@@ -1164,7 +1168,7 @@ export function InvoiceClient({
                       size="sm"
                       variant="outline"
                       onClick={async () => {
-                        if (insuranceBillId) await ensureInsuranceBillLoaded(insuranceBillId);
+                        if (currentInvoiceId) await ensureInsuranceBillLoaded(currentInvoiceId);
                         setActiveView("insurance");
                       }}
                     >
@@ -1173,6 +1177,7 @@ export function InvoiceClient({
                     {insuranceBill && currentInvoice && (
                       <PrintButton
                         label="Print Insurance"
+                        hotkey="mod+shift+p"
                         getDocument={async () => {
                           const { InsuranceInvoiceDocument } = await import("@/components/pdf/insurance-invoice-pdf");
                           return (
@@ -1199,7 +1204,13 @@ export function InvoiceClient({
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
         title={`Delete ${billNumber}?`}
-        description="This will permanently delete the invoice and all its line items. This cannot be undone."
+        description={
+          insuranceBillStatus === "Finalized"
+            ? "This invoice has a FINALIZED insurance bill. Deleting will permanently remove the invoice and its finalized insurance record. This cannot be undone."
+            : hasInsurance
+              ? "This will permanently delete the invoice, its line items, and the linked insurance bill. This cannot be undone."
+              : "This will permanently delete the invoice and all its line items. This cannot be undone."
+        }
         confirmLabel="Delete Invoice"
         onConfirm={handleDelete}
       />

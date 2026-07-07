@@ -43,6 +43,13 @@
       "when": 1782462481220,
       "tag": "0005_certain_romulus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783418258230,
+      "tag": "0006_greedy_rogue",
+      "breakpoints": true
     }
   ]
 }

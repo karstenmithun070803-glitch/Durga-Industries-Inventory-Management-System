@@ -29,7 +29,7 @@ function fmtQty(v: number) {
 }
 
 interface Props {
-  vehicles: { id: string; vehicle_name: string | null; job_ref_no: string }[];
+  vehicles: { id: string; job_ref_no: string }[];
   stages: { id: string; stage_code: string; stage_name: string }[];
   defaultFY: string;
   companySetting?: CompanySetting;
@@ -49,7 +49,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${v.job_ref_no}${v.vehicle_name ? ` — ${v.vehicle_name}` : ""}`,
+    label: v.job_ref_no,
   }));
 
   const stageOptions = [
@@ -57,12 +57,8 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
     ...stages.map((s) => ({ value: s.id, label: `${s.stage_code} — ${s.stage_name}` })),
   ];
 
-  const v1Label = vehicles.find((v) => v.id === v1Id)
-    ? `${vehicles.find((v) => v.id === v1Id)!.job_ref_no}${vehicles.find((v) => v.id === v1Id)!.vehicle_name ? ` — ${vehicles.find((v) => v.id === v1Id)!.vehicle_name}` : ""}`
-    : "";
-  const v2Label = vehicles.find((v) => v.id === v2Id)
-    ? `${vehicles.find((v) => v.id === v2Id)!.job_ref_no}${vehicles.find((v) => v.id === v2Id)!.vehicle_name ? ` — ${vehicles.find((v) => v.id === v2Id)!.vehicle_name}` : ""}`
-    : "";
+  const v1Label = vehicles.find((v) => v.id === v1Id)?.job_ref_no ?? "";
+  const v2Label = vehicles.find((v) => v.id === v2Id)?.job_ref_no ?? "";
   const stageLabel = stageId ? (stages.find((s) => s.id === stageId)?.stage_name ?? "Unknown") : "All Stages";
 
   function runCompare() {
@@ -209,6 +205,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
             <PrintButton
               label="Print"
               disabled={!hasData}
+              hotkey="mod+p"
               getDocument={async () => {
                 const { VehicleComparisonDocument } = await import("@/components/pdf/vehicle-comparison-pdf");
                 return (

@@ -131,7 +131,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
               <Input
                 placeholder="e.g. 33AAAAA1234A1Z5"
                 value={form.gstin}
-                onChange={(e) => set("gstin", e.target.value)}
+                onChange={(e) => set("gstin", e.target.value.toUpperCase())}
                 onBlur={(e) => {
                   const err = validateGstinFormat(e.target.value);
                   if (err) toast.warning(err);

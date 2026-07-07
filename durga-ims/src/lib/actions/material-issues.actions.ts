@@ -136,7 +136,6 @@ export const getActiveVehicles = unstable_cache(
       .select({
         id: vehicles.id,
         job_ref_no: vehicles.job_ref_no,
-        vehicle_name: vehicles.vehicle_name,
         type: vehicles.type,
         customer_id: vehicles.customer_id,
         customer_name: customers.customer_name,
@@ -256,13 +255,12 @@ export async function getLastMaterialRate(materialId: string): Promise<string | 
 export async function getSlipsForDropdown(
   financialYear: string,
   issueType: "OLD" | "NEW"
-): Promise<{ id: string; slipNumber: number | null; vehicleId: string; vehicleName: string | null; date: string; status: string }[]> {
+): Promise<{ id: string; slipNumber: number | null; vehicleId: string; date: string; status: string }[]> {
   const rows = await db
     .select({
       id: materialIssues.id,
       slip_number: materialIssues.slip_number,
       vehicle_id: materialIssues.vehicle_id,
-      vehicle_name: vehicles.vehicle_name,
       issue_date: materialIssues.issue_date,
       status: materialIssues.status,
     })
@@ -280,7 +278,6 @@ export async function getSlipsForDropdown(
     id: r.id,
     slipNumber: r.slip_number,
     vehicleId: r.vehicle_id,
-    vehicleName: r.vehicle_name,
     date:
       r.issue_date instanceof Date
         ? r.issue_date.toISOString().split("T")[0]
@@ -324,7 +321,6 @@ export async function getMaterialIssues(
       margin_percentage: materialIssues.margin_percentage,
       total_amount: materialIssues.total_amount,
       vehicle_id: materialIssues.vehicle_id,
-      vehicle_name: v.vehicle_name,
       job_ref_no: v.job_ref_no,
       customer_id: cu.id,
       customer_name: cu.customer_name,
@@ -366,7 +362,7 @@ export async function getMaterialIssues(
       status && status !== "all" ? eq(materialIssues.status, status) : undefined,
       dateFrom ? gte(materialIssues.issue_date, new Date(dateFrom)) : undefined,
       dateTo ? lte(materialIssues.issue_date, new Date(dateTo + "T23:59:59")) : undefined,
-      q ? or(ilike(v.vehicle_name, q), ilike(cu.customer_name, q)) : undefined,
+      q ? or(ilike(v.job_ref_no, q), ilike(cu.customer_name, q)) : undefined,
     ))
     .orderBy(desc(materialIssues.issue_date), desc(materialIssues.slip_number));
 
@@ -407,7 +403,6 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
       margin_percentage: materialIssues.margin_percentage,
       total_amount: materialIssues.total_amount,
       vehicle_id: materialIssues.vehicle_id,
-      vehicle_name: vehicles.vehicle_name,
       job_ref_no: vehicles.job_ref_no,
       customer_id: customers.id,
       customer_name: customers.customer_name,
@@ -492,7 +487,6 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
     margin_percentage: header.margin_percentage ?? "0",
     total_amount: header.total_amount,
     vehicle_id: header.vehicle_id,
-    vehicle_name: header.vehicle_name,
     job_ref_no: header.job_ref_no,
     customer_id: header.customer_id ?? null,
     customer_name: header.customer_name ?? null,
@@ -972,7 +966,6 @@ export async function getVehicleMaterialIssue(
       margin_percentage: materialIssues.margin_percentage,
       total_amount: materialIssues.total_amount,
       vehicle_id: materialIssues.vehicle_id,
-      vehicle_name: vehicles.vehicle_name,
       job_ref_no: vehicles.job_ref_no,
       customer_id: customers.id,
       customer_name: customers.customer_name,
@@ -1066,7 +1059,6 @@ export async function getVehicleMaterialIssue(
     margin_percentage: header.margin_percentage ?? "0",
     total_amount: header.total_amount,
     vehicle_id: header.vehicle_id,
-    vehicle_name: header.vehicle_name,
     job_ref_no: header.job_ref_no,
     customer_id: header.customer_id ?? null,
     customer_name: header.customer_name ?? null,
@@ -1583,4 +1575,6 @@ export async function updateVehicleMargin(
     `);
   });
 
+  revalidateTag(CACHE_TAGS.dashboard);
+  revalidateTag(CACHE_TAGS.materials);
 }

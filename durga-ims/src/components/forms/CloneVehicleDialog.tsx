@@ -64,7 +64,6 @@ export function CloneVehicleDialog({
 
   // Vehicle fields
   const [jobRefNo, setJobRefNo] = useState("");
-  const [vehicleName, setVehicleName] = useState("");
   const [jobRefError, setJobRefError] = useState("");
 
   // Customer — existing (selectedCustomerId set) or new (fill fields manually)
@@ -127,7 +126,6 @@ export function CloneVehicleDialog({
 
   function resetForm() {
     setJobRefNo("");
-    setVehicleName("");
     setJobRefError("");
     setSelectedCustomerId("");
     setCustomerName("");
@@ -153,8 +151,7 @@ export function CloneVehicleDialog({
     startTransition(async () => {
       try {
         const { vehicleId } = await createVehicleWithCustomer({
-          job_ref_no: jobRefNo.trim(),
-          vehicle_name: vehicleName.trim() || undefined,
+          job_ref_no: jobRefNo.trim().toUpperCase(),
           type: sourceVehicleType,
           customer_id: isExistingCustomer ? selectedCustomerId : undefined,
           customer_name: !isExistingCustomer ? customerName.trim() : undefined,
@@ -202,22 +199,13 @@ export function CloneVehicleDialog({
                 <Input
                   id="clone-job-ref"
                   value={jobRefNo}
-                  onChange={(e) => { setJobRefNo(e.target.value); setJobRefError(""); }}
+                  onChange={(e) => { setJobRefNo(e.target.value.toUpperCase()); setJobRefError(""); }}
                   placeholder="e.g. 2026/045"
                   className={jobRefError ? "border-red-400 focus-visible:ring-red-300" : ""}
                 />
                 {jobRefError && <p className="text-xs text-red-500">{jobRefError}</p>}
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="clone-vehicle-name">Vehicle Name</Label>
-                <Input
-                  id="clone-vehicle-name"
-                  value={vehicleName}
-                  onChange={(e) => setVehicleName(e.target.value)}
-                  placeholder="e.g. TN 82 H 3560"
-                />
-              </div>
             </div>
 
             <div className="space-y-1.5">

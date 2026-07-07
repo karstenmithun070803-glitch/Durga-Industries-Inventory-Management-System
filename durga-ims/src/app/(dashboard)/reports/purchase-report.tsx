@@ -299,6 +299,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
             </Button>
             <PrintButton
               label="Print"
+              hotkey="mod+p"
               getDocument={async () => {
                 const { PurchaseReportDocument } = await import("@/components/pdf/purchase-report-pdf");
                 return (

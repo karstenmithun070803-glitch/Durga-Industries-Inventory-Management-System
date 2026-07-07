@@ -41,7 +41,6 @@ interface UnitOption {
 interface ParentInvoiceInfo {
   billNumber: string;
   jobRefNo: string;
-  vehicleName: string | null;
   customerName: string | null;
   gstin: string | null;
   state: string | null;
@@ -425,7 +424,6 @@ export function InsuranceForm({
     id: invoiceId,
     billNumber: parentInvoice.billNumber,
     jobRefNo: parentInvoice.jobRefNo,
-    vehicleName: parentInvoice.vehicleName,
     customerName: parentInvoice.customerName,
     customerGstin: parentInvoice.gstin,
     customerState: parentInvoice.state,
@@ -535,10 +533,6 @@ export function InsuranceForm({
 
           {/* Customer info + include_tax */}
           <div className="grid grid-cols-4 gap-4 border-t border-slate-100 pt-3">
-            <div>
-              <span className="text-xs text-slate-700 block">Vehicle</span>
-              <span className="text-sm text-slate-700">{parentInvoice.vehicleName ?? "—"}</span>
-            </div>
             <div>
               <span className="text-xs text-slate-700 block">Customer</span>
               <span className="text-sm text-slate-700">{parentInvoice.customerName ?? "—"}</span>

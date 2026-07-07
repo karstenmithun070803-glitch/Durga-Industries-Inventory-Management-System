@@ -71,6 +71,9 @@ interface Props {
   showTaxColumns?: boolean;
   // When true (VMI New only): shows read-only Stage column after S.No
   showStageColumn?: boolean;
+  // Margin factor (1 + margin%/100) applied to the last-PO rate when a material is
+  // selected (VMI modes). Defaults to 1 (no margin) for PO / invoice modes.
+  marginFactor?: number;
 }
 
 // Column indices per mode (interactive/focusable elements, including delete button)
@@ -113,6 +116,7 @@ interface RowProps {
   readOnly: boolean;
   showTaxColumns: boolean;
   showStageColumn: boolean;
+  marginFactor: number;
   // pre-computed column indices (stable)
   colMaterial: number;
   colSupplierOrContractor: number;
@@ -149,6 +153,7 @@ const TransactionRow = React.memo(
     readOnly,
     showTaxColumns,
     showStageColumn,
+    marginFactor,
     colMaterial,
     colSupplierOrContractor,
     colAffectsStock,
@@ -193,6 +198,12 @@ const TransactionRow = React.memo(
 
       const lastRate = mat.lastRate ?? null;
       const rateBlank = lastRate === null;
+      // Apply the current margin (VMI modes) so the popped-in rate already reflects it.
+      // baseRate stays raw so the debounced margin recalc remains consistent.
+      const displayRate =
+        lastRate != null && marginFactor > 1
+          ? (parseFloat(lastRate) * marginFactor).toFixed(4)
+          : (lastRate ?? "");
 
       update(key, {
         material_id: materialId,
@@ -202,7 +213,7 @@ const TransactionRow = React.memo(
         unit_id: preferredUnitId ?? "",
         unit_name: unit?.unit_name ?? "",
         tax_percentage: taxPct,
-        rate: lastRate ?? "",
+        rate: displayRate,
         baseRate: lastRate ?? "",
         rateBlank,
         zeroRateConfirmed: false,
@@ -516,7 +527,9 @@ const TransactionRow = React.memo(
     prev.row === next.row &&
     prev.openComboboxCol === next.openComboboxCol &&
     prev.rowIndex === next.rowIndex &&
-    prev.showTaxColumns === next.showTaxColumns
+    prev.showTaxColumns === next.showTaxColumns &&
+    prev.marginFactor === next.marginFactor &&
+    prev.readOnly === next.readOnly
 );
 
 // ─── TransactionGrid ─────────────────────────────────────────────────────────
@@ -534,6 +547,7 @@ export function TransactionGrid({
   gstType,
   showTaxColumns = false,
   showStageColumn = false,
+  marginFactor = 1,
 }: Props) {
   const gridRef = useRef<HTMLTableElement>(null);
   const isIssueMode = mode === "material-issue";
@@ -695,6 +709,7 @@ export function TransactionGrid({
               readOnly={readOnly}
               showTaxColumns={showTaxColumns}
               showStageColumn={showStageColumn}
+              marginFactor={marginFactor}
               colMaterial={colMaterial}
               colSupplierOrContractor={colSupplierOrContractor}
               colAffectsStock={colAffectsStock}

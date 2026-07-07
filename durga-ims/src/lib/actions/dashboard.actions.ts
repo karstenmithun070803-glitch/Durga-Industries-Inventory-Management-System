@@ -22,7 +22,7 @@ export interface DashboardStats {
   fyTotalSales: number;
   fyTotalPurchases: number;
   recentPOs: { id: string; po_number: number; po_date: string; status: string; supplier_name: string | null }[];
-  recentMIs: { id: string; vehicle_id: string; vehicle_name: string | null; job_ref_no: string | null; issue_date: string; status: string; issue_type: string }[];
+  recentMIs: { id: string; vehicle_id: string; job_ref_no: string | null; issue_date: string; status: string; issue_type: string }[];
   recentInvoices: { id: string; bill_number: string; customer_name: string | null; bill_date: string }[];
 }
 
@@ -86,7 +86,6 @@ export const getDashboardStats = unstable_cache(
         issue_date: materialIssues.issue_date,
         status: materialIssues.status,
         issue_type: materialIssues.issue_type,
-        vehicle_name: vehicles.vehicle_name,
         job_ref_no: vehicles.job_ref_no,
       })
       .from(materialIssues)
@@ -172,7 +171,6 @@ export const getDashboardStats = unstable_cache(
       issue_date: new Date(r.issue_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
       status: r.status,
       issue_type: r.issue_type,
-      vehicle_name: r.vehicle_name,
       job_ref_no: r.job_ref_no,
     })),
     recentInvoices: recentInvoiceRows.map((r) => ({

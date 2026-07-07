@@ -67,8 +67,8 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 10, marginTop: 4 }]}>INVOICE SUMMARY REPORT</Text>
-        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+        <Text style={[styles.docTypeCentered, { fontSize: 12, marginTop: 4 }]}>INVOICE SUMMARY REPORT</Text>
+        <Text style={{ fontSize: 9.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
           {filterParts.join("   |   ")}
         </Text>
 
@@ -79,7 +79,7 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           <Text style={[styles.plainTableHeadCell, { width: W.sno }]}>S.No</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.bill }]}>Bill #</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.date }]}>Date</Text>
-          <Text style={[styles.plainTableHeadCell, { width: W.vehicle }]}>Vehicle</Text>
+          <Text style={[styles.plainTableHeadCell, { width: W.vehicle }]}>Job Ref</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.customer }]}>Customer</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.taxable, textAlign: "right" }]}>Taxable</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.tax, textAlign: "right" }]}>Tax Amt</Text>
@@ -101,7 +101,7 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
               <Text style={[cellStyle, { width: W.sno }]}>{i + 1}</Text>
               <Text style={[cellStyle, { width: W.bill, fontFamily: "Helvetica-Bold" }]}>{r.bill_number}</Text>
               <Text style={[cellStyle, { width: W.date }]}>{r.bill_date}</Text>
-              <Text style={[cellStyle, { width: W.vehicle }]}>{r.vehicle_name ?? "—"}</Text>
+              <Text style={[cellStyle, { width: W.vehicle }]}>{r.job_ref_no ?? "—"}</Text>
               <Text style={[cellStyle, { width: W.customer }]}>{r.customer_name ?? "—"}</Text>
               <Text style={[cellStyle, { width: W.taxable, textAlign: "right" }]}>{fmt(r.taxable_value)}</Text>
               <Text style={[cellStyle, { width: W.tax, textAlign: "right" }]}>{taxAmt > 0 ? fmt(taxAmt) : "—"}</Text>

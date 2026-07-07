@@ -33,7 +33,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { useFormSectionNav } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { formatCode } from "@/lib/utils";
-import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Search, FilePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PurchaseOrderWithDetails, LineItemDraft } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
@@ -257,6 +257,10 @@ export function PurchaseOrdersClient({
 
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Print option — when true, the printed PO includes Rate / Tax% / Tax Amt / Amount
+  // columns and the tax totals footer. Print-only; does not affect the on-screen grid.
+  const [printWithRates, setPrintWithRates] = useState(false);
 
   // Filter state — both inputs always visible simultaneously
   const [filterSupplier, setFilterSupplier] = useState("");
@@ -739,10 +743,14 @@ export function PurchaseOrdersClient({
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <div className="flex-1 overflow-y-auto p-6 pb-0">
-          {/* Header card */}
-          <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
+          {/* ── Card A: Browse existing POs ── */}
+          <div className="bg-white rounded-lg border border-slate-200 mb-4 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+              <Search className="w-4 h-4 text-slate-500" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Browse Existing POs</span>
+            </div>
             {/* Filter panel — always visible */}
-            <div>
+            <div className="p-4">
               <div className="flex flex-wrap items-end gap-4">
                 <div className="space-y-1">
                   <label className="text-xs text-slate-700 uppercase tracking-wide">Supplier</label>
@@ -828,8 +836,17 @@ export function PurchaseOrdersClient({
               )}
             </div>
 
-            {/* Row 2: always-visible header fields */}
-            <div className="mt-4 flex flex-wrap items-end gap-4">
+          </div>
+
+          {/* ── Card B: Create new PO ── */}
+          <div className="bg-white rounded-lg border border-slate-200 mb-4 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+              <FilePlus className="w-4 h-4 text-slate-500" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Create New PO</span>
+            </div>
+
+            {/* Header fields: PO Date + Update Stock — kept at the top of the create card */}
+            <div className="p-4 flex flex-wrap items-end gap-4">
               <div className="space-y-1" ref={dateSectionRef}>
                 <label className="text-sm text-slate-600">PO Date</label>
                 <div className="w-40">
@@ -858,38 +875,38 @@ export function PurchaseOrdersClient({
 
             {/* Received PO edit warning */}
             {hasFormContent && poStatus === "Received" && (
-              <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              <div className="mx-4 mb-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-sm text-amber-800">
                   <span className="font-medium">This PO has been received.</span> Saving will reverse the current stock additions and reapply them with the new values (atomic operation).
                 </p>
               </div>
             )}
-          </div>
 
-          {/* Grid */}
-          {isLoading ? (
-            <div className="flex items-center justify-center py-16 text-slate-700 text-sm">
-              Loading…
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-4" ref={gridSectionRef}>
-              {!hasFormContent && (
-                <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-700">
-                  Enter a PO date and add materials to create a new PO, or use the filters above to find an existing PO.
-                </div>
-              )}
-              <TransactionGrid
-                rows={rows}
-                dispatch={dispatchWithDirty}
-                suppliers={suppliers}
-                materials={materials}
-                taxRates={taxRates}
-                units={units}
-                mode="purchase-order"
-              />
-            </div>
-          )}
+            {/* Material entry grid */}
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16 text-slate-700 text-sm">
+                Loading…
+              </div>
+            ) : (
+              <div className="border-t border-slate-100" ref={gridSectionRef}>
+                {!hasFormContent && (
+                  <div className="px-5 py-3 border-b border-slate-100 text-sm text-slate-700">
+                    Enter a PO date and add materials to create a new PO, or use the Browse card above to find an existing PO.
+                  </div>
+                )}
+                <TransactionGrid
+                  rows={rows}
+                  dispatch={dispatchWithDirty}
+                  suppliers={suppliers}
+                  materials={materials}
+                  taxRates={taxRates}
+                  units={units}
+                  mode="purchase-order"
+                />
+              </div>
+            )}
+          </div>
 
         </div>
 
@@ -961,20 +978,32 @@ export function PurchaseOrdersClient({
                 )}
 
                 {loadedPO && (
-                  <PrintButton
-                    getDocument={async () => {
-                      const { PORegisterDocument } = await import("@/components/pdf/po-register-pdf");
-                      return (
-                        <PORegisterDocument
-                          rows={buildPDFRows()}
-                          fy={activeFY}
-                          showRates
-                          companySetting={companySetting}
-                        />
-                      );
-                    }}
-                    label="Print"
-                  />
+                  <>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={printWithRates}
+                        onChange={(e) => setPrintWithRates(e.target.checked)}
+                        className="w-4 h-4 accent-slate-700"
+                      />
+                      <span className="text-sm text-slate-700">Include rates &amp; amounts</span>
+                    </label>
+                    <PrintButton
+                      getDocument={async () => {
+                        const { PORegisterDocument } = await import("@/components/pdf/po-register-pdf");
+                        return (
+                          <PORegisterDocument
+                            rows={buildPDFRows()}
+                            fy={activeFY}
+                            showRates={printWithRates}
+                            companySetting={companySetting}
+                          />
+                        );
+                      }}
+                      label="Print"
+                      hotkey="mod+p"
+                    />
+                  </>
                 )}
 
                 <Button variant="outline" className="h-10 px-5" onClick={handleCancel} disabled={isPending}>
@@ -1026,6 +1055,15 @@ export function PurchaseOrdersClient({
                 placeholder="To…"
               />
             </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={printWithRates}
+                onChange={(e) => setPrintWithRates(e.target.checked)}
+                className="w-4 h-4 accent-slate-700"
+              />
+              <span className="text-sm text-slate-700">Include rates &amp; amounts</span>
+            </label>
             <PrintButton
               getDocument={async () => {
                 const { PORegisterDocument } = await import("@/components/pdf/po-register-pdf");
@@ -1033,7 +1071,7 @@ export function PurchaseOrdersClient({
                   <PORegisterDocument
                     rows={buildBatchPDFRows()}
                     fy={activeFY}
-                    showRates
+                    showRates={printWithRates}
                     companySetting={companySetting}
                   />
                 );

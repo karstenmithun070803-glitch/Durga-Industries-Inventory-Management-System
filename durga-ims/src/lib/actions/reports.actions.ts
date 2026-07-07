@@ -27,7 +27,6 @@ export interface InvoiceSummaryRow {
   id: string;
   bill_number: string;
   bill_date: string;
-  vehicle_name: string | null;
   vehicle_type: string | null;
   job_ref_no: string | null;
   customer_name: string | null;
@@ -58,7 +57,6 @@ export async function getInvoiceSummaryReport(params: {
       id: invoices.id,
       bill_number: invoices.bill_number,
       bill_date: invoices.bill_date,
-      vehicle_name: vehicles.vehicle_name,
       vehicle_type: vehicles.type,
       job_ref_no: vehicles.job_ref_no,
       customer_name: invoices.customer_name,
@@ -93,7 +91,6 @@ export async function getInvoiceSummaryReport(params: {
       invoices.status,
       invoices.discount,
       invoices.net_amount,
-      vehicles.vehicle_name,
       vehicles.type,
       vehicles.job_ref_no,
       vehicles.customer_id
@@ -109,7 +106,6 @@ export async function getInvoiceSummaryReport(params: {
       id: r.id,
       bill_number: r.bill_number,
       bill_date: new Date(r.bill_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
-      vehicle_name: r.vehicle_name ?? null,
       vehicle_type: r.vehicle_type ?? null,
       job_ref_no: r.job_ref_no ?? null,
       customer_name: r.customer_name ?? null,

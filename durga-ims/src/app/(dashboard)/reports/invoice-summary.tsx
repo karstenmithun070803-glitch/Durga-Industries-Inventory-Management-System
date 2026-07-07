@@ -31,7 +31,7 @@ function fmtAmt(v: number) {
 }
 
 interface Props {
-  vehicles: { id: string; vehicle_name: string | null; job_ref_no: string }[];
+  vehicles: { id: string; job_ref_no: string }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];
   defaultFY: string;
   companySetting?: CompanySetting;
@@ -58,7 +58,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${v.job_ref_no}${v.vehicle_name ? ` — ${v.vehicle_name}` : ""}`,
+    label: v.job_ref_no,
   }));
 
   const customerOptions = customers.map((c) => ({
@@ -124,9 +124,9 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
   }, [rows, isCancelledOnlyView]);
 
   function downloadCsv() {
-    const headers = ["Bill #", "Date", "Vehicle", "Type", "Customer", "GSTIN", "Taxable", "Tax Amt", "Gross Total", "Discount", "Net Amount"];
+    const headers = ["Bill #", "Date", "Job Ref", "Type", "Customer", "GSTIN", "Taxable", "Tax Amt", "Gross Total", "Discount", "Net Amount"];
     const csvRows = rows.map((r) => [
-      r.bill_number, r.bill_date, r.vehicle_name ?? "",
+      r.bill_number, r.bill_date, r.job_ref_no ?? "",
       r.vehicle_type === "New" ? "New Build" : r.vehicle_type === "Old" ? "Old Build" : "",
       r.customer_name ?? "", r.customer_gstin ?? "",
       r.taxable_value.toFixed(2),
@@ -207,6 +207,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
             </Button>
             <PrintButton
               label="Print"
+              hotkey="mod+p"
               getDocument={async () => {
                 const { InvoiceSummaryReportDocument } = await import("@/components/pdf/invoice-summary-report-pdf");
                 return (
@@ -230,7 +231,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                 <tr>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Bill #</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Date</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Vehicle</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Job Ref</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Type</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Customer</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">GSTIN</th>
@@ -253,7 +254,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                   >
                     <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.bill_number}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.bill_date}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.vehicle_name ?? "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.job_ref_no ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap">
                       {r.vehicle_type ? (
                         <span className={cn(

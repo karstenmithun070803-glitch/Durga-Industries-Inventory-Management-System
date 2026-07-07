@@ -142,7 +142,7 @@ export const getActiveVehiclesForInvoice = unstable_cache(
       .select({
         id: vehicles.id,
         job_ref_no: vehicles.job_ref_no,
-        vehicle_name: vehicles.vehicle_name,
+        type: vehicles.type,
         customer_id: vehicles.customer_id,
         customer_name: customers.customer_name,
         customer_gstin: customers.gstin,
@@ -446,7 +446,6 @@ export async function getInvoices(
       cancelled_at: invoices.cancelled_at,
       // vehicle
       vehicle_id: vehicles.id,
-      vehicle_name: vehicles.vehicle_name,
       job_ref_no: vehicles.job_ref_no,
       // customer snapshot (from invoices table — not live JOIN)
       customer_id: customers.id,
@@ -486,7 +485,7 @@ export async function getInvoices(
       q ? or(
         ilike(invoices.bill_number, q),
         ilike(invoices.customer_name, q),
-        ilike(vehicles.vehicle_name, q),
+        ilike(vehicles.job_ref_no, q),
       ) : undefined,
     ))
     .orderBy(desc(invoices.bill_date), desc(invoices.bill_number));
@@ -523,7 +522,6 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
       cancelled_at: invoices.cancelled_at,
       include_tax: invoices.include_tax,
       vehicle_id: vehicles.id,
-      vehicle_name: vehicles.vehicle_name,
       job_ref_no: vehicles.job_ref_no,
       customer_id: customers.id,
       // customer snapshot — read from invoices row, not live JOIN
@@ -584,7 +582,6 @@ export async function getInvoiceById(id: string): Promise<InvoiceWithDetails | n
     cancelled_by: h.cancelled_by ?? null,
     cancelled_at: h.cancelled_at ? (h.cancelled_at as unknown as Date).toISOString() : null,
     vehicle_id: h.vehicle_id,
-    vehicle_name: h.vehicle_name,
     job_ref_no: h.job_ref_no,
     customer_id: h.customer_id,
     customer_name: h.customer_name,
@@ -853,8 +850,14 @@ export async function deleteInvoice(id: string): Promise<void> {
       `Cancelled invoice ${inv[0].bill_number} is a permanent record and cannot be deleted.`
     );
 
-  // CASCADE deletes invoice_items and invoice_slip_links
-  await db.delete(invoices).where(eq(invoices.id, id));
+  // Delete insurance bill (if any) + invoice in one transaction.
+  // invoice_insurance has no ON DELETE CASCADE, so must be deleted first.
+  // invoiceInsuranceItems cascade from invoiceInsurance automatically.
+  // invoice_items and invoice_slip_links cascade from invoices automatically.
+  await db.transaction(async (tx) => {
+    await tx.delete(invoiceInsurance).where(eq(invoiceInsurance.invoice_id, id));
+    await tx.delete(invoices).where(eq(invoices.id, id));
+  });
   revalidatePath("/invoice");
   revalidateTag(CACHE_TAGS.dashboard);
 }
@@ -942,7 +945,6 @@ export async function getInvoicesForDropdown(fy: string): Promise<InvoiceDropdow
           bill_date: invoices.bill_date,
           status: invoices.status,
           net_amount: invoices.net_amount,
-          vehicle_name: vehicles.vehicle_name,
           customer_name: invoices.customer_name,
         })
         .from(invoices)
@@ -955,7 +957,6 @@ export async function getInvoicesForDropdown(fy: string): Promise<InvoiceDropdow
         billNumber: r.bill_number,
         date: (r.bill_date as unknown as Date).toISOString().split("T")[0],
         status: r.status,
-        vehicleName: r.vehicle_name,
         customerName: r.customer_name,
         netAmount: r.net_amount,
       }));

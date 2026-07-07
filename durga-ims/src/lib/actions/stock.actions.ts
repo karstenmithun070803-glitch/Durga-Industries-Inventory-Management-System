@@ -68,7 +68,6 @@ export interface DraftCommitmentsResult {
 export interface VehicleSearchRow {
   id: string;
   job_ref_no: string;
-  vehicle_name: string | null;
   customer_name: string | null;
   is_active: boolean;
 }
@@ -86,7 +85,6 @@ export interface JobCostRow {
 export interface JobCostResult {
   vehicle: {
     job_ref_no: string;
-    vehicle_name: string | null;
     vehicle_type: string;
     customer_name: string | null;
   };
@@ -410,7 +408,6 @@ export const getVehiclesForJobSearch = unstable_cache(
       .select({
         id: vehicles.id,
         job_ref_no: vehicles.job_ref_no,
-        vehicle_name: vehicles.vehicle_name,
         customer_name: customers.customer_name,
         is_active: vehicles.is_active,
       })
@@ -421,7 +418,6 @@ export const getVehiclesForJobSearch = unstable_cache(
     return rows.map((r) => ({
       id: r.id,
       job_ref_no: r.job_ref_no,
-      vehicle_name: r.vehicle_name,
       customer_name: r.customer_name ?? null,
       is_active: r.is_active,
     }));
@@ -439,7 +435,6 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
   const [veh] = await db
     .select({
       job_ref_no: vehicles.job_ref_no,
-      vehicle_name: vehicles.vehicle_name,
       vehicle_type: vehicles.type,
       customer_name: customers.customer_name,
     })
@@ -481,7 +476,7 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
 
   if (miItems.length === 0) {
     return {
-      vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, vehicle_type: veh.vehicle_type, customer_name: veh.customer_name ?? null },
+      vehicle: { job_ref_no: veh.job_ref_no, vehicle_type: veh.vehicle_type, customer_name: veh.customer_name ?? null },
       rows: [],
       totals: { total_cost: 0 },
     };
@@ -539,7 +534,7 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
   const total_cost = rows.reduce((s, r) => s + r.total_amount, 0);
 
   return {
-    vehicle: { job_ref_no: veh.job_ref_no, vehicle_name: veh.vehicle_name, vehicle_type: veh.vehicle_type, customer_name: veh.customer_name ?? null },
+    vehicle: { job_ref_no: veh.job_ref_no, vehicle_type: veh.vehicle_type, customer_name: veh.customer_name ?? null },
     rows,
     totals: { total_cost },
   };

@@ -4,15 +4,17 @@ import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useHotkeys } from "react-hotkeys-hook";
 import type { ReactElement } from "react";
 
 interface PrintButtonProps {
   getDocument: () => Promise<ReactElement>;
   disabled?: boolean;
   label?: string;
+  hotkey?: string;
 }
 
-export function PrintButton({ getDocument, disabled, label = "Print" }: PrintButtonProps) {
+export function PrintButton({ getDocument, disabled, label = "Print", hotkey }: PrintButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const isGeneratingRef = useRef(false);
 
@@ -35,6 +37,16 @@ export function PrintButton({ getDocument, disabled, label = "Print" }: PrintBut
       setIsGenerating(false);
     }
   }
+
+  useHotkeys(
+    hotkey ?? "mod+f24",
+    (e) => { e.preventDefault(); void handlePrint(); },
+    {
+      enabled: !!hotkey && !disabled && !isGenerating,
+      preventDefault: true,
+      enableOnFormTags: true,
+    }
+  );
 
   return (
     <Button

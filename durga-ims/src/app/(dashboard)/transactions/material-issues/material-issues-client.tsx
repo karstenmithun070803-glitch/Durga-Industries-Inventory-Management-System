@@ -44,7 +44,6 @@ const todayISO = new Date().toISOString().split("T")[0];
 interface VehicleOption {
   id: string;
   job_ref_no: string;
-  vehicle_name: string | null;
   customer_name: string | null;
   customer_gstin: string | null;
   customer_state: string | null;
@@ -523,23 +522,17 @@ export function MaterialIssuesClient({
     const dateMap = new Map(vehicleIssueDates.map((d) => [d.vehicleId, d.issue_date]));
     return vehicles
       .filter((v) => v.type === "Old")
-      .filter((v) => {
-        if (!issueDate) return true;
-        const recordDate = dateMap.get(v.id);
-        if (!recordDate) return false;
-        return toISODate(recordDate) === issueDate;
-      })
       .map((v) => {
         const dateSuffix = dateMap.has(v.id)
           ? ` — ${formatIssueDateShort(dateMap.get(v.id)!)}`
           : "";
         return {
           value: v.id,
-          label: `${v.job_ref_no} — ${v.vehicle_name ?? ""}${dateSuffix}`,
-          displayLabel: (v.vehicle_name ?? v.job_ref_no) + dateSuffix,
+          label: `${v.job_ref_no}${dateSuffix}`,
+          displayLabel: v.job_ref_no + dateSuffix,
         };
       });
-  }, [vehicles, vehicleIssueDates, issueDate]);
+  }, [vehicles, vehicleIssueDates]);
 
   return (
     <div className="flex h-full flex-col" {...containerProps}>
@@ -682,6 +675,7 @@ export function MaterialIssuesClient({
               contractors={contractors}
               gstType={gstType}
               mode="material-issue"
+              marginFactor={1 + parseFloat(marginPct || "0") / 100}
             />
           </div>
         )}
@@ -719,6 +713,7 @@ export function MaterialIssuesClient({
                       return <MISlipDocument slip={loadedRecord} companySetting={companySetting} />;
                     }}
                     label="Print"
+                    hotkey="mod+p"
                   />
                   <Button variant="outline" className="h-10 px-5" onClick={() => setCloneDialogOpen(true)} disabled={isPending}>
                     Clone

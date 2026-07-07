@@ -7,7 +7,7 @@ export const COMPANY_GSTIN = "33AALPU5476B1ZJ";
 export const styles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 9,
+    fontSize: 10,
     paddingTop: 30,
     paddingBottom: 40,
     paddingHorizontal: 32,
@@ -16,20 +16,20 @@ export const styles = StyleSheet.create({
 
   // ── Document-style centered company block ──────────────────────────────────
   companyNameCentered: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
     letterSpacing: 1,
     color: "#000",
   },
   companyDetailCentered: {
-    fontSize: 8,
+    fontSize: 9.5,
     textAlign: "center",
     color: "#000",
     marginTop: 2,
   },
   docTypeCentered: {
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
     marginTop: 8,
@@ -43,22 +43,22 @@ export const styles = StyleSheet.create({
     marginBottom: 3,
   },
   infoLineLabel: {
-    fontSize: 8.5,
-    width: 130,
+    fontSize: 10,
+    width: 145,
     color: "#000",
   },
   infoLineLabelInvoice: {
-    fontSize: 8.5,
-    width: 90,
+    fontSize: 10,
+    width: 105,
     color: "#000",
   },
   infoLineLabelMI: {
-    fontSize: 8.5,
-    width: 75,
+    fontSize: 10,
+    width: 90,
     color: "#000",
   },
   infoLineValue: {
-    fontSize: 8.5,
+    fontSize: 10,
     fontFamily: "Helvetica-Bold",
     color: "#000",
     flex: 1,
@@ -80,7 +80,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   plainTableHeadCell: {
-    fontSize: 8.5,
+    fontSize: 10,
     fontFamily: "Helvetica-Bold",
     color: "#000",
     paddingRight: 3,
@@ -90,12 +90,12 @@ export const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   plainTableCell: {
-    fontSize: 8.5,
+    fontSize: 10,
     color: "#000",
     paddingRight: 3,
   },
   plainTableCellBold: {
-    fontSize: 8.5,
+    fontSize: 10,
     fontFamily: "Helvetica-Bold",
     color: "#000",
     paddingRight: 3,
@@ -114,7 +114,7 @@ export const styles = StyleSheet.create({
     marginBottom: 4,
   },
   footerText: {
-    fontSize: 8,
+    fontSize: 9.5,
     textAlign: "right",
     color: "#000",
   },
@@ -128,7 +128,7 @@ export const styles = StyleSheet.create({
     marginBottom: 1,
   },
   stageHeaderText: {
-    fontSize: 7,
+    fontSize: 8.5,
     fontFamily: "Helvetica-Bold",
     color: "#475569",
     textTransform: "uppercase",

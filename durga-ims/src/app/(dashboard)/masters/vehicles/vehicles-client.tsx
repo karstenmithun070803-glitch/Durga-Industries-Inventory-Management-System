@@ -16,8 +16,8 @@ import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
-type VehicleRow = { id: string; job_ref_no: string; vehicle_name: string | null; type: string; customer_id: string | null; customer_name: string | null; is_active: boolean; created_at: Date; updated_at: Date };
-const EMPTY = { job_ref_no: "", vehicle_name: "", type: "New", customer_id: "" };
+type VehicleRow = { id: string; job_ref_no: string; type: string; customer_id: string | null; customer_name: string | null; is_active: boolean; created_at: Date; updated_at: Date };
+const EMPTY = { job_ref_no: "", type: "New", customer_id: "" };
 
 interface Props { vehicles: VehicleRow[]; customers: Customer[]; }
 
@@ -42,7 +42,6 @@ export function VehiclesClient({ vehicles, customers }: Props) {
     vehicles.filter((v) => showInactive ? !v.is_active : v.is_active).filter((v) => {
       const q = search.toLowerCase();
       return (
-        (v.vehicle_name ?? "").toLowerCase().includes(q) ||
         (v.customer_name ?? "").toLowerCase().includes(q) ||
         (v.job_ref_no ?? "").toLowerCase().includes(q)
       );
@@ -53,7 +52,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   function startEdit(v: VehicleRow) {
     setEditing(v);
     setFocusedIdx(-1);
-    const next = { job_ref_no: v.job_ref_no, vehicle_name: v.vehicle_name ?? "", type: v.type, customer_id: v.customer_id ?? "" };
+    const next = { job_ref_no: v.job_ref_no.toUpperCase(), type: v.type, customer_id: v.customer_id ?? "" };
     setForm(next);
     originalFormRef.current = next;
   }
@@ -119,12 +118,8 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                 ref={firstFieldRef}
                 placeholder="e.g. 2026/001"
                 value={form.job_ref_no}
-                onChange={(e) => set("job_ref_no", e.target.value)}
+                onChange={(e) => set("job_ref_no", e.target.value.toUpperCase())}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-600">Vehicle Name / Reg. No</label>
-              <Input placeholder="e.g. TN 82 H 3560" value={form.vehicle_name} onChange={(e) => set("vehicle_name", e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Vehicle Type</label>
@@ -176,7 +171,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               <Input
                 ref={searchRef}
                 autoComplete="off"
-                placeholder="Search by vehicle name, job number, or customer..."
+                placeholder="Search by job number or customer..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
                 onKeyDown={(e) => {
@@ -200,7 +195,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-700 text-white">
                   <tr>
-                    {["S.No", "Job No.", "Vehicle Name", "Type", "Customer"].map((h) => (
+                    {["S.No", "Job No.", "Type", "Customer"].map((h) => (
                       <th key={h} className="px-4 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -217,7 +212,6 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                     >
                       <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
                       <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{v.job_ref_no}</td>
-                      <td className="px-4 py-1.5 font-medium">{v.vehicle_name ?? "—"}</td>
                       <td className="px-4 py-1.5">
                         <Badge variant={v.type === "New" ? "default" : "secondary"}>{v.type}</Badge>
                       </td>
@@ -235,8 +229,8 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         onOpenChange={setImportOpen}
         title="Import Vehicles / Jobs"
         templateFileName="vehicles-import-template.xlsx"
-        templateColumns={["Job Ref No", "Vehicle Name", "Type", "Customer Name"]}
-        exampleRow={["JB-2024-001", "TN 01 AB 1234", "New", "Ravi Motors"]}
+        templateColumns={["Job Ref No", "Type", "Customer Name"]}
+        exampleRow={["JB-2024-001", "New", "Ravi Motors"]}
         referenceSheet={{ rows: [
           ["REFERENCE — do not edit this sheet"],
           [],
@@ -250,13 +244,11 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         existingKeys={new Set(vehicles.map((v) => v.job_ref_no.toUpperCase()))}
         processRow={(row) => {
           const errors: string[] = [];
-          const jobRef = row["Job Ref No"]?.trim() ?? "";
-          const vehicleName = row["Vehicle Name"]?.trim() ?? "";
+          const jobRef = (row["Job Ref No"]?.trim() ?? "").toUpperCase();
           const typeRaw = row["Type"]?.trim() ?? "";
           const custNameRaw = row["Customer Name"]?.trim() ?? "";
 
           if (!jobRef) errors.push("Job Ref No is required");
-          if (!vehicleName) errors.push("Vehicle Name is required");
           if (!typeRaw) errors.push("Type is required (New or Old)");
 
           const normalizedType = typeRaw
@@ -277,11 +269,10 @@ export function VehiclesClient({ vehicles, customers }: Props) {
 
           return {
             errors,
-            displayName: jobRef ? `${jobRef}${vehicleName ? ` — ${vehicleName}` : ""}` : vehicleName || "—",
+            displayName: jobRef || "—",
             dedupKey: jobRef,
             data: {
               job_ref_no: jobRef,
-              vehicle_name: vehicleName.toUpperCase(),
               type: normalizedType,
               customer_id,
             },
@@ -289,7 +280,6 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         }}
         onImport={(rows) => bulkImportVehicles(rows.map((r) => ({
           job_ref_no: r.job_ref_no as string,
-          vehicle_name: r.vehicle_name as string,
           type: r.type as string,
           customer_id: r.customer_id as string | null,
         })))}

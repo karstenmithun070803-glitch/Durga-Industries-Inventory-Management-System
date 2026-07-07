@@ -10,7 +10,6 @@ import { getCurrentFY } from "@/lib/fy";
 const vehicleSelect = {
   id: vehicles.id,
   job_ref_no: vehicles.job_ref_no,
-  vehicle_name: vehicles.vehicle_name,
   type: vehicles.type,
   customer_id: vehicles.customer_id,
   customer_name: customers.customer_name,
@@ -48,15 +47,13 @@ export const getAllVehicles = unstable_cache(
 
 export async function createVehicle(data: {
   job_ref_no: string;
-  vehicle_name?: string;
   type: string;
   customer_id?: string;
 }) {
   if (!data.job_ref_no.trim()) throw new Error("Job number is required.");
   try {
     await db.insert(vehicles).values({
-      job_ref_no: data.job_ref_no.trim(),
-      vehicle_name: data.vehicle_name?.trim().toUpperCase() || null,
+      job_ref_no: data.job_ref_no.trim().toUpperCase(),
       type: data.type || "New",
       customer_id: data.customer_id || null,
     });
@@ -71,15 +68,13 @@ export async function createVehicle(data: {
 
 export async function updateVehicle(id: string, data: {
   job_ref_no: string;
-  vehicle_name?: string;
   type: string;
   customer_id?: string;
 }) {
   if (!data.job_ref_no.trim()) throw new Error("Job number is required.");
   try {
     await db.update(vehicles).set({
-      job_ref_no: data.job_ref_no.trim(),
-      vehicle_name: data.vehicle_name?.trim().toUpperCase() || null,
+      job_ref_no: data.job_ref_no.trim().toUpperCase(),
       type: data.type,
       customer_id: data.customer_id || null,
     }).where(eq(vehicles.id, id));
@@ -93,7 +88,7 @@ export async function updateVehicle(id: string, data: {
 }
 
 export async function deleteVehicle(id: string, force = false) {
-  const [veh] = await db.select({ vehicle_name: vehicles.vehicle_name }).from(vehicles).where(eq(vehicles.id, id));
+  const [veh] = await db.select({ job_ref_no: vehicles.job_ref_no }).from(vehicles).where(eq(vehicles.id, id));
 
   if (!force) {
     // Soft warning: vehicle has material issue records in the current FY
@@ -118,7 +113,7 @@ export async function deleteVehicle(id: string, force = false) {
     .limit(1);
   if (draftInvoice.length > 0)
     throw new Error(
-      `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": has a Draft invoice ${draftInvoice[0].bill_number}. Finalize or delete it first.`
+      `Cannot deactivate "${veh?.job_ref_no ?? "this vehicle"}": has a Draft invoice ${draftInvoice[0].bill_number}. Finalize or delete it first.`
     );
 
   const finalizedInvoice = await db
@@ -128,7 +123,7 @@ export async function deleteVehicle(id: string, force = false) {
     .limit(1);
   if (finalizedInvoice.length > 0)
     throw new Error(
-      `Cannot deactivate "${veh?.vehicle_name ?? "this vehicle"}": has a Finalized invoice ${finalizedInvoice[0].bill_number}. Finalized invoices are permanent GST records.`
+      `Cannot deactivate "${veh?.job_ref_no ?? "this vehicle"}": has a Finalized invoice ${finalizedInvoice[0].bill_number}. Finalized invoices are permanent GST records.`
     );
 
   await db.update(vehicles).set({ is_active: false }).where(eq(vehicles.id, id));
@@ -143,7 +138,6 @@ export async function reactivateVehicle(id: string) {
 export async function bulkImportVehicles(
   rows: Array<{
     job_ref_no: string;
-    vehicle_name: string;
     type: string;
     customer_id?: string | null;
   }>
@@ -167,8 +161,7 @@ export async function bulkImportVehicles(
   await db.transaction(async (tx) => {
     await tx.insert(vehicles).values(
       toInsert.map((r) => ({
-        job_ref_no: r.job_ref_no,
-        vehicle_name: r.vehicle_name,
+        job_ref_no: r.job_ref_no.toUpperCase(),
         type: r.type,
         customer_id: r.customer_id || null,
       }))
@@ -185,7 +178,6 @@ export async function bulkImportVehicles(
 
 export async function createVehicleWithCustomer(data: {
   job_ref_no: string;
-  vehicle_name?: string;
   type: "Old" | "New";
   // Provide customer_id to use an existing customer, OR customer_name to create a new one
   customer_id?: string;
@@ -225,8 +217,7 @@ export async function createVehicleWithCustomer(data: {
       const [newVehicle] = await tx
         .insert(vehicles)
         .values({
-          job_ref_no: data.job_ref_no.trim(),
-          vehicle_name: data.vehicle_name?.trim().toUpperCase() || null,
+          job_ref_no: data.job_ref_no.trim().toUpperCase(),
           type: data.type,
           customer_id: customerId,
         })

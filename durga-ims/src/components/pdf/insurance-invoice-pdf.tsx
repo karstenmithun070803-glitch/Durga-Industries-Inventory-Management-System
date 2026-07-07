@@ -64,10 +64,6 @@ export function InsuranceInvoiceDocument({ groups, companySetting, showTaxColumn
                   <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
                 </View>
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabelInvoice}>VEHICLE</Text>
-                  <Text style={styles.infoLineValue}>: {first.vehicle_name ?? ""}</Text>
-                </View>
-                <View style={styles.infoLine}>
                   <Text style={styles.infoLineLabelInvoice}>JOB NO.</Text>
                   <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
                 </View>
@@ -171,7 +167,7 @@ export function InsuranceInvoiceDocument({ groups, companySetting, showTaxColumn
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>
-              <Text style={{ marginTop: 6, fontSize: 8, fontFamily: "Helvetica-Oblique", color: "#374151" }}>
+              <Text style={{ marginTop: 6, fontSize: 9.5, fontFamily: "Helvetica-Oblique", color: "#374151" }}>
                 {numberToWords(parseFloat(first.net_amount))}
               </Text>
             </View>
@@ -183,10 +179,10 @@ export function InsuranceInvoiceDocument({ groups, companySetting, showTaxColumn
               <View style={{ flex: 1, paddingRight: 8 }}>
                 {companySetting?.bank_account_no && (
                   <View>
-                    <Text style={{ fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#374151", marginBottom: 2 }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: "#374151", marginBottom: 2 }}>
                       Payment Details
                     </Text>
-                    <Text style={{ fontSize: 7.5, color: "#374151" }}>
+                    <Text style={{ fontSize: 9, color: "#374151" }}>
                       {[
                         companySetting.bank_name,
                         companySetting.bank_account_no ? `A/C: ${companySetting.bank_account_no}` : null,
@@ -202,8 +198,8 @@ export function InsuranceInvoiceDocument({ groups, companySetting, showTaxColumn
               <View style={{ alignItems: "center", justifyContent: "flex-end", minWidth: 140 }}>
                 <View style={{ height: 30 }} />
                 <View style={{ borderTopWidth: 0.5, borderTopColor: "#000", width: 140, marginBottom: 3 }} />
-                <Text style={{ fontSize: 8 }}>For {coName}</Text>
-                <Text style={{ fontSize: 8 }}>Authorised Signatory</Text>
+                <Text style={{ fontSize: 9.5 }}>For {coName}</Text>
+                <Text style={{ fontSize: 9.5 }}>Authorised Signatory</Text>
               </View>
 
             </View>

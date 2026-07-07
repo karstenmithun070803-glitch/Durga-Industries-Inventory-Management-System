@@ -138,13 +138,12 @@ export default async function HomePage() {
         <div>
           <SectionTitle>Recent Material Issues</SectionTitle>
           <RecentTable
-            headers={["Job No", "Date", "Vehicle", "Status"]}
+            headers={["Job No", "Date", "Status"]}
             rows={stats.recentMIs.map((r) => [
               <Link key={r.id} href={r.issue_type === "NEW" ? `/transactions/material-issues/new?vehicleId=${r.vehicle_id}` : `/transactions/material-issues?vehicleId=${r.vehicle_id}`} className="font-mono text-blue-600 hover:underline">
                 {r.job_ref_no ?? "—"}
               </Link>,
               r.issue_date,
-              r.vehicle_name ?? "—",
               <span key="s" className={cn(
                 "px-1.5 py-0.5 rounded text-xs font-medium",
                 r.status === "Issued" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"

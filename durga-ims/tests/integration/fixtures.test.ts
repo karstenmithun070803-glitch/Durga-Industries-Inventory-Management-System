@@ -172,7 +172,7 @@ describe("Full FK chain: Customer → Vehicle → Material → MI → Invoice", 
     const customer = await createTestCustomer({ customer_name: "Chain Customer" });
 
     // Vehicle
-    const vehicle = await createTestVehicle({ customerId: customer.id }, { vehicle_name: "Chain Vehicle" });
+    const vehicle = await createTestVehicle({ customerId: customer.id });
     expect(vehicle.customer_id).toBe(customer.id);
 
     // Material (shared by MI and Invoice items)

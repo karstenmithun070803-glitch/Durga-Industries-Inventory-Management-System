@@ -80,7 +80,7 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
                 </View>
                 <View style={styles.infoLine}>
                   <Text style={styles.infoLineLabelMI}>VEHICLE / JOB</Text>
-                  <Text style={styles.infoLineValue}>: {first.vehicle_name ?? ""}  ({jobLabel})</Text>
+                  <Text style={styles.infoLineValue}>: {jobLabel}</Text>
                 </View>
               </View>
               {/* Right — customer info */}

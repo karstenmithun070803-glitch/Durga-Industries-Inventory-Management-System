@@ -5,7 +5,6 @@ interface ParentInvoiceInfo {
   id: string;
   billNumber: string;
   jobRefNo: string;
-  vehicleName: string | null;
   customerName: string | null;
   customerGstin: string | null;
   customerState: string | null;
@@ -37,7 +36,6 @@ export function insuranceBillToInvoiceRows(
     cancelled_by: null,
     cancelled_at: null,
     vehicle_id: "",
-    vehicle_name: parent.vehicleName,
     job_ref_no: parent.jobRefNo,
     customer_id: null,
     customer_name: parent.customerName,

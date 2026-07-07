@@ -8,7 +8,7 @@ interface Props {
   stageRows: (StageWiseCostingRow & { amount: number })[];
   materialRows: (MaterialWiseCostingRow & { amount: number })[];
   rptType: "stage" | "material";
-  vehicleName: string;
+  jobLabel: string;
   fy: string;
   marginPct: number;
   companySetting?: CompanySetting;
@@ -23,7 +23,7 @@ export function StageWiseCostingDocument({
   stageRows,
   materialRows,
   rptType,
-  vehicleName,
+  jobLabel,
   fy,
   marginPct,
   companySetting,
@@ -44,7 +44,7 @@ export function StageWiseCostingDocument({
 
 
   return (
-    <Document title={`${isStageWise ? "Stage" : "Material"} Wise Costing — ${vehicleName} — FY ${fy}${asOfDate ? ` — As Of ${asOfDate}` : ""}`}>
+    <Document title={`${isStageWise ? "Stage" : "Material"} Wise Costing — ${jobLabel} — FY ${fy}${asOfDate ? ` — As Of ${asOfDate}` : ""}`}>
       <Page size="A4" style={styles.page}>
         {/* Company header */}
         <View>
@@ -53,11 +53,11 @@ export function StageWiseCostingDocument({
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 10, marginTop: 4 }]}>{title}</Text>
-        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
-          {`Vehicle: ${vehicleName}   |   FY ${fy}${marginPct !== 0 ? `   |   Margin: ${marginPct}%` : ""}${asOfDate ? `   |   As Of: ${asOfDate.split("-").reverse().join("/")}` : ""}`}
+        <Text style={[styles.docTypeCentered, { fontSize: 12, marginTop: 4 }]}>{title}</Text>
+        <Text style={{ fontSize: 9.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+          {`Job No.: ${jobLabel}   |   FY ${fy}${marginPct !== 0 ? `   |   Margin: ${marginPct}%` : ""}${asOfDate ? `   |   As Of: ${asOfDate.split("-").reverse().join("/")}` : ""}`}
         </Text>
-        <Text style={{ fontSize: 7.5, color: "#9CA3AF", textAlign: "center", marginBottom: 4 }}>
+        <Text style={{ fontSize: 9, color: "#9CA3AF", textAlign: "center", marginBottom: 4 }}>
           Amounts include tax (GST included)
         </Text>
 
@@ -129,7 +129,7 @@ export function StageWiseCostingDocument({
           <Text
             style={styles.footerText}
             render={({ pageNumber, totalPages }) =>
-              `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          ${title} — ${vehicleName} — FY ${fy}`
+              `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          ${title} — ${jobLabel} — FY ${fy}`
             }
           />
         </View>

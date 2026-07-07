@@ -9,7 +9,7 @@ import { CACHE_TAGS } from "@/lib/cache";
 export const getActiveVehiclesForReports = unstable_cache(
   async () =>
     db
-      .select({ id: vehicles.id, vehicle_name: vehicles.vehicle_name, job_ref_no: vehicles.job_ref_no })
+      .select({ id: vehicles.id, job_ref_no: vehicles.job_ref_no })
       .from(vehicles)
       .where(eq(vehicles.is_active, true))
       .orderBy(vehicles.job_ref_no),

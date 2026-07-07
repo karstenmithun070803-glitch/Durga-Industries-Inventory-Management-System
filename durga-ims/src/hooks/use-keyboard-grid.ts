@@ -82,6 +82,7 @@ export function useKeyboardGrid({
           if ((e.target as HTMLElement).tagName === "BUTTON") return;
 
           e.preventDefault();
+          e.stopPropagation();
           // Enter always goes to col 0 of the next row (creates a new row if on last)
           if (isLastRow) {
             if (rowHasAnyData(rows[rowIndex])) {
@@ -96,6 +97,7 @@ export function useKeyboardGrid({
         }
         case "ArrowDown": {
           e.preventDefault();
+          e.stopPropagation();
           // ↓ moves to next row, same column. Never creates rows.
           if (!isLastRow) {
             focusCell(rowIndex + 1, colIndex);
@@ -104,16 +106,21 @@ export function useKeyboardGrid({
         }
         case "ArrowUp": {
           e.preventDefault();
-          if (rowIndex > 0) focusCell(rowIndex - 1, colIndex);
+          if (rowIndex > 0) {
+            e.stopPropagation(); // row 0: let bubble so section nav exits the grid upward
+            focusCell(rowIndex - 1, colIndex);
+          }
           break;
         }
         case "ArrowRight": {
           e.preventDefault();
+          e.stopPropagation();
           focusNextEditableCell(rowIndex, colIndex, 1);
           break;
         }
         case "ArrowLeft": {
           e.preventDefault();
+          e.stopPropagation();
           focusNextEditableCell(rowIndex, colIndex, -1);
           break;
         }

@@ -32,12 +32,17 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
     () =>
       vehicles.map((v) => ({
         value: v.id,
-        label: `${v.job_ref_no}${v.vehicle_name ? ` — ${v.vehicle_name}` : ""}${v.customer_name ? ` (${v.customer_name})` : ""}${!v.is_active ? " [Inactive]" : ""}`,
+        label: `${v.job_ref_no}${v.customer_name ? ` (${v.customer_name})` : ""}${!v.is_active ? " [Inactive]" : ""}`,
       })),
     [vehicles]
   );
 
   async function handleSelect(vehicleId: string) {
+    if (!vehicleId) {
+      setSelectedVehicleId(null);
+      setResult(null);
+      return;
+    }
     setSelectedVehicleId(vehicleId);
     setResult(null);
     setLoading(true);
@@ -73,7 +78,6 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
         <div className="mt-4">
           {/* Vehicle info */}
           <div className="flex items-center gap-4 mb-3 text-sm">
-            <span className="font-medium text-slate-800">{result.vehicle.vehicle_name ?? "—"}</span>
             <span className={cn(
               "px-2 py-0.5 rounded-full text-xs font-medium",
               result.vehicle.vehicle_type === "New" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
@@ -124,6 +128,7 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
               <div className="mt-3 flex justify-end">
                 <PrintButton
                   label="Print Job Cost PDF"
+                  hotkey="mod+p"
                   getDocument={async () => {
                     const { JobCostDocument } = await import("@/components/pdf/job-cost-pdf");
                     return <JobCostDocument result={result} companySetting={companySetting} />;

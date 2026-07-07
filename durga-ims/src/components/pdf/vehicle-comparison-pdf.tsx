@@ -63,11 +63,11 @@ export function VehicleComparisonDocument({
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 10, marginTop: 4 }]}>VEHICLE COMPARISON REPORT</Text>
-        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 2 }}>
+        <Text style={[styles.docTypeCentered, { fontSize: 12, marginTop: 4 }]}>VEHICLE COMPARISON REPORT</Text>
+        <Text style={{ fontSize: 9.5, color: "#6B7280", textAlign: "center", marginBottom: 2 }}>
           {v1Name}  vs  {v2Name}
         </Text>
-        <Text style={{ fontSize: 8, color: "#9CA3AF", textAlign: "center", marginBottom: 6 }}>
+        <Text style={{ fontSize: 9.5, color: "#9CA3AF", textAlign: "center", marginBottom: 6 }}>
           {filterParts.join("   |   ")}
         </Text>
 
@@ -115,7 +115,7 @@ export function VehicleComparisonDocument({
         })}
 
         <View style={[styles.separator, { marginTop: 2 }]} />
-        <Text style={{ fontSize: 7.5, color: "#9CA3AF", marginTop: 4 }}>
+        <Text style={{ fontSize: 9, color: "#9CA3AF", marginTop: 4 }}>
           {rows.length} material{rows.length !== 1 ? "s" : ""} shown
           {showDiffOnly ? " (differences only)" : ""}
           {hideAmounts ? " · amounts hidden" : ""}

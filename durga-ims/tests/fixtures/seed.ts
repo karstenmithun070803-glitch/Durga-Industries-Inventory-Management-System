@@ -135,7 +135,7 @@ export async function createTestVehicle(
   const jobRef = `TEST-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const [row] = await db
     .insert(schema.vehicles)
-    .values({ job_ref_no: jobRef, vehicle_name: "Test Vehicle", customer_id: customer, ...overrides })
+    .values({ job_ref_no: jobRef, customer_id: customer, ...overrides })
     .returning();
   trackCreated("vehicles", row.id);
   return row;

@@ -38,7 +38,7 @@ function fmtDate(iso: string) {
 type RptType = "stage" | "material";
 
 interface Props {
-  vehicles: { id: string; vehicle_name: string | null; job_ref_no: string }[];
+  vehicles: { id: string; job_ref_no: string }[];
   defaultFY: string;
   companySetting?: CompanySetting;
 }
@@ -49,7 +49,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
   const [vehicleId, setVehicleId] = useState("");
   const [asOfDate, setAsOfDate] = useState("");
   const [rptType, setRptType] = useState<RptType>("stage");
-  const [marginPct, setMarginPct] = useState(0);
+  const [marginPct, setMarginPct] = useState("0");
   const [storedMargin, setStoredMargin] = useState(0);
   const [stageRows, setStageRows] = useState<StageWiseCostingRow[]>([]);
   const [materialRows, setMaterialRows] = useState<MaterialWiseCostingRow[]>([]);
@@ -59,13 +59,11 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
 
   const vehicleOptions = vehicles.map((v) => ({
     value: v.id,
-    label: `${v.job_ref_no}${v.vehicle_name ? ` — ${v.vehicle_name}` : ""}`,
+    label: v.job_ref_no,
   }));
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId);
-  const vehicleLabel = selectedVehicle
-    ? `${selectedVehicle.job_ref_no}${selectedVehicle.vehicle_name ? ` — ${selectedVehicle.vehicle_name}` : ""}`
-    : "";
+  const vehicleLabel = selectedVehicle?.job_ref_no ?? "";
 
   async function runReport() {
     if (!vehicleId) return;
@@ -73,8 +71,8 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     setIsLoading(true);
     try {
       // If margin changed from stored value, persist to DB first
-      if (marginPct !== storedMargin) {
-        await updateVehicleMargin(vehicleId, fy, String(marginPct));
+      if (parseFloat(marginPct) !== storedMargin) {
+        await updateVehicleMargin(vehicleId, fy, marginPct);
       }
       const [sw, mw] = await Promise.all([
         getStageWiseCostingData(vehicleId, fy, asOfDate || undefined),
@@ -84,7 +82,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         setStageRows(sw.rows);
         setMaterialRows(mw.rows);
         setStoredMargin(sw.storedMargin);
-        setMarginPct(sw.storedMargin);
+        setMarginPct(String(sw.storedMargin));
         setHasRun(true);
       }
     } catch {
@@ -110,7 +108,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
             setStageRows(sw.rows);
             setMaterialRows(mw.rows);
             setStoredMargin(sw.storedMargin);
-            setMarginPct(sw.storedMargin);
+            setMarginPct(String(sw.storedMargin));
             setHasRun(true);
           }
         })
@@ -230,11 +228,12 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         <div className="space-y-1 w-28">
           <label className="text-xs font-medium text-slate-600">Margin %</label>
           <Input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={marginPct}
-            onChange={(e) => setMarginPct(parseFloat(e.target.value) || 0)}
+            onChange={(e) => { if (/^\d*\.?\d*$/.test(e.target.value)) setMarginPct(e.target.value); }}
             onFocus={(e) => e.target.select()}
+            onKeyDown={(e) => { if (e.key === "Enter") runReport(); }}
             className="h-9 text-sm"
           />
         </div>
@@ -263,6 +262,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
             <PrintButton
               label="Print"
               disabled={!hasData}
+              hotkey="mod+p"
               getDocument={async () => {
                 const { StageWiseCostingDocument } = await import("@/components/pdf/stage-wise-costing-pdf");
                 return (
@@ -270,9 +270,9 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                     stageRows={displayStageRows}
                     materialRows={displayMaterialRows}
                     rptType={rptType}
-                    vehicleName={vehicleLabel}
+                    jobLabel={vehicleLabel}
                     fy={fy}
-                    marginPct={marginPct}
+                    marginPct={parseFloat(marginPct) || 0}
                     companySetting={companySetting}
                     asOfDate={asOfDate || undefined}
                   />

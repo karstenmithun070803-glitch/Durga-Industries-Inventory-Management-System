@@ -30,7 +30,7 @@ export function JobCostDocument({ result, companySetting }: Props) {
   const jobLabel = result.vehicle.job_ref_no;
 
   return (
-    <Document title={`Job Cost — ${result.vehicle.vehicle_name ?? result.vehicle.job_ref_no}`}>
+    <Document title={`Job Cost — ${result.vehicle.job_ref_no}`}>
       <Page size="A4" style={styles.page}>
         {/* Company header */}
         <View>
@@ -44,8 +44,8 @@ export function JobCostDocument({ result, companySetting }: Props) {
         {/* Vehicle info */}
         <View style={{ marginTop: 10, marginBottom: 6 }}>
           <View style={styles.infoLine}>
-            <Text style={styles.infoLineLabel}>VEHICLE</Text>
-            <Text style={styles.infoLineValue}>: {result.vehicle.vehicle_name ?? "—"}  ({jobLabel})</Text>
+            <Text style={styles.infoLineLabel}>JOB NO.</Text>
+            <Text style={styles.infoLineValue}>: {jobLabel}</Text>
           </View>
           <View style={styles.infoLine}>
             <Text style={styles.infoLineLabel}>TYPE</Text>
