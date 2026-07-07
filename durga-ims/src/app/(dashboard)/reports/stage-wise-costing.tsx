@@ -22,9 +22,15 @@ function buildFYOptions(defaultFY: string) {
   const [startYear] = defaultFY.split("-").map(Number);
   return Array.from({ length: 5 }, (_, i) => {
     const y = startYear - i;
-    const label = `${y}-${String(y + 1).slice(-2)}`;
-    return { value: label, label: `FY ${label}` };
+    const fullFY  = `${y}-${y + 1}`;
+    const display = `${y}-${String(y + 1).slice(-2)}`;
+    return { value: fullFY, label: `FY ${display}` };
   });
+}
+
+function fmtFY(fy: string): string {
+  const [y] = fy.split("-");
+  return `${y}-${String(Number(y) + 1).slice(-2)}`;
 }
 
 function fmtAmt(v: number) {
@@ -161,7 +167,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `stage-wise-costing-${vehicleLabel.replace(/[^a-z0-9]/gi, "_")}-${fy}${asOfDate ? `-as-of-${asOfDate}` : ""}.csv`;
+    a.download = `stage-wise-costing-${vehicleLabel.replace(/[^a-z0-9]/gi, "_")}-${fmtFY(fy)}${asOfDate ? `-as-of-${asOfDate}` : ""}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -250,7 +256,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         </div>
       ) : activeRows.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-slate-700 text-sm">
-          No stage-based (VMI New) material slips found for {vehicleLabel} in FY {fy}{asOfDate && ` as of ${fmtDate(asOfDate)}`}
+          No stage-based (VMI New) material issue data found for {vehicleLabel} in FY {fmtFY(fy)}{asOfDate && ` as of ${fmtDate(asOfDate)}`}
         </div>
       ) : (
         <>
@@ -271,7 +277,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                     materialRows={displayMaterialRows}
                     rptType={rptType}
                     jobLabel={vehicleLabel}
-                    fy={fy}
+                    fy={fmtFY(fy)}
                     marginPct={parseFloat(marginPct) || 0}
                     companySetting={companySetting}
                     asOfDate={asOfDate || undefined}
