@@ -1092,7 +1092,7 @@ export function NewVMIClient({
                   <span className="text-sm text-slate-600 w-28 shrink-0">Stage</span>
                   {f2Mode && (
                     <span className="text-xs font-semibold text-amber-700 bg-amber-100 rounded px-2 py-0.5">
-                      Saved (F2)
+                      Saved
                     </span>
                   )}
                   <button
