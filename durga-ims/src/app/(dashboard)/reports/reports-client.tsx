@@ -17,6 +17,7 @@ type ReportTab = "invoice-summary" | "purchase" | "monthly-stock" | "job-cost" |
 
 interface Props {
   vehicles: { id: string; job_ref_no: string }[];
+  stageVehicles: { id: string; job_ref_no: string }[];
   suppliers: { id: string; name: string }[];
   materials: { id: string; name: string; material_no: number }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];
@@ -34,7 +35,7 @@ const NAV_ITEMS: { id: ReportTab; label: string; icon: React.ElementType }[] = [
   { id: "vehicle-comparison",  label: "Vehicle Comparison",  icon: GitCompare   },
 ];
 
-export function ReportsClient({ vehicles, suppliers, materials, customers, stages, jobCostVehicles, companySetting }: Props) {
+export function ReportsClient({ vehicles, stageVehicles, suppliers, materials, customers, stages, jobCostVehicles, companySetting }: Props) {
   const { activeFY } = useFY();
   const [activeTab, setActiveTab] = useState<ReportTab>("invoice-summary");
   const [navHighlight, setNavHighlight] = useState(-1);
@@ -151,7 +152,7 @@ export function ReportsClient({ vehicles, suppliers, materials, customers, stage
         )}
         {activeTab === "stage-costing" && (
           <StageWiseCostingReport
-            vehicles={vehicles}
+            vehicles={stageVehicles}
             defaultFY={activeFY}
             companySetting={companySetting}
           />

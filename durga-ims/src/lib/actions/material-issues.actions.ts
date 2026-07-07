@@ -1278,17 +1278,12 @@ export async function saveVehicleStage(
             eq(materialIssueItems.stage_id, stageId)
           )
         );
-      // Append stageId to saved_stage_ids if not already present
-      await tx.execute(sql`
-        UPDATE material_issues
-        SET saved_stage_ids = CASE
-          WHEN ${stageId} = ANY(saved_stage_ids) THEN saved_stage_ids
-          ELSE array_append(saved_stage_ids, ${stageId})
-        END,
-        issue_date = ${date},
-        margin_percentage = ${marginPct || "0"}
-        WHERE id = ${id}
-      `);
+      // Append stageId to saved_stage_ids (array_remove first ensures idempotency)
+      await tx.update(materialIssues).set({
+        saved_stage_ids: sql`array_append(array_remove(${materialIssues.saved_stage_ids}, ${stageId}::text), ${stageId}::text)`,
+        issue_date: date,
+        margin_percentage: marginPct || "0",
+      }).where(eq(materialIssues.id, id));
     }
 
     await tx
@@ -1427,11 +1422,9 @@ export async function deleteSavedStage(
         )
       );
 
-    await tx.execute(sql`
-      UPDATE material_issues
-      SET saved_stage_ids = array_remove(saved_stage_ids, ${stageId})
-      WHERE id = ${issueId}
-    `);
+    const [updatedRecord] = await tx.update(materialIssues).set({
+      saved_stage_ids: sql`array_remove(${materialIssues.saved_stage_ids}, ${stageId}::text)`,
+    }).where(eq(materialIssues.id, issueId)).returning({ saved_stage_ids: materialIssues.saved_stage_ids });
 
     // Recalculate total_amount
     const [totals] = await tx
@@ -1439,13 +1432,8 @@ export async function deleteSavedStage(
       .from(materialIssueItems)
       .where(eq(materialIssueItems.issue_id, issueId));
 
-    // Check if any stages remain; if not, delete the entire record
-    const [updated] = await tx
-      .select({ saved_stage_ids: materialIssues.saved_stage_ids })
-      .from(materialIssues)
-      .where(eq(materialIssues.id, issueId));
-
-    if (!updated || updated.saved_stage_ids.length === 0) {
+    // If no stages remain, delete the entire record; otherwise update total
+    if (!updatedRecord || updatedRecord.saved_stage_ids.length === 0) {
       await tx.delete(materialIssues).where(eq(materialIssues.id, issueId));
     } else {
       await tx

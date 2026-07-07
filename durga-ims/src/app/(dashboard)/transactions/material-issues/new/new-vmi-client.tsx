@@ -1017,7 +1017,7 @@ export function NewVMIClient({
 
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
 
-  useHotkeys("f2", (e) => {
+  useHotkeys(["f2", "meta+f2"], (e) => {
     e.preventDefault();
     if (savedStageIds.length === 0) return;
     setF2Mode((prev) => {

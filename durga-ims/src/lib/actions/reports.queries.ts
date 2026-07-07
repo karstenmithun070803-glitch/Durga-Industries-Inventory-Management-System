@@ -3,7 +3,7 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { vehicles, suppliers, materials, customers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { CACHE_TAGS } from "@/lib/cache";
 
 export const getActiveVehiclesForReports = unstable_cache(
@@ -14,6 +14,17 @@ export const getActiveVehiclesForReports = unstable_cache(
       .where(eq(vehicles.is_active, true))
       .orderBy(vehicles.job_ref_no),
   ["reports-active-vehicles"],
+  { tags: [CACHE_TAGS.vehicles], revalidate: false }
+);
+
+export const getVMINewVehiclesForReports = unstable_cache(
+  async () =>
+    db
+      .select({ id: vehicles.id, job_ref_no: vehicles.job_ref_no })
+      .from(vehicles)
+      .where(and(eq(vehicles.is_active, true), eq(vehicles.type, "New")))
+      .orderBy(vehicles.job_ref_no),
+  ["reports-vmi-new-vehicles"],
   { tags: [CACHE_TAGS.vehicles], revalidate: false }
 );
 

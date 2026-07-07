@@ -5,6 +5,7 @@ import {
   getActiveSuppliersForReports,
   getActiveMaterialsForReports,
   getActiveCustomersForReports,
+  getVMINewVehiclesForReports,
 } from "@/lib/actions/reports.queries";
 import { getVehiclesForJobSearch } from "@/lib/actions/stock.actions";
 import { getCompanySettings } from "@/lib/actions/settings.actions";
@@ -18,10 +19,11 @@ export default async function ReportsPage() {
   let customers: Awaited<ReturnType<typeof getActiveCustomersForReports>> = [];
   let stages: Awaited<ReturnType<typeof getStagesForDropdown>> = [];
   let jobCostVehicles: Awaited<ReturnType<typeof getVehiclesForJobSearch>> = [];
+  let stageVehicles: Awaited<ReturnType<typeof getVMINewVehiclesForReports>> = [];
   let companySetting: Awaited<ReturnType<typeof getCompanySettings>> | undefined = undefined;
 
   try {
-    [vehicles, suppliers, materials, customers, stages, jobCostVehicles, companySetting] =
+    [vehicles, suppliers, materials, customers, stages, jobCostVehicles, stageVehicles, companySetting] =
       await Promise.all([
         getActiveVehiclesForReports(),
         getActiveSuppliersForReports(),
@@ -29,6 +31,7 @@ export default async function ReportsPage() {
         getActiveCustomersForReports(),
         getStagesForDropdown(),
         getVehiclesForJobSearch(),
+        getVMINewVehiclesForReports(),
         getCompanySettings(),
       ]);
   } catch (e) {
@@ -43,6 +46,7 @@ export default async function ReportsPage() {
       customers={customers}
       stages={stages}
       jobCostVehicles={jobCostVehicles}
+      stageVehicles={stageVehicles}
       companySetting={companySetting}
     />
   );
