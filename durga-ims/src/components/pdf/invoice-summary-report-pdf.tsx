@@ -47,13 +47,13 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
   const W = {
     sno:      "5%",
     bill:     "9%",
-    date:     "9%",
-    vehicle:  "13%",
-    customer: "22%",
+    date:     "11%",
+    vehicle:  "15%",
+    customer: "20%",
     taxable:  "12%",
     tax:      "11%",
     discount: "10%",  // conditional
-    net:      "15%",
+    net:      "13%",
   };
 
   return (
@@ -67,8 +67,8 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 12, marginTop: 4 }]}>INVOICE SUMMARY REPORT</Text>
-        <Text style={{ fontSize: 9.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+        <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>INVOICE SUMMARY REPORT</Text>
+        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
           {filterParts.join("   |   ")}
         </Text>
 

@@ -70,8 +70,8 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 12, marginTop: 4 }]}>MONTHLY STOCK REPORT</Text>
-        <Text style={{ fontSize: 9.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+        <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>MONTHLY STOCK REPORT</Text>
+        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
           {filterParts.join("   |   ")}
         </Text>
 

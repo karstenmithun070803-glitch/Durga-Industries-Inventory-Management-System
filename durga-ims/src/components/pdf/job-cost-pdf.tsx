@@ -1,7 +1,7 @@
 import React from "react";
 import { Document, Page, View, Text } from "@react-pdf/renderer";
 import {
-  styles,
+  docStyles as styles,
   COMPANY_NAME,
   COMPANY_ADDRESS,
   COMPANY_GSTIN,

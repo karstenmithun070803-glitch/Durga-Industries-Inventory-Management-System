@@ -53,8 +53,8 @@ export function StageWiseCostingDocument({
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 12, marginTop: 4 }]}>{title}</Text>
-        <Text style={{ fontSize: 9.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+        <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>{title}</Text>
+        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
           {`Job No.: ${jobLabel}   |   FY ${fy}${marginPct !== 0 ? `   |   Margin: ${marginPct}%` : ""}${asOfDate ? `   |   As Of: ${asOfDate.split("-").reverse().join("/")}` : ""}`}
         </Text>
         <Text style={{ fontSize: 9, color: "#9CA3AF", textAlign: "center", marginBottom: 4 }}>

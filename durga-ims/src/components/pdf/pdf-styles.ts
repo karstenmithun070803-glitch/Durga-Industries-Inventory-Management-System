@@ -4,7 +4,11 @@ export const COMPANY_NAME = "DURGA INDUSTRIES";
 export const COMPANY_ADDRESS = "S.FNO.1994/2, MADURAI NEW BYE PASS RD, NEAR PERIYAR ARCH, KARUR - 639002";
 export const COMPANY_GSTIN = "33AALPU5476B1ZJ";
 
-export const styles = StyleSheet.create({
+// ── Base definitions at document (current) sizes ─────────────────────────────
+// Plain object so both scales can spread from it safely. `docStyles` uses these
+// sizes verbatim (invoices / slips / POs / job-cost); `styles` (the report scale)
+// overrides only the font sizes below to a smaller, less-crowded proportion.
+const base = {
   page: {
     fontFamily: "Helvetica",
     fontSize: 10,
@@ -152,6 +156,31 @@ export const styles = StyleSheet.create({
   tableCellCenter: {
     textAlign: "center",
   },
+} as const;
+
+// Document scale — single-record docs (invoices, MI slips, POs, job-cost) keep
+// today's sizes. Alias in those components via `import { docStyles as styles }`.
+export const docStyles = StyleSheet.create(base);
+
+// Report scale (default) — tabular list reports. Font sizes reduced ~1.5pt so
+// dense reports (Purchase Report, etc.) are less crowded; only fontSize and row
+// padding differ from `base`. All widths/margins/separators stay identical.
+export const styles = StyleSheet.create({
+  ...base,
+  page: { ...base.page, fontSize: 8.5 },
+  companyNameCentered: { ...base.companyNameCentered, fontSize: 16 },
+  companyDetailCentered: { ...base.companyDetailCentered, fontSize: 8 },
+  docTypeCentered: { ...base.docTypeCentered, fontSize: 11 },
+  infoLineLabel: { ...base.infoLineLabel, fontSize: 8.5 },
+  infoLineLabelInvoice: { ...base.infoLineLabelInvoice, fontSize: 8.5 },
+  infoLineLabelMI: { ...base.infoLineLabelMI, fontSize: 8.5 },
+  infoLineValue: { ...base.infoLineValue, fontSize: 8.5 },
+  plainTableHead: { ...base.plainTableHead, paddingVertical: 2 },
+  plainTableHeadCell: { ...base.plainTableHeadCell, fontSize: 8.5 },
+  plainTableRow: { ...base.plainTableRow, paddingVertical: 3 },
+  plainTableCell: { ...base.plainTableCell, fontSize: 8.5 },
+  plainTableCellBold: { ...base.plainTableCellBold, fontSize: 8.5 },
+  footerText: { ...base.footerText, fontSize: 8 },
 });
 
 export function fmtAmt(v: string | null | undefined): string {

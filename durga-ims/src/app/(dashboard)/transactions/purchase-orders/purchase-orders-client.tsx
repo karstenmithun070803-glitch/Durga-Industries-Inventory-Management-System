@@ -871,6 +871,19 @@ export function PurchaseOrdersClient({
                   <span className="text-sm text-slate-700">Update Stock</span>
                 </label>
               </div>
+              {loadedPO && (
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={printWithRates}
+                      onChange={(e) => setPrintWithRates(e.target.checked)}
+                      className="w-4 h-4 accent-slate-700"
+                    />
+                    <span className="text-sm text-slate-700">Include rates &amp; amounts</span>
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Received PO edit warning */}
@@ -979,15 +992,6 @@ export function PurchaseOrdersClient({
 
                 {loadedPO && (
                   <>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={printWithRates}
-                        onChange={(e) => setPrintWithRates(e.target.checked)}
-                        className="w-4 h-4 accent-slate-700"
-                      />
-                      <span className="text-sm text-slate-700">Include rates &amp; amounts</span>
-                    </label>
                     <PrintButton
                       getDocument={async () => {
                         const { PORegisterDocument } = await import("@/components/pdf/po-register-pdf");

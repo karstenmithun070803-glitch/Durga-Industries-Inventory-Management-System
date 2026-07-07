@@ -109,8 +109,8 @@ function PurchaseDetailDocument({
         <Text style={styles.companyDetailCentered}>{coAddress}</Text>
         <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
       </View>
-      <Text style={[styles.docTypeCentered, { fontSize: 12, marginTop: 4 }]}>PURCHASE REPORT</Text>
-      <Text style={{ fontSize: 9.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+      <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>PURCHASE REPORT</Text>
+      <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
         {filterParts.join("   |   ")}
       </Text>
       <View style={styles.separator} />
@@ -226,8 +226,8 @@ function PurchaseMonthlyDocument({
         <Text style={styles.companyDetailCentered}>{coAddress}</Text>
         <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
       </View>
-      <Text style={[styles.docTypeCentered, { fontSize: 12, marginTop: 4 }]}>PURCHASE REPORT — MONTHLY VIEW</Text>
-      <Text style={{ fontSize: 9.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+      <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>PURCHASE REPORT — MONTHLY VIEW</Text>
+      <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
         {filterParts.join("   |   ")}
       </Text>
       <View style={styles.separator} />
