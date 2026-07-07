@@ -312,7 +312,6 @@ export function NewVMIClient({
   // Dialog states
   const [issueConfirmOpen, setIssueConfirmOpen] = useState(false);
   const [reapplyConfirmOpen, setReapplyConfirmOpen] = useState(false);
-  const [stageSaveConfirmOpen, setStageSaveConfirmOpen] = useState(false);
   const [issueAllConfirmOpen, setIssueAllConfirmOpen] = useState(false);
   const [zeroRateDialogOpen, setZeroRateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -882,7 +881,7 @@ export function NewVMIClient({
     if (activeRows.length === 0) { toast.error("Add at least one material for this stage."); return; }
     const hasStageZeroRate = activeRows.some((r) => r.rate === "0" && !r.rateBlank && !r.zeroRateConfirmed);
     if (hasStageZeroRate) { setZeroRateDialogOpen(true); return; }
-    setStageSaveConfirmOpen(true);
+    confirmSaveStage();
   }
 
   function confirmIssue() {
@@ -912,7 +911,6 @@ export function NewVMIClient({
   }
 
   function confirmSaveStage() {
-    setStageSaveConfirmOpen(false);
     const savedStageId = activeStageId!;
     const stageItems = buildItemsPayload(rows.filter((r) => r.stage_id === savedStageId && r.material_id));
     startTransition(async () => {
@@ -1017,8 +1015,7 @@ export function NewVMIClient({
 
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
 
-  useHotkeys(["f2", "meta+f2"], (e) => {
-    e.preventDefault();
+  function toggleF2Mode() {
     if (savedStageIds.length === 0) return;
     setF2Mode((prev) => {
       const next = !prev;
@@ -1032,7 +1029,10 @@ export function NewVMIClient({
       }
       return next;
     });
-  }, { enableOnFormTags: true });
+  }
+
+  // Ctrl+E (Windows) / Cmd+E (Mac) — both work reliably without needing Fn key
+  useHotkeys("ctrl+e,meta+e", (e) => { e.preventDefault(); toggleF2Mode(); }, { enableOnFormTags: true });
 
   const { subtotal, cgst, sgst, igst, grand } = calcTotals(rows);
   const hasFormContent = !!vehicleId;
@@ -1215,7 +1215,7 @@ export function NewVMIClient({
               {recordStatus === "Draft" && (
                 <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded px-3 py-2">
                   <p className="text-sm text-blue-800">
-                    <span className="font-medium">Draft in progress.</span> {savedStageIds.length} stage{savedStageIds.length !== 1 ? "s" : ""} saved.{savedStageIds.length > 0 ? " Press F2 to review saved stages." : ""}
+                    <span className="font-medium">Draft in progress.</span> {savedStageIds.length} stage{savedStageIds.length !== 1 ? "s" : ""} saved.{savedStageIds.length > 0 ? " Press Ctrl+E (Windows) or Cmd+E (Mac) to review saved stages." : ""}
                   </p>
                 </div>
               )}
@@ -1326,6 +1326,18 @@ export function NewVMIClient({
                 </Button>
               )}
 
+              {recordStatus === "Draft" && savedStageIds.length > 0 && (
+                <Button
+                  variant="outline"
+                  className={cn("h-10 px-5", f2Mode && "bg-amber-50 border-amber-300 text-amber-800")}
+                  onClick={toggleF2Mode}
+                  disabled={isPending}
+                  title="Toggle saved stages view (Ctrl+E on Windows / Cmd+E on Mac)"
+                >
+                  {f2Mode ? "← Unsaved Stages" : "Review Saved ▸"}
+                </Button>
+              )}
+
               {f2Mode && (
                 <Button
                   variant="outline"
@@ -1386,7 +1398,7 @@ export function NewVMIClient({
                 setZeroRateDialogOpen(false);
                 setRows((prev) => prev.map((r) => ({ ...r, zeroRateConfirmed: r.rate === "0" ? true : r.zeroRateConfirmed })));
                 if (recordStatus === "Issued") setReapplyConfirmOpen(true);
-                else setStageSaveConfirmOpen(true);
+                else confirmSaveStage();
               }}
             >
               Confirm Zero Rates
@@ -1426,24 +1438,6 @@ export function NewVMIClient({
             <Button variant="outline" onClick={() => setReapplyConfirmOpen(false)} disabled={isPending}>Cancel</Button>
             <Button onClick={confirmReapply} disabled={isPending} className="bg-amber-600 hover:bg-amber-700">
               {isPending ? "Processing…" : "Reverse & Reapply"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Stage save confirmation */}
-      <Dialog open={stageSaveConfirmOpen} onOpenChange={setStageSaveConfirmOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Save this stage?</DialogTitle>
-            <DialogDescription>
-              This will save the current stage as a draft. No stock will be deducted yet. Use &quot;Issue All&quot; when all stages are ready to finalize.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStageSaveConfirmOpen(false)} disabled={isPending}>Cancel</Button>
-            <Button onClick={confirmSaveStage} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? "Saving…" : "Save Stage"}
             </Button>
           </DialogFooter>
         </DialogContent>
