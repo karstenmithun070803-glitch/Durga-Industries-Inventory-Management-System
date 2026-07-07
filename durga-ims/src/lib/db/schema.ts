@@ -254,6 +254,8 @@ export const materialIssues = pgTable("material_issues", {
   issue_type: text("issue_type").notNull().default("OLD"),
   // null for OLD type; set for NEW type
   stage_id: uuid("stage_id").references(() => stages.id),
+  // UUIDs of stages whose items have been committed to draft (NEW type only)
+  saved_stage_ids: text("saved_stage_ids").array().notNull().default(sql`'{}'::text[]`),
   ...timestamps,
 }, (t) => [
   // One record per vehicle per issue_type per financial_year

@@ -216,6 +216,7 @@ export interface MaterialIssueWithDetails {
   stage_id: string | null;
   margin_percentage: string;
   total_amount: string;
+  saved_stage_ids: string[];
   vehicle_id: string;
   job_ref_no: string;
   customer_id: string | null;

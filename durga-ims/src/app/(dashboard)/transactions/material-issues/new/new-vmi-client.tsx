@@ -6,6 +6,9 @@ import { isDateInFY } from "@/lib/fy";
 import {
   getVehicleMaterialIssue,
   saveVehicleMaterialIssue,
+  saveVehicleStage,
+  issueDraftRecord,
+  deleteSavedStage,
   deleteMaterialIssue,
   getVehicleIssueDatesForFY,
 } from "@/lib/actions/material-issues.actions";
@@ -301,9 +304,16 @@ export function NewVMIClient({
   }, []); // stable — all mutable values read via refs
   const [pendingFY, setPendingFY] = useState<string | null>(null);
 
+  // Draft / stage-save state
+  const [f2Mode, setF2Mode] = useState(false);
+  const [savedStageIds, setSavedStageIds] = useState<string[]>([]);
+  const [recordStatus, setRecordStatus] = useState<"Draft" | "Issued" | null>(null);
+
   // Dialog states
   const [issueConfirmOpen, setIssueConfirmOpen] = useState(false);
   const [reapplyConfirmOpen, setReapplyConfirmOpen] = useState(false);
+  const [stageSaveConfirmOpen, setStageSaveConfirmOpen] = useState(false);
+  const [issueAllConfirmOpen, setIssueAllConfirmOpen] = useState(false);
   const [zeroRateDialogOpen, setZeroRateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
@@ -314,8 +324,6 @@ export function NewVMIClient({
   const vehicleSectionRef = useRef<HTMLDivElement>(null);
   const dateSectionRef = useRef<HTMLDivElement>(null);
   const stageSectionRef = useRef<HTMLDivElement>(null);
-  const marginSectionRef = useRef<HTMLDivElement>(null);
-  const marginInputRef = useRef<HTMLInputElement>(null);
   const gridSectionRef = useRef<HTMLDivElement>(null);
   // Ref to goToSection so async callbacks (loadVehicleRecord) can call it
   const goToSectionRef = useRef<((index: number) => void) | null>(null);
@@ -325,11 +333,15 @@ export function NewVMIClient({
     ? determineGstType(selectedVehicle.customer_gstin, selectedVehicle.customer_state)
     : "CGST_SGST";
 
-  // Stages in master list order — stable navigation regardless of insertion order
-  const orderedStageIds = useMemo(
-    () => stages.filter((s) => selectedStageIds.includes(s.id)).map((s) => s.id),
-    [stages, selectedStageIds]
-  );
+  // Stages in master list order — main: unsaved only; F2: saved only
+  const orderedStageIds = useMemo(() => {
+    if (f2Mode) {
+      return stages.filter((s) => savedStageIds.includes(s.id)).map((s) => s.id);
+    }
+    return stages
+      .filter((s) => selectedStageIds.includes(s.id) && !savedStageIds.includes(s.id))
+      .map((s) => s.id);
+  }, [stages, selectedStageIds, savedStageIds, f2Mode]);
 
   const isAnyStageLoading = loadingStageIds.size > 0;
 
@@ -358,17 +370,6 @@ export function NewVMIClient({
         onActivate: () => {
           stageSectionRef.current?.querySelector<HTMLElement>("button")?.focus();
         },
-      },
-      {
-        id: "margin",
-        ref: marginSectionRef,
-        isDisabled: () => !vehicleId,
-        autoActivate: true,
-        onActivate: () => {
-          marginInputRef.current?.focus();
-          marginInputRef.current?.select();
-        },
-        onDeactivate: () => marginInputRef.current?.blur(),
       },
       {
         id: "grid",
@@ -447,11 +448,16 @@ export function NewVMIClient({
     setMarginPct("0");
     setRows([newRow()]);
     setIsDirty(false);
+    setF2Mode(false);
+    setSavedStageIds([]);
+    setRecordStatus(null);
   }
 
   function populateForm(record: MaterialIssueWithDetails) {
     setLoadedRecord(record);
     setHasExistingRecord(true);
+    setRecordStatus("Issued");
+    setSavedStageIds(record.saved_stage_ids ?? []);
     setVehicleId(record.vehicle_id);
     const seen = new Set<string>();
     const stageIds: string[] = [];
@@ -473,12 +479,97 @@ export function NewVMIClient({
     ]);
   }
 
+  async function populateDraftForm(record: MaterialIssueWithDetails) {
+    const marginPctVal = record.margin_percentage ?? "0";
+    const factor = 1 + parseFloat(marginPctVal) / 100;
+    const dbRows = miItemsToRows(record, marginPctVal);
+
+    setSavedStageIds(record.saved_stage_ids ?? []);
+    setRecordStatus("Draft");
+    setLoadedRecord(record);
+    setHasExistingRecord(true);
+    setVehicleId(record.vehicle_id);
+    setIssueDate(toISODate(record.issue_date));
+    setMarginPct(marginPctVal);
+    setIsDirty(false);
+    setVehicleIssueDates((prev) => [
+      ...prev.filter((d) => d.vehicleId !== record.vehicle_id),
+      { vehicleId: record.vehicle_id, issue_date: toISODate(record.issue_date) },
+    ]);
+
+    const unsavedStages = stages.filter((s) => !record.saved_stage_ids.includes(s.id));
+    const allStageIds = stages.map((s) => s.id);
+    setSelectedStageIds(allStageIds);
+
+    if (unsavedStages.length === 0) {
+      // All stages saved — auto-enter F2 mode
+      setF2Mode(true);
+      setActiveStageId(record.saved_stage_ids[0] ?? null);
+      setRows(dbRows);
+    } else {
+      // Load unsaved stage materials
+      setLoadingStageIds((prev) => { const s = new Set(prev); unsavedStages.forEach((st) => s.add(st.id)); return s; });
+      try {
+        const grouped = await getAllStageMaterials();
+        const autoRows: typeof dbRows = unsavedStages.flatMap((stage) => {
+          const mats = grouped[stage.id] ?? [];
+          return mats.map((m) => {
+            const baseRate = m.last_po_rate ?? "0";
+            const displayRate = factor > 1 ? (parseFloat(baseRate) * factor).toFixed(4) : baseRate;
+            const taxPct = m.tax_percentage ?? "0";
+            return {
+              _key: crypto.randomUUID(),
+              stage_id: stage.id,
+              stage_name: stage.stage_name,
+              material_id: m.material_id,
+              material_name: m.material_name,
+              material_no: m.material_no,
+              hsn_code: m.hsn_code ?? "",
+              supplier_id: "",
+              supplier_name: "",
+              gst_type: gstType,
+              qty: m.default_qty,
+              unit_id: m.unit_id,
+              unit_name: m.unit_name,
+              rate: displayRate,
+              baseRate: baseRate,
+              tax_percentage: taxPct,
+              rateBlank: m.last_po_rate === null,
+              zeroRateConfirmed: false,
+              contractor_id: "",
+              contractor_name: "",
+              affects_inventory: true,
+              ...computeRowAmounts(m.default_qty, displayRate, taxPct, gstType),
+            };
+          });
+        });
+        setRows([...dbRows, ...autoRows]);
+        // Focus first unsaved stage
+        const firstUnsaved = stages.find((s) => !record.saved_stage_ids.includes(s.id));
+        setActiveStageId(firstUnsaved?.id ?? null);
+      } catch {
+        toast.error("Failed to auto-load unsaved stage materials");
+        setRows(dbRows);
+        setActiveStageId(stages.find((s) => !record.saved_stage_ids.includes(s.id))?.id ?? null);
+      } finally {
+        setLoadingStageIds((prev) => { const s = new Set(prev); unsavedStages.forEach((st) => s.delete(st.id)); return s; });
+      }
+    }
+  }
+
   async function loadVehicleRecord(vehId: string, fy: string) {
+    setF2Mode(false);
+    setSavedStageIds([]);
+    setRecordStatus(null);
     setIsLoading(true);
     try {
       const record = await getVehicleMaterialIssue(vehId, "NEW", fy);
       if (record) {
-        populateForm(record);
+        if (record.status === "Draft") {
+          await populateDraftForm(record);
+        } else {
+          populateForm(record);
+        }
       } else {
         setVehicleId(vehId);
         setHasExistingRecord(false);
@@ -489,6 +580,7 @@ export function NewVMIClient({
         setMarginPct("0");
         setRows([newRow()]);
         setIsDirty(false);
+        setRecordStatus(null);
         // Auto-load all stages for new record
         void handleSelectAllStagesFor(vehId);
       }
@@ -588,8 +680,34 @@ export function NewVMIClient({
     const idx = orderedStageIds.indexOf(activeStageId);
     const remaining = orderedStageIds.filter((id) => id !== activeStageId);
     const nextId = remaining[idx - 1] ?? remaining[0] ?? null;
-    void handleStageToggle(activeStageId, false);
-    setActiveStageId(nextId);
+
+    if (savedStageIds.includes(activeStageId) && loadedRecord) {
+      const removingStageId = activeStageId;
+      startTransition(async () => {
+        try {
+          await deleteSavedStage(loadedRecord.id, removingStageId);
+          const newSaved = savedStageIds.filter((id) => id !== removingStageId);
+          setSavedStageIds(newSaved);
+          setRows((prev) => prev.filter((r) => r.stage_id !== removingStageId));
+          if (newSaved.length === 0) {
+            setLoadedRecord(null);
+            setHasExistingRecord(false);
+            setRecordStatus(null);
+            setF2Mode(false);
+            const fallback = stages.find((s) => selectedStageIds.includes(s.id) && s.id !== removingStageId);
+            setActiveStageId(fallback?.id ?? null);
+          } else {
+            setActiveStageId(nextId);
+          }
+          toast.success("Stage removed");
+        } catch (e) {
+          toast.error(formatActionError(e, "Remove failed"));
+        }
+      });
+    } else {
+      void handleStageToggle(activeStageId, false);
+      setActiveStageId(nextId);
+    }
   }
 
   async function handleSelectAllStages() {
@@ -746,14 +864,25 @@ export function NewVMIClient({
   }
 
   function handleSave() {
-    const err = validate();
-    if (err) { toast.error(err); return; }
-    if (hasZeroRateItems()) { setZeroRateDialogOpen(true); return; }
-    if (!hasExistingRecord) {
-      setIssueConfirmOpen(true);
-    } else {
+    // Issued path: existing reverse+reapply flow
+    if (recordStatus === "Issued") {
+      const err = validate();
+      if (err) { toast.error(err); return; }
+      if (hasZeroRateItems()) { setZeroRateDialogOpen(true); return; }
       setReapplyConfirmOpen(true);
+      return;
     }
+
+    // Draft / new path: per-stage save
+    if (!vehicleId) { toast.error("Please select a vehicle."); return; }
+    if (!issueDate) { toast.error("Please enter a date."); return; }
+    if (!isDateInFY(issueDate, loadedFY)) { toast.error(`Date is outside FY ${loadedFY}.`); return; }
+    if (!activeStageId) { toast.error("No stage selected."); return; }
+    const activeRows = rows.filter((r) => r.stage_id === activeStageId && r.material_id);
+    if (activeRows.length === 0) { toast.error("Add at least one material for this stage."); return; }
+    const hasStageZeroRate = activeRows.some((r) => r.rate === "0" && !r.rateBlank && !r.zeroRateConfirmed);
+    if (hasStageZeroRate) { setZeroRateDialogOpen(true); return; }
+    setStageSaveConfirmOpen(true);
   }
 
   function confirmIssue() {
@@ -778,6 +907,67 @@ export function NewVMIClient({
         await loadVehicleRecord(vehicleId, loadedFY);
       } catch (e: unknown) {
         toast.error(formatActionError(e, "Save failed"));
+      }
+    });
+  }
+
+  function confirmSaveStage() {
+    setStageSaveConfirmOpen(false);
+    const savedStageId = activeStageId!;
+    const stageItems = buildItemsPayload(rows.filter((r) => r.stage_id === savedStageId && r.material_id));
+    startTransition(async () => {
+      try {
+        await saveVehicleStage(vehicleId, savedStageId, stageItems, issueDate, marginPct, loadedFY);
+      } catch (e) {
+        toast.error(formatActionError(e, "Save failed"));
+        return;
+      }
+
+      const newSaved = Array.from(new Set([...savedStageIds, savedStageId]));
+      setSavedStageIds(newSaved);
+      setHasExistingRecord(true);
+      setRecordStatus("Draft");
+      setIsDirty(false);
+      toast.success("Stage saved");
+
+      try {
+        const updatedRecord = await getVehicleMaterialIssue(vehicleId, "NEW", loadedFY);
+        if (updatedRecord) {
+          setLoadedRecord(updatedRecord);
+          setSavedStageIds(updatedRecord.saved_stage_ids);
+        }
+      } catch {
+        // non-fatal refresh failure
+      }
+
+      if (!f2Mode) {
+        const nextUnsaved = stages.find(
+          (s) => selectedStageIds.includes(s.id) && !newSaved.includes(s.id)
+        );
+        if (nextUnsaved) {
+          setActiveStageId(nextUnsaved.id);
+        } else {
+          setF2Mode(true);
+          setActiveStageId(newSaved[0] ?? savedStageId);
+          toast.info("All stages saved — review and click Issue when ready");
+        }
+      }
+    });
+  }
+
+  function handleIssueAll() {
+    setIssueAllConfirmOpen(true);
+  }
+
+  function confirmIssueAll() {
+    setIssueAllConfirmOpen(false);
+    startTransition(async () => {
+      try {
+        await issueDraftRecord(vehicleId, loadedFY, issueDate);
+        toast.success("Materials issued — stock deducted");
+        await loadVehicleRecord(vehicleId, loadedFY);
+      } catch (e) {
+        toast.error(formatActionError(e, "Issue failed"));
       }
     });
   }
@@ -826,6 +1016,23 @@ export function NewVMIClient({
   }
 
   useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+
+  useHotkeys("f2", (e) => {
+    e.preventDefault();
+    if (savedStageIds.length === 0) return;
+    setF2Mode((prev) => {
+      const next = !prev;
+      if (next) {
+        setActiveStageId(savedStageIds[0]);
+      } else {
+        const firstUnsaved = stages.find(
+          (s) => selectedStageIds.includes(s.id) && !savedStageIds.includes(s.id)
+        );
+        setActiveStageId(firstUnsaved?.id ?? null);
+      }
+      return next;
+    });
+  }, { enableOnFormTags: true });
 
   const { subtotal, cgst, sgst, igst, grand } = calcTotals(rows);
   const hasFormContent = !!vehicleId;
@@ -883,9 +1090,14 @@ export function NewVMIClient({
               {vehicleId && (
                 <div className="flex items-center gap-2" ref={stageSectionRef}>
                   <span className="text-sm text-slate-600 w-28 shrink-0">Stage</span>
+                  {f2Mode && (
+                    <span className="text-xs font-semibold text-amber-700 bg-amber-100 rounded px-2 py-0.5">
+                      Saved (F2)
+                    </span>
+                  )}
                   <button
                     onClick={() => navigateStage(-1)}
-                    disabled={isAnyStageLoading || !activeStageId || orderedStageIds.indexOf(activeStageId) === 0}
+                    disabled={isPending || isAnyStageLoading || !activeStageId || orderedStageIds.indexOf(activeStageId) === 0}
                     className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4 text-slate-600" />
@@ -908,7 +1120,7 @@ export function NewVMIClient({
                         <CommandList>
                           <CommandEmpty>No stages found.</CommandEmpty>
                           {orderedStageIds.length > 0 && (
-                            <CommandGroup heading="In this record">
+                            <CommandGroup heading={f2Mode ? "Saved stages" : "In this record"}>
                               {orderedStageIds.map((id) => {
                                 const s = stages.find((st) => st.id === id);
                                 if (!s) return null;
@@ -926,7 +1138,7 @@ export function NewVMIClient({
                               })}
                             </CommandGroup>
                           )}
-                          {stages.filter((s) => !selectedStageIds.includes(s.id)).length > 0 && (
+                          {!f2Mode && stages.filter((s) => !selectedStageIds.includes(s.id)).length > 0 && (
                             <CommandGroup heading="Add stage">
                               {stages.filter((s) => !selectedStageIds.includes(s.id)).map((s) => (
                                 <CommandItem
@@ -946,7 +1158,7 @@ export function NewVMIClient({
                   </Popover>
                   <button
                     onClick={() => navigateStage(1)}
-                    disabled={isAnyStageLoading || !activeStageId || orderedStageIds.indexOf(activeStageId) === orderedStageIds.length - 1}
+                    disabled={isPending || isAnyStageLoading || !activeStageId || orderedStageIds.indexOf(activeStageId) === orderedStageIds.length - 1}
                     className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 transition-colors"
                   >
                     <ChevronRight className="w-4 h-4 text-slate-600" />
@@ -959,14 +1171,14 @@ export function NewVMIClient({
                   {activeStageId && (
                     <button
                       onClick={handleRemoveCurrentStage}
-                      disabled={isAnyStageLoading}
+                      disabled={isPending || isAnyStageLoading}
                       title="Remove this stage and its materials"
                       className="p-1.5 rounded hover:bg-red-50 text-slate-300 hover:text-red-500 disabled:opacity-30 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  {stages.length > 0 && selectedStageIds.length < stages.length && (
+                  {!f2Mode && stages.length > 0 && selectedStageIds.length < stages.length && (
                     <button
                       onClick={() => void handleSelectAllStages()}
                       disabled={isAnyStageLoading}
@@ -989,42 +1201,21 @@ export function NewVMIClient({
                       {selectedVehicle?.job_ref_no || "—"}
                     </div>
                   </div>
-                  <div className="space-y-1" ref={marginSectionRef}>
-                    <label className="text-sm text-slate-600">Margin %</label>
-                    <div className="w-24">
-                      <Input
-                        ref={marginInputRef}
-                        type="text"
-                        inputMode="decimal"
-                        value={marginPct}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "" || /^\d*\.?\d*$/.test(val)) {
-                            setMarginPct(val);
-                            setIsDirty(true);
-                          }
-                        }}
-                        onFocus={(e) => e.target.select()}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            goToSection(4); // advance to Grid
-                          }
-                        }}
-                        className="h-9 text-sm"
-                        placeholder="0"
-                        autoComplete="off"
-                      />
-                    </div>
-                  </div>
                 </div>
               )}
 
-              {hasExistingRecord && (
+              {recordStatus === "Issued" && (
                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-sm text-amber-800">
                     <span className="font-medium">Materials already issued for this vehicle.</span> Saving will reverse the current stock deductions and reapply them with the new values (atomic operation).
+                  </p>
+                </div>
+              )}
+              {recordStatus === "Draft" && (
+                <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                  <p className="text-sm text-blue-800">
+                    <span className="font-medium">Draft in progress.</span> {savedStageIds.length} stage{savedStageIds.length !== 1 ? "s" : ""} saved.{savedStageIds.length > 0 ? " Press F2 to review saved stages." : ""}
                   </p>
                 </div>
               )}
@@ -1117,15 +1308,36 @@ export function NewVMIClient({
                 onClick={handleSave}
                 disabled={
                   isPending || isLoading || isAnyStageLoading ||
-                  (hasExistingRecord
+                  (recordStatus === "Issued"
                     ? !isDirty
-                    : rows.filter((r) => r.material_id).length === 0)
+                    : rows.filter((r) => r.stage_id === activeStageId && r.material_id).length === 0)
                 }
               >
-                {isPending ? "Saving…" : hasExistingRecord ? "Save & Reapply" : "Issue"}
+                {isPending ? "Saving…" : recordStatus === "Issued" ? "Save & Reapply" : "Save Stage"}
               </Button>
 
-              {loadedRecord && (
+              {recordStatus === "Draft" && savedStageIds.length > 0 && (
+                <Button
+                  className="h-10 px-5 bg-emerald-600 hover:bg-emerald-700"
+                  onClick={handleIssueAll}
+                  disabled={isPending || isLoading}
+                >
+                  Issue All
+                </Button>
+              )}
+
+              {f2Mode && (
+                <Button
+                  variant="outline"
+                  className="h-10 px-5"
+                  onClick={clearForm}
+                  disabled={isPending}
+                >
+                  Exit
+                </Button>
+              )}
+
+              {loadedRecord && recordStatus === "Issued" && (
                 <>
                   <PrintButton
                     getDocument={async () => {
@@ -1138,15 +1350,18 @@ export function NewVMIClient({
                   <Button variant="outline" className="h-10 px-5" onClick={() => setCloneDialogOpen(true)} disabled={isPending}>
                     Clone
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="h-10 px-5 text-red-600 border-red-200 hover:bg-red-50"
-                    onClick={handleDelete}
-                    disabled={isPending}
-                  >
-                    Delete
-                  </Button>
                 </>
+              )}
+
+              {loadedRecord && (
+                <Button
+                  variant="outline"
+                  className="h-10 px-5 text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={handleDelete}
+                  disabled={isPending}
+                >
+                  Delete
+                </Button>
               )}
             </>
           )}
@@ -1170,8 +1385,8 @@ export function NewVMIClient({
               onClick={() => {
                 setZeroRateDialogOpen(false);
                 setRows((prev) => prev.map((r) => ({ ...r, zeroRateConfirmed: r.rate === "0" ? true : r.zeroRateConfirmed })));
-                if (!hasExistingRecord) setIssueConfirmOpen(true);
-                else setReapplyConfirmOpen(true);
+                if (recordStatus === "Issued") setReapplyConfirmOpen(true);
+                else setStageSaveConfirmOpen(true);
               }}
             >
               Confirm Zero Rates
@@ -1216,12 +1431,50 @@ export function NewVMIClient({
         </DialogContent>
       </Dialog>
 
+      {/* Stage save confirmation */}
+      <Dialog open={stageSaveConfirmOpen} onOpenChange={setStageSaveConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save this stage?</DialogTitle>
+            <DialogDescription>
+              This will save the current stage as a draft. No stock will be deducted yet. Use &quot;Issue All&quot; when all stages are ready to finalize.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStageSaveConfirmOpen(false)} disabled={isPending}>Cancel</Button>
+            <Button onClick={confirmSaveStage} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+              {isPending ? "Saving…" : "Save Stage"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Issue All confirmation */}
+      <Dialog open={issueAllConfirmOpen} onOpenChange={setIssueAllConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Issue all saved stages?</DialogTitle>
+            <DialogDescription>
+              This will finalize all {savedStageIds.length} saved stage{savedStageIds.length !== 1 ? "s" : ""} for <strong>{selectedVehicle?.job_ref_no}</strong> and deduct stock for all inventory items.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIssueAllConfirmOpen(false)} disabled={isPending}>Cancel</Button>
+            <Button onClick={confirmIssueAll} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-700">
+              {isPending ? "Processing…" : "Issue All & Deduct Stock"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete confirm */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Delete material issue record?"
-        description={`This will permanently remove all material issue data for ${selectedVehicle?.job_ref_no ?? "this vehicle"} in FY ${loadedFY} and reverse ALL stock deductions.`}
+        description={recordStatus === "Draft"
+          ? `This will permanently remove all saved stage data for ${selectedVehicle?.job_ref_no ?? "this vehicle"} in FY ${loadedFY}. No stock has been deducted.`
+          : `This will permanently remove all material issue data for ${selectedVehicle?.job_ref_no ?? "this vehicle"} in FY ${loadedFY} and reverse ALL stock deductions.`}
         confirmLabel="Delete"
         onConfirm={confirmDelete}
         isPending={isPending}

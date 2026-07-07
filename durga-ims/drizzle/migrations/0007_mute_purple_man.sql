@@ -1,0 +1,1 @@
+ALTER TABLE "material_issues" ADD COLUMN "saved_stage_ids" text[] DEFAULT '{}'::text[] NOT NULL;

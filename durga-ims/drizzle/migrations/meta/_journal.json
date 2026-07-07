@@ -50,6 +50,13 @@
       "when": 1783418258230,
       "tag": "0006_greedy_rogue",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783424809881,
+      "tag": "0007_mute_purple_man",
+      "breakpoints": true
     }
   ]
 }

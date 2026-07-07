@@ -402,6 +402,7 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
       stage_id: materialIssues.stage_id,
       margin_percentage: materialIssues.margin_percentage,
       total_amount: materialIssues.total_amount,
+      saved_stage_ids: materialIssues.saved_stage_ids,
       vehicle_id: materialIssues.vehicle_id,
       job_ref_no: vehicles.job_ref_no,
       customer_id: customers.id,
@@ -486,6 +487,7 @@ export async function getMaterialIssueById(id: string): Promise<MaterialIssueWit
     stage_id: header.stage_id ?? null,
     margin_percentage: header.margin_percentage ?? "0",
     total_amount: header.total_amount,
+    saved_stage_ids: header.saved_stage_ids ?? [],
     vehicle_id: header.vehicle_id,
     job_ref_no: header.job_ref_no,
     customer_id: header.customer_id ?? null,
@@ -965,6 +967,7 @@ export async function getVehicleMaterialIssue(
       stage_id: materialIssues.stage_id,
       margin_percentage: materialIssues.margin_percentage,
       total_amount: materialIssues.total_amount,
+      saved_stage_ids: materialIssues.saved_stage_ids,
       vehicle_id: materialIssues.vehicle_id,
       job_ref_no: vehicles.job_ref_no,
       customer_id: customers.id,
@@ -1058,6 +1061,7 @@ export async function getVehicleMaterialIssue(
     stage_id: header.stage_id ?? null,
     margin_percentage: header.margin_percentage ?? "0",
     total_amount: header.total_amount,
+    saved_stage_ids: header.saved_stage_ids ?? [],
     vehicle_id: header.vehicle_id,
     job_ref_no: header.job_ref_no,
     customer_id: header.customer_id ?? null,
@@ -1206,6 +1210,252 @@ export async function saveVehicleMaterialIssue(
   // Existing record: reverse + reapply (delegates to existing atomic helper)
   await updateIssuedMaterialIssue(existing.id, { ...data, vehicle_id: vehicleId });
   return { id: existing.id, isNew: false };
+}
+
+// ---------------------------------------------------------------------------
+// Write — save one stage as draft (no stock deduction)
+// ---------------------------------------------------------------------------
+
+export async function saveVehicleStage(
+  vehicleId: string,
+  stageId: string,
+  items: IssueItemInput[],
+  issueDate: string,
+  marginPct: string,
+  financialYear: string
+): Promise<{ id: string }> {
+  if (!vehicleId) throw new Error("Vehicle is required.");
+  if (!stageId) throw new Error("Stage is required.");
+  if (items.length === 0) throw new Error("At least one material is required.");
+
+  const date = new Date(issueDate);
+  const fyRange = fyDateRange(financialYear);
+  if (date < fyRange.start || date > fyRange.end)
+    throw new Error("Issue date must fall within the active financial year.");
+
+  const [existing] = await db
+    .select({ id: materialIssues.id, status: materialIssues.status })
+    .from(materialIssues)
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.issue_type, "NEW"),
+        eq(materialIssues.financial_year, financialYear)
+      )
+    );
+
+  if (existing && existing.status === "Issued")
+    throw new Error("Record already issued — use Save & Reapply.");
+
+  const issueId = await db.transaction(async (tx) => {
+    let id: string;
+
+    if (!existing) {
+      const [issue] = await tx
+        .insert(materialIssues)
+        .values({
+          slip_number: null,
+          issue_date: date,
+          vehicle_id: vehicleId,
+          issue_type: "NEW",
+          stage_id: null,
+          margin_percentage: marginPct || "0",
+          total_amount: "0",
+          financial_year: financialYear,
+          status: "Draft",
+          saved_stage_ids: [stageId],
+        })
+        .returning({ id: materialIssues.id });
+      id = issue.id;
+    } else {
+      id = existing.id;
+      // Remove existing items for this stage (re-save)
+      await tx
+        .delete(materialIssueItems)
+        .where(
+          and(
+            eq(materialIssueItems.issue_id, id),
+            eq(materialIssueItems.stage_id, stageId)
+          )
+        );
+      // Append stageId to saved_stage_ids if not already present
+      await tx.execute(sql`
+        UPDATE material_issues
+        SET saved_stage_ids = CASE
+          WHEN ${stageId} = ANY(saved_stage_ids) THEN saved_stage_ids
+          ELSE array_append(saved_stage_ids, ${stageId})
+        END,
+        issue_date = ${date},
+        margin_percentage = ${marginPct || "0"}
+        WHERE id = ${id}
+      `);
+    }
+
+    await tx
+      .insert(materialIssueItems)
+      .values(items.map((item) => itemValues(id, item)));
+
+    // Recalculate total_amount across all items for this issue
+    const [totals] = await tx
+      .select({ total: sql<string>`COALESCE(SUM(amount::numeric), 0)::text` })
+      .from(materialIssueItems)
+      .where(eq(materialIssueItems.issue_id, id));
+
+    await tx
+      .update(materialIssues)
+      .set({ total_amount: totals?.total ?? "0" })
+      .where(eq(materialIssues.id, id));
+
+    return id;
+  });
+
+  revalidateTag(CACHE_TAGS.dashboard);
+  return { id: issueId };
+}
+
+// ---------------------------------------------------------------------------
+// Write — finalize draft: deduct stock (Issue All)
+// ---------------------------------------------------------------------------
+
+export async function issueDraftRecord(
+  vehicleId: string,
+  financialYear: string,
+  issueDate: string
+): Promise<{ id: string }> {
+  if (!vehicleId) throw new Error("Vehicle is required.");
+
+  const date = new Date(issueDate);
+  const fyRange = fyDateRange(financialYear);
+  if (date < fyRange.start || date > fyRange.end)
+    throw new Error("Issue date must fall within the active financial year.");
+
+  const [record] = await db
+    .select({ id: materialIssues.id, status: materialIssues.status })
+    .from(materialIssues)
+    .where(
+      and(
+        eq(materialIssues.vehicle_id, vehicleId),
+        eq(materialIssues.issue_type, "NEW"),
+        eq(materialIssues.financial_year, financialYear)
+      )
+    );
+
+  if (!record) throw new Error("No draft record found.");
+  if (record.status !== "Draft") throw new Error("Record is not in Draft status.");
+
+  const issueItems = await db
+    .select({
+      material_id: materialIssueItems.material_id,
+      qty: materialIssueItems.qty,
+      affects_inventory: materialIssueItems.affects_inventory,
+    })
+    .from(materialIssueItems)
+    .where(eq(materialIssueItems.issue_id, record.id));
+
+  await db.transaction(async (tx) => {
+    const inventoryItems = issueItems.filter((i) => i.affects_inventory);
+
+    if (inventoryItems.length > 0) {
+      const matStocks = await tx
+        .select({ id: materials.id, name: materials.name, current_stock: materials.current_stock })
+        .from(materials)
+        .where(inArray(materials.id, inventoryItems.map((i) => i.material_id)));
+      const stockMap = new Map(matStocks.map((m) => [m.id, { name: m.name, stock: parseFloat(m.current_stock) }]));
+
+      const qtyByMaterial = new Map<string, number>();
+      for (const item of inventoryItems) {
+        qtyByMaterial.set(item.material_id, (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0"));
+      }
+      for (const [materialId, requestedQty] of Array.from(qtyByMaterial.entries())) {
+        const mat = stockMap.get(materialId);
+        if (!mat) throw new Error("Material not found.");
+        if (mat.stock < requestedQty)
+          throw new Error(`Insufficient stock for "${mat.name}": available ${mat.stock.toFixed(2)}, requested ${requestedQty.toFixed(2)}.`);
+      }
+
+      for (const item of inventoryItems) {
+        const newStock = stockMap.get(item.material_id)!.stock - parseFloat(item.qty);
+        await tx.update(materials).set({ current_stock: newStock.toString() }).where(eq(materials.id, item.material_id));
+      }
+
+      await tx.insert(stockLedger).values(
+        inventoryItems.map((item) => ({
+          material_id: item.material_id,
+          transaction_type: "ISSUE",
+          reference_id: record.id,
+          reference_type: "material_issue",
+          qty_change: (-parseFloat(item.qty)).toString(),
+          stock_after: (stockMap.get(item.material_id)!.stock - parseFloat(item.qty)).toFixed(4),
+        }))
+      );
+    }
+
+    await tx
+      .update(materialIssues)
+      .set({ status: "Issued", issue_date: date })
+      .where(eq(materialIssues.id, record.id));
+  });
+
+  revalidateTag(CACHE_TAGS.materials);
+  revalidateTag(CACHE_TAGS.dashboard);
+  return { id: record.id };
+}
+
+// ---------------------------------------------------------------------------
+// Write — delete one saved stage from a draft record
+// ---------------------------------------------------------------------------
+
+export async function deleteSavedStage(
+  issueId: string,
+  stageId: string
+): Promise<void> {
+  const [record] = await db
+    .select({ id: materialIssues.id, status: materialIssues.status })
+    .from(materialIssues)
+    .where(eq(materialIssues.id, issueId));
+
+  if (!record) throw new Error("Record not found.");
+  if (record.status !== "Draft") throw new Error("Can only delete stages from a Draft record.");
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(materialIssueItems)
+      .where(
+        and(
+          eq(materialIssueItems.issue_id, issueId),
+          eq(materialIssueItems.stage_id, stageId)
+        )
+      );
+
+    await tx.execute(sql`
+      UPDATE material_issues
+      SET saved_stage_ids = array_remove(saved_stage_ids, ${stageId})
+      WHERE id = ${issueId}
+    `);
+
+    // Recalculate total_amount
+    const [totals] = await tx
+      .select({ total: sql<string>`COALESCE(SUM(amount::numeric), 0)::text` })
+      .from(materialIssueItems)
+      .where(eq(materialIssueItems.issue_id, issueId));
+
+    // Check if any stages remain; if not, delete the entire record
+    const [updated] = await tx
+      .select({ saved_stage_ids: materialIssues.saved_stage_ids })
+      .from(materialIssues)
+      .where(eq(materialIssues.id, issueId));
+
+    if (!updated || updated.saved_stage_ids.length === 0) {
+      await tx.delete(materialIssues).where(eq(materialIssues.id, issueId));
+    } else {
+      await tx
+        .update(materialIssues)
+        .set({ total_amount: totals?.total ?? "0" })
+        .where(eq(materialIssues.id, issueId));
+    }
+  });
+
+  revalidateTag(CACHE_TAGS.dashboard);
 }
 
 // ---------------------------------------------------------------------------
