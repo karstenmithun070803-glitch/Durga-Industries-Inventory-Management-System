@@ -1031,8 +1031,8 @@ export function NewVMIClient({
     });
   }
 
-  // Ctrl+E (Windows) / Cmd+E (Mac) — both work reliably without needing Fn key
-  useHotkeys("ctrl+e,meta+e", (e) => { e.preventDefault(); toggleF2Mode(); }, { enableOnFormTags: true });
+  // Ctrl+Shift+E — works on Mac and Windows without browser/extension interception
+  useHotkeys("ctrl+shift+e", (e) => { e.preventDefault(); toggleF2Mode(); }, { enableOnFormTags: true });
 
   const { subtotal, cgst, sgst, igst, grand } = calcTotals(rows);
   const hasFormContent = !!vehicleId;
@@ -1215,7 +1215,7 @@ export function NewVMIClient({
               {recordStatus === "Draft" && (
                 <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded px-3 py-2">
                   <p className="text-sm text-blue-800">
-                    <span className="font-medium">Draft in progress.</span> {savedStageIds.length} stage{savedStageIds.length !== 1 ? "s" : ""} saved.{savedStageIds.length > 0 ? " Press Ctrl+E (Windows) or Cmd+E (Mac) to review saved stages." : ""}
+                    <span className="font-medium">Draft in progress.</span> {savedStageIds.length} stage{savedStageIds.length !== 1 ? "s" : ""} saved.{savedStageIds.length > 0 ? " Press Ctrl+Shift+E to review saved stages." : ""}
                   </p>
                 </div>
               )}
@@ -1332,7 +1332,7 @@ export function NewVMIClient({
                   className={cn("h-10 px-5", f2Mode && "bg-amber-50 border-amber-300 text-amber-800")}
                   onClick={toggleF2Mode}
                   disabled={isPending}
-                  title="Toggle saved stages view (Ctrl+E on Windows / Cmd+E on Mac)"
+                  title="Toggle saved stages view (Ctrl+Shift+E)"
                 >
                   {f2Mode ? "← Unsaved Stages" : "Review Saved ▸"}
                 </Button>
