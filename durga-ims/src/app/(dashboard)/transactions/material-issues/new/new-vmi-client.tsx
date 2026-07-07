@@ -264,7 +264,7 @@ export function NewVMIClient({
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [stageDropOpen, setStageDropOpen] = useState(false);
   const [loadingStageIds, setLoadingStageIds] = useState<Set<string>>(new Set());
-  const [issueDate, setIssueDate] = useState(todayISO);
+  const [issueDate, setIssueDate] = useState("");
   const [marginPct, setMarginPct] = useState("0");
   const debouncedMargin = useDebounce(marginPct, 300);
   const [rows, setRows] = useState<LineItemDraft[]>([newRow()]);
@@ -444,7 +444,7 @@ export function NewVMIClient({
     setVehicleId("");
     setSelectedStageIds([]);
     setActiveStageId(null);
-    setIssueDate(todayISO);
+    setIssueDate("");
     setMarginPct("0");
     setRows([newRow()]);
     setIsDirty(false);
@@ -486,6 +486,8 @@ export function NewVMIClient({
         setLoadedRecord(null);
         setSelectedStageIds([]);
         setActiveStageId(null);
+        setIssueDate(todayISO);
+        setMarginPct("0");
         setRows([newRow()]);
         setIsDirty(false);
         // Auto-load all stages for new record
@@ -833,6 +835,12 @@ export function NewVMIClient({
     const dateMap = new Map(vehicleIssueDates.map((d) => [d.vehicleId, d.issue_date]));
     return vehicles
       .filter((v) => v.type === "New")
+      .filter((v) => {
+        if (!issueDate) return true;
+        const recordDate = dateMap.get(v.id);
+        if (!recordDate) return false;
+        return toISODate(recordDate) === issueDate;
+      })
       .map((v) => {
         const dateSuffix = dateMap.has(v.id)
           ? ` — ${formatIssueDateShort(dateMap.get(v.id)!)}`
@@ -843,7 +851,7 @@ export function NewVMIClient({
           displayLabel: (v.vehicle_name ?? v.job_ref_no) + dateSuffix,
         };
       });
-  }, [vehicles, vehicleIssueDates]);
+  }, [vehicles, vehicleIssueDates, issueDate]);
 
   return (
     <div className="flex h-full flex-col" {...containerProps}>

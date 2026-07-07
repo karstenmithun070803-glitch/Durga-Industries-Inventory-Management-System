@@ -83,6 +83,7 @@ export const styles = StyleSheet.create({
     fontSize: 8.5,
     fontFamily: "Helvetica-Bold",
     color: "#000",
+    paddingRight: 3,
   },
   plainTableRow: {
     flexDirection: "row",
@@ -91,11 +92,13 @@ export const styles = StyleSheet.create({
   plainTableCell: {
     fontSize: 8.5,
     color: "#000",
+    paddingRight: 3,
   },
   plainTableCellBold: {
     fontSize: 8.5,
     fontFamily: "Helvetica-Bold",
     color: "#000",
+    paddingRight: 3,
   },
 
   // ── Page footer ────────────────────────────────────────────────────────────

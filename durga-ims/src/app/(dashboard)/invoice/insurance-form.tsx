@@ -40,6 +40,7 @@ interface UnitOption {
 
 interface ParentInvoiceInfo {
   billNumber: string;
+  jobRefNo: string;
   vehicleName: string | null;
   customerName: string | null;
   gstin: string | null;
@@ -423,7 +424,7 @@ export function InsuranceForm({
   const pdfRows = insuranceBillToInvoiceRows(currentBillForPdf, {
     id: invoiceId,
     billNumber: parentInvoice.billNumber,
-    jobRefNo: "",
+    jobRefNo: parentInvoice.jobRefNo,
     vehicleName: parentInvoice.vehicleName,
     customerName: parentInvoice.customerName,
     customerGstin: parentInvoice.gstin,

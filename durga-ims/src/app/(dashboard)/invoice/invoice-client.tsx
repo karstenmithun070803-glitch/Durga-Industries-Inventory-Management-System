@@ -779,6 +779,7 @@ export function InvoiceClient({
         insuranceBillId={insuranceBill.header.id}
         parentInvoice={{
           billNumber: currentInvoice.bill_number,
+          jobRefNo: currentInvoice.job_ref_no ?? "",
           vehicleName: currentInvoice.vehicle_name,
           customerName: currentInvoice.customer_name,
           gstin: currentInvoice.customer_gstin,

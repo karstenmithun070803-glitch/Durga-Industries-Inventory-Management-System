@@ -228,7 +228,8 @@ export function PurchaseOrdersClient({
   const [isLoading, setIsLoading] = useState(false);
 
   // Form fields
-  const [poDate, setPoDate] = useState("");
+  const todayISO = new Date().toISOString().split("T")[0];
+  const [poDate, setPoDate] = useState(todayISO);
   const [affectsStock, setAffectsStock] = useState(true);
   const [supplierBillNo, setSupplierBillNo] = useState("");
   const [supplierBillDate, setSupplierBillDate] = useState("");
@@ -329,8 +330,6 @@ export function PurchaseOrdersClient({
   // ---------------------------------------------------------------------------
   // Form helpers
   // ---------------------------------------------------------------------------
-
-  const todayISO = new Date().toISOString().split("T")[0];
 
   function clearForm() {
     setLoadedPO(null);

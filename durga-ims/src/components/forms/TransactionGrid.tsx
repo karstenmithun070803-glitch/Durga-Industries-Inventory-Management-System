@@ -515,7 +515,8 @@ const TransactionRow = React.memo(
   (prev, next) =>
     prev.row === next.row &&
     prev.openComboboxCol === next.openComboboxCol &&
-    prev.rowIndex === next.rowIndex
+    prev.rowIndex === next.rowIndex &&
+    prev.showTaxColumns === next.showTaxColumns
 );
 
 // ─── TransactionGrid ─────────────────────────────────────────────────────────
@@ -578,28 +579,36 @@ export function TransactionGrid({
   }, [effectiveGstType]); // intentionally excludes dispatch to prevent loop
 
   const materialOptions = useMemo(
-    () => materials.map((m) => ({
-      value: m.id,
-      label: isInvoiceMode ? m.name : `${formatCode("M", m.material_no)} — ${m.name}`,
-    })),
+    () =>
+      [...materials]
+        .sort((a, b) => a.material_no - b.material_no)
+        .map((m) => ({
+          value: m.id,
+          label: isInvoiceMode ? m.name : `${formatCode("M", m.material_no)} — ${m.name}`,
+        })),
     [materials, isInvoiceMode]
   );
 
   const supplierOptions = useMemo(
-    () => suppliers.map((s) => ({
-      value: s.id,
-      label: `${formatCode("S", s.code_no)} — ${s.name}`,
-    })),
+    () =>
+      [...suppliers]
+        .sort((a, b) => a.code_no - b.code_no)
+        .map((s) => ({
+          value: s.id,
+          label: `${formatCode("S", s.code_no)} — ${s.name}`,
+        })),
     [suppliers]
   );
 
   const contractorOptions = useMemo(
     () => [
       { value: "", label: "None" },
-      ...contractors.map((c) => ({
-        value: c.id,
-        label: `${formatCode("CON", c.code_no, 2)} — ${c.name}`,
-      })),
+      ...[...contractors]
+        .sort((a, b) => a.code_no - b.code_no)
+        .map((c) => ({
+          value: c.id,
+          label: `${formatCode("CON", c.code_no, 2)} — ${c.name}`,
+        })),
     ],
     [contractors]
   );

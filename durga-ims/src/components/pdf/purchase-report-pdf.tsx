@@ -82,13 +82,14 @@ function PurchaseDetailDocument({
   if (dateTo)   filterParts.push(`To: ${dateTo}`);
 
   // Portrait A4 column widths — 4 configurations based on optional cols (all sum to 100%)
+  // Date needs 10% (55pt) for "07/07/2026" at 8.5pt; Total needs 13% (72pt) for "1,69,930.62"
   const w = showBill && showTaxAmt
-    ? { sno:"4%", po:"7%", date:"7%", bill:"8%", sup:"15%", mat:"17%", qty:"7%", unit:"5%", rate:"7%", taxable:"10%", tax:"7%", total:"6%" }
+    ? { sno:"4%", po:"6%", date:"8%", bill:"8%", sup:"14%", mat:"14%", qty:"5%", unit:"4%", rate:"7%", taxable:"12%", tax:"7%", total:"11%" }
     : showTaxAmt
-    ? { sno:"4%", po:"8%", date:"7%", bill:undefined, sup:"16%", mat:"19%", qty:"7%", unit:"5%", rate:"7%", taxable:"12%", tax:"8%", total:"7%" }
+    ? { sno:"4%", po:"7%", date:"9%", bill:undefined, sup:"16%", mat:"16%", qty:"5%", unit:"4%", rate:"8%", taxable:"12%", tax:"8%", total:"11%" }
     : showBill
-    ? { sno:"5%", po:"8%", date:"7%", bill:"8%", sup:"16%", mat:"19%", qty:"7%", unit:"5%", rate:"7%", taxable:"11%", tax:undefined, total:"7%" }
-    : { sno:"5%", po:"9%", date:"8%", bill:undefined, sup:"18%", mat:"21%", qty:"7%", unit:"5%", rate:"8%", taxable:"12%", tax:undefined, total:"7%" };
+    ? { sno:"4%", po:"7%", date:"9%", bill:"9%", sup:"15%", mat:"15%", qty:"5%", unit:"4%", rate:"8%", taxable:"13%", tax:undefined, total:"11%" }
+    : { sno:"4%", po:"8%", date:"10%", bill:undefined, sup:"17%", mat:"16%", qty:"5%", unit:"5%", rate:"8%", taxable:"14%", tax:undefined, total:"13%" };
 
   // Group rows by PO id — same Map approach as the screen
   const poGroups: PurchaseReportRow[][] = [];
@@ -122,7 +123,7 @@ function PurchaseDetailDocument({
         <Text style={[styles.plainTableHeadCell, { width: w.sup }]}>Supplier</Text>
         <Text style={[styles.plainTableHeadCell, { width: w.mat }]}>Material</Text>
         <Text style={[styles.plainTableHeadCell, { width: w.qty, textAlign: "right" }]}>Qty</Text>
-        <Text style={[styles.plainTableHeadCell, { width: w.unit }]}>Unit</Text>
+        <Text style={[styles.plainTableHeadCell, { width: w.unit, paddingLeft: 4 }]}>Unit</Text>
         <Text style={[styles.plainTableHeadCell, { width: w.rate, textAlign: "right" }]}>Rate</Text>
         <Text style={[styles.plainTableHeadCell, { width: w.taxable, textAlign: "right" }]}>Taxable</Text>
         {showTaxAmt && <Text style={[styles.plainTableHeadCell, { width: w.tax!, textAlign: "right" }]}>Tax Amt</Text>}
@@ -215,8 +216,8 @@ function PurchaseMonthlyDocument({
 
   // Portrait A4 column widths — 2 configurations based on showTaxAmt (all sum to 100%)
   const mw = showTaxAmt
-    ? { sno:"5%", month:"11%", sup:"18%", mat:"24%", qty:"8%", taxable:"12%", tax:"10%", total:"12%" }
-    : { sno:"5%", month:"12%", sup:"20%", mat:"28%", qty:"8%", taxable:"14%", tax:undefined, total:"13%" };
+    ? { sno:"5%", month:"11%", sup:"18%", mat:"23%", qty:"8%", taxable:"14%", tax:"9%", total:"12%" }
+    : { sno:"5%", month:"12%", sup:"20%", mat:"26%", qty:"8%", taxable:"16%", tax:undefined, total:"13%" };
 
   return (
     <Page size="A4" style={styles.page}>

@@ -54,8 +54,9 @@ function fmtAmt(v: number): string {
 
 function fmtLargeAmt(v: number): string {
   if (v >= 1_00_00_000) return `₹${(v / 1_00_00_000).toFixed(2)} Cr`;
-  if (v >= 1_00_000) return `₹${(v / 1_00_000).toFixed(2)} L`;
-  if (v >= 1_000) return `₹${(v / 1_000).toFixed(1)} K`;
+  if (v >= 10_00_000)   return `₹${(v / 1_00_000).toFixed(2)} L`;
+  if (v >= 1_00_000)    return "₹" + Math.round(v).toLocaleString("en-IN");
+  if (v >= 1_000)       return `₹${(v / 1_000).toFixed(1)} K`;
   return fmtAmt(v);
 }
 
