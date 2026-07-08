@@ -112,6 +112,15 @@ export function Combobox({
         onGridKeyDown?.(e);
         return;
       }
+      // Type-to-open: a printable character opens the dropdown seeded with it, so a
+      // filled cell can be changed by just starting to type (ArrowDown stays row-nav).
+      if (e.key.length === 1 && e.key !== " " && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        setSearch(e.key);
+        handleOpenChange(true);
+        return;
+      }
       // Delegate grid arrow keys to the parent grid hook when combobox is closed
       onGridKeyDown?.(e);
     } else {

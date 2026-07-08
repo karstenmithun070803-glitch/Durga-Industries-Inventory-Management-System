@@ -1296,6 +1296,7 @@ export function PurchaseOrdersClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
+        confirmOnEnter
       />
     </div>
   );
