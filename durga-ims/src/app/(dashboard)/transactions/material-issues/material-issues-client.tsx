@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useHotkeys } from "react-hotkeys-hook";
-import { useFormSectionNav } from "@/hooks/use-form-section-nav";
+import { useFormSectionNav, focusGridRowZero } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { formatActionError } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
@@ -278,11 +278,7 @@ export function MaterialIssuesClient({
         id: "grid",
         ref: gridSectionRef,
         isDisabled: () => !vehicleId || isLoading,
-        onActivate: () => {
-          gridSectionRef.current
-            ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
-            ?.focus();
-        },
+        onActivate: () => focusGridRowZero(gridSectionRef.current),
       },
     ],
     isLoading: isLoading || isPending,

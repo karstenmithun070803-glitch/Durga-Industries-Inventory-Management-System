@@ -128,6 +128,7 @@ interface RowProps {
   // stable callbacks from parent
   onKeyDown: (e: React.KeyboardEvent<Element>, rowIndex: number, colIndex: number, comboboxOpen: boolean) => void;
   focusCell: (row: number, col: number) => void;
+  advanceChain: (rowIndex: number, colIndex: number) => void;
   setOpenComboboxCell: React.Dispatch<React.SetStateAction<{ row: number; col: number } | null>>;
 }
 
@@ -163,6 +164,7 @@ const TransactionRow = React.memo(
     colDelete,
     onKeyDown,
     focusCell,
+    advanceChain,
     setOpenComboboxCell,
   }: RowProps) {
     const isOpen = (col: number) => openComboboxCol === col;
@@ -219,6 +221,8 @@ const TransactionRow = React.memo(
         zeroRateConfirmed: false,
         ...(isHeaderGstMode && effectiveGstType ? { gst_type: effectiveGstType } : {}),
       });
+      // Enter/select AND advance — defer past the popover's focus-return on close.
+      requestAnimationFrame(() => advanceChain(rowIndex, colMaterial));
     }
 
     function handleSupplierSelect(key: string, supplierId: string) {
@@ -230,10 +234,12 @@ const TransactionRow = React.memo(
         supplier_name: sup.name,
         gst_type: gst,
       });
+      requestAnimationFrame(() => advanceChain(rowIndex, colSupplierOrContractor));
     }
 
     function handleContractorSelect(key: string, contractorId: string) {
       if (!contractorId) {
+        // "None"/clear — do not auto-advance (user is clearing, not committing).
         update(key, { contractor_id: "", contractor_name: "" });
         return;
       }
@@ -243,6 +249,7 @@ const TransactionRow = React.memo(
         contractor_id: contractorId,
         contractor_name: con.name,
       });
+      requestAnimationFrame(() => advanceChain(rowIndex, colSupplierOrContractor));
     }
 
     function handleDelete() {
@@ -381,7 +388,8 @@ const TransactionRow = React.memo(
             <span className="text-slate-800">{row.qty}</span>
           ) : (
             <Input
-              type="number"
+              type="text"
+              inputMode="decimal"
               className={`w-20 h-8 text-sm ${
                 !row.qty || parseFloat(row.qty) <= 0
                   ? "border-red-300 focus-visible:ring-red-400"
@@ -392,8 +400,6 @@ const TransactionRow = React.memo(
               onKeyDown={(e) => onKeyDown(e, rowIndex, colQty, isOpen(colQty))}
               data-grid-row={rowIndex}
               data-grid-col={colQty}
-              min="0"
-              step="any"
             />
           )}
         </td>
@@ -423,7 +429,8 @@ const TransactionRow = React.memo(
           ) : (
             <div className="space-y-0.5">
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 className={`w-24 h-8 text-sm ${row.rateBlank ? "bg-yellow-50 border-yellow-300" : ""} ${
                   showZeroWarning ? "border-amber-400" : ""
                 }`}
@@ -434,8 +441,6 @@ const TransactionRow = React.memo(
                 onKeyDown={(e) => onKeyDown(e, rowIndex, colRate, isOpen(colRate))}
                 data-grid-row={rowIndex}
                 data-grid-col={colRate}
-                min="0"
-                step="any"
                 placeholder={row.rateBlank ? "No history" : ""}
                 title={row.rateBlank ? "No purchase history — enter rate manually" : ""}
               />
@@ -466,16 +471,14 @@ const TransactionRow = React.memo(
               <span className="text-slate-800">{row.tax_percentage}</span>
             ) : (
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 className="w-16 h-8 text-sm"
                 value={row.tax_percentage}
                 onChange={(e) => update(row._key, { tax_percentage: e.target.value })}
                 onKeyDown={(e) => onKeyDown(e, rowIndex, colTax, isOpen(colTax))}
                 data-grid-row={rowIndex}
                 data-grid-col={colTax}
-                min="0"
-                max="100"
-                step="any"
               />
             )}
           </td>
@@ -509,12 +512,27 @@ const TransactionRow = React.memo(
               size="icon"
               className="h-7 w-7 text-slate-700 hover:text-red-500 hover:bg-red-50"
               onClick={handleDelete}
-              onKeyDown={(e) => onKeyDown(e, rowIndex, colDelete, false)}
+              onKeyDown={(e) => {
+                // Enter must NEVER delete (accidental row-loss guard).
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return;
+                }
+                // Space / Delete remove the row immediately (no confirm — matches the icon).
+                if (e.key === " " || e.key === "Delete") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDelete();
+                  return;
+                }
+                onKeyDown(e, rowIndex, colDelete, false);
+              }}
               data-grid-row={rowIndex}
               data-grid-col={colDelete}
               type="button"
               tabIndex={-1}
-              title="Delete row (Enter)"
+              title="Delete row (Space / Delete)"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
@@ -571,15 +589,48 @@ export function TransactionGrid({
   // Track which combobox cell is open so the keyboard hook can yield to cmdk
   const [openComboboxCell, setOpenComboboxCell] = useState<{ row: number; col: number } | null>(null);
 
+  // Live record of the last-focused cell (mouse or keyboard), so re-entry from the
+  // section ring returns to the SAME column the user left. One capturing handler on
+  // the table catches focus of any descendant cell — no per-cell onFocus needed.
+  const lastFocusedCellRef = useRef<{ row: number; col: number }>({ row: 0, col: 0 });
+  const handleGridFocusCapture = useCallback((e: React.FocusEvent) => {
+    const el = e.target as HTMLElement;
+    const r = el.getAttribute?.("data-grid-row");
+    const c = el.getAttribute?.("data-grid-col");
+    if (r != null && c != null) {
+      lastFocusedCellRef.current = { row: Number(r), col: Number(c) };
+      // Expose the entry column so the page's grid-section onActivate can restore it.
+      gridRef.current?.setAttribute("data-entry-col", c);
+    }
+  }, []);
+
   const appendEmptyRow = useCallback(() => {
     dispatch({ type: "APPEND", row: newRow() });
   }, [dispatch]);
 
-  const { handleKeyDown, focusCell } = useKeyboardGrid({
+  // Stable column indices per mode (derived once from mode + showTaxColumns)
+  const colMaterial = 0;
+  const colSupplierOrContractor = 1;
+  const colAffectsStock = isIssueMode ? 2 : -1;
+  const colQty = qtyCol;
+  const colRate = isInvoiceMode ? 2 : isIssueMode ? 4 : 3;
+  const colTax = isIssueMode ? 5 : mode === "purchase-order" ? 4 : (isInvoiceMode && showTaxColumns) ? 3 : -1;
+  const colDelete = lastDataColIndex + 1;
+
+  // Ordered Enter chain per mode. Note MI intentionally skips the Affects-Stock
+  // checkbox (col 2): Material → Contractor → Qty → Rate. Enter on the last entry
+  // (Rate) appends a new row.
+  const enterChainCols = isInvoiceMode
+    ? [colMaterial, colQty, colRate]
+    : [colMaterial, colSupplierOrContractor, colQty, colRate];
+
+  const { handleKeyDown, focusCell, advanceChain } = useKeyboardGrid({
     gridRef,
     rows,
     columnCount,
     appendEmptyRow,
+    enterChainCols,
+    lastDataColIndex,
   });
 
   // Recalculate all rows when header-level gstType changes (issue / invoice mode only)
@@ -633,18 +684,9 @@ export function TransactionGrid({
     [rows]
   );
 
-  // Stable column indices per mode (derived once from mode + showTaxColumns)
-  const colMaterial = 0;
-  const colSupplierOrContractor = 1;
-  const colAffectsStock = isIssueMode ? 2 : -1;
-  const colQty = qtyCol;
-  const colRate = isInvoiceMode ? 2 : isIssueMode ? 4 : 3;
-  const colTax = isIssueMode ? 5 : mode === "purchase-order" ? 4 : (isInvoiceMode && showTaxColumns) ? 3 : -1;
-  const colDelete = lastDataColIndex + 1;
-
   return (
     <div className="overflow-auto">
-      <table ref={gridRef} className="min-w-max text-sm w-full">
+      <table ref={gridRef} className="min-w-max text-sm w-full" onFocusCapture={handleGridFocusCapture}>
         <thead className="bg-slate-700 text-white sticky top-0 z-10">
           <tr>
             <th className="px-3 py-2 text-left font-medium whitespace-nowrap w-10">S.No</th>
@@ -719,6 +761,7 @@ export function TransactionGrid({
               colDelete={colDelete}
               onKeyDown={handleKeyDown}
               focusCell={focusCell}
+              advanceChain={advanceChain}
               setOpenComboboxCell={setOpenComboboxCell}
             />
           ))}

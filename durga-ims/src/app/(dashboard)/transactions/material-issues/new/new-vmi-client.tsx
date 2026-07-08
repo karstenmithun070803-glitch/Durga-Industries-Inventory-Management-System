@@ -38,7 +38,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useHotkeys } from "react-hotkeys-hook";
-import { useFormSectionNav } from "@/hooks/use-form-section-nav";
+import { useFormSectionNav, focusGridRowZero } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { formatActionError, cn } from "@/lib/utils";
 import { AlertTriangle, ChevronLeft, ChevronRight, Trash2, ChevronsUpDown, Plus } from "lucide-react";
@@ -374,11 +374,7 @@ export function NewVMIClient({
         id: "grid",
         ref: gridSectionRef,
         isDisabled: () => !vehicleId || isLoading,
-        onActivate: () => {
-          gridSectionRef.current
-            ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
-            ?.focus();
-        },
+        onActivate: () => focusGridRowZero(gridSectionRef.current),
       },
     ],
     isLoading: isLoading || isPending,

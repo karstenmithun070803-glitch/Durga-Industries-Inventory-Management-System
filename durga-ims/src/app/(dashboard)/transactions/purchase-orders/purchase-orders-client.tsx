@@ -30,7 +30,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PrintButton } from "@/components/pdf/print-button";
 import { useHotkeys } from "react-hotkeys-hook";
-import { useFormSectionNav } from "@/hooks/use-form-section-nav";
+import { useFormSectionNav, focusGridRowZero } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { formatCode } from "@/lib/utils";
 import { AlertTriangle, ChevronLeft, ChevronRight, Search, FilePlus } from "lucide-react";
@@ -266,6 +266,10 @@ export function PurchaseOrdersClient({
   const [filterSupplier, setFilterSupplier] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [isListOpen, setIsListOpen] = useState(false);
+  // Browse-card keyboard nav: highlighted PO in the results list + deferred-focus flags
+  const [poListHighlight, setPoListHighlight] = useState(0);
+  const [pendingFocusList, setPendingFocusList] = useState(false);
+  const [pendingFocusGrid, setPendingFocusGrid] = useState(false);
 
   // Auto-load on mount if deep-linked via ?id=
   useEffect(() => {
@@ -361,6 +365,7 @@ export function PurchaseOrdersClient({
       const po = await getPurchaseOrderById(id);
       if (po) {
         populateForm(po);
+        setPendingFocusGrid(true); // drop into the grid (Material row 1) after load
       } else {
         toast.error("Purchase order not found");
       }
@@ -580,6 +585,7 @@ export function PurchaseOrdersClient({
     if (val !== "") {
       setFilterSupplier(val);
       setIsListOpen(true);
+      setPendingFocusList(true); // move focus into the PO-List once it renders
       return;
     }
     if (loadedPO) {
@@ -611,9 +617,21 @@ export function PurchaseOrdersClient({
     setPendingAction(null);
   }
 
-  // Hotkeys
-  useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  // Hotkeys (Mac-aware: mod = Cmd on macOS / Ctrl on Windows)
+  const overlayOpen = () => !!document.querySelector('[role="dialog"], [cmdk-root]');
+  useHotkeys("mod+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("mod+enter", (e) => { e.preventDefault(); if (!overlayOpen()) handleMarkAsReceived(); }, { enableOnFormTags: true });
   useHotkeys("alt+n", (e) => { e.preventDefault(); handleNew(); }, { enableOnFormTags: true });
+
+  // Alt+C / Alt+A: bound via raw keydown on e.code (Option+letter emits ç/å on macOS,
+  // so the react-hotkeys-hook key-string is unreliable). Attached on the root container.
+  // Plain function (not memoized) so it always sees current handlers/state.
+  const handleAltShortcuts = (e: React.KeyboardEvent) => {
+    if (!e.altKey || e.metaKey || e.ctrlKey) return;
+    if (overlayOpen()) return;
+    if (e.code === "KeyC") { e.preventDefault(); handleCancel(); }
+    else if (e.code === "KeyA") { e.preventDefault(); dispatchWithDirty({ type: "APPEND", row: newRow() }); }
+  };
 
   // ---------------------------------------------------------------------------
   // Computed
@@ -692,33 +710,6 @@ export function PurchaseOrdersClient({
     );
   }
 
-  // ── Section nav refs ───────────────────────────────────────────────────────
-  const dateSectionRef = useRef<HTMLDivElement>(null);
-  const gridSectionRef = useRef<HTMLDivElement>(null);
-
-  const { containerProps } = useFormSectionNav({
-    sections: [
-      {
-        id: "date",
-        ref: dateSectionRef,
-        onActivate: () => {
-          dateSectionRef.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
-        },
-      },
-      {
-        id: "grid",
-        ref: gridSectionRef,
-        isDisabled: () => isLoading,
-        onActivate: () => {
-          gridSectionRef.current
-            ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
-            ?.focus();
-        },
-      },
-    ],
-    isLoading: isLoading || isPending,
-  });
-
   // Supplier filter options — unique supplier names from loaded dropdown
   const supplierFilterOptions = Array.from(
     new Set(dropdownItems.filter((d) => d.supplierName).map((d) => d.supplierName!))
@@ -734,12 +725,115 @@ export function PurchaseOrdersClient({
       })
     : [];
 
+  // ── Section nav refs ───────────────────────────────────────────────────────
+  // Ring order (Mode A → Mode B): Browse-Supplier → PO-List → grid.
+  // PO Date (Card B) and the Update-Stock checkbox are intentionally NOT in the ring.
+  const browseSupplierRef = useRef<HTMLDivElement>(null);
+  const browseDateRef = useRef<HTMLDivElement>(null);
+  const poListRef = useRef<HTMLDivElement>(null);
+  const gridSectionRef = useRef<HTMLDivElement>(null);
+
+  const { containerProps, goToSection } = useFormSectionNav({
+    sections: [
+      {
+        id: "browse-supplier",
+        ref: browseSupplierRef,
+        onActivate: () =>
+          browseSupplierRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus(),
+      },
+      {
+        id: "po-list",
+        ref: poListRef,
+        isDisabled: () => !(isListOpen && filteredPOs.length > 0),
+        onActivate: () => {
+          setPoListHighlight(0);
+          poListRef.current?.focus();
+        },
+      },
+      {
+        id: "grid",
+        ref: gridSectionRef,
+        isDisabled: () => isLoading,
+        onActivate: () => focusGridRowZero(gridSectionRef.current),
+      },
+    ],
+    isLoading: isLoading || isPending,
+    // Tab jumps into the grid from outside it; inside the grid, native Tab proceeds.
+    onTab: (e) => {
+      const inGrid = gridSectionRef.current?.contains(document.activeElement);
+      if (!inGrid && !isLoading) {
+        e.preventDefault();
+        focusGridRowZero(gridSectionRef.current);
+      }
+    },
+  });
+
+  // Section indices (order above) — used for programmatic jumps.
+  const SEC_SUPPLIER = 0;
+  const SEC_POLIST = 1;
+  const SEC_GRID = 2;
+
+  // Deferred focus INTO the PO-List once it renders after a supplier is chosen.
+  useEffect(() => {
+    if (pendingFocusList && isListOpen && filteredPOs.length > 0) {
+      setPendingFocusList(false);
+      setPoListHighlight(0);
+      goToSection(SEC_POLIST);
+    }
+  }, [pendingFocusList, isListOpen, filteredPOs.length, goToSection]);
+
+  // Deferred focus into the grid (Material row 1) after a PO finishes loading.
+  useEffect(() => {
+    if (pendingFocusGrid && !isLoading && loadedPO) {
+      setPendingFocusGrid(false);
+      goToSection(SEC_GRID);
+    }
+  }, [pendingFocusGrid, isLoading, loadedPO, goToSection]);
+
+  // PO-List keyboard handling (↑/↓ move highlight, Enter loads, ←/→ to Date filter).
+  // stopPropagation so the section ring doesn't also treat ↑/↓ as section moves.
+  function handlePoListKeyDown(e: React.KeyboardEvent) {
+    if (document.querySelector('[role="dialog"]')) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      e.stopPropagation();
+      setPoListHighlight((i) => Math.min(i + 1, filteredPOs.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (poListHighlight <= 0) {
+        goToSection(SEC_SUPPLIER); // back up to the supplier box
+      } else {
+        setPoListHighlight((i) => Math.max(i - 1, 0));
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      const po = filteredPOs[poListHighlight];
+      if (po) handleSelect(po.id);
+    } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      e.stopPropagation();
+      browseDateRef.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
+    }
+  }
+
+  // Browse-Date keyboard: an arrow returns to the PO-List (or supplier if no list).
+  function handleBrowseDateKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isListOpen && filteredPOs.length > 0) goToSection(SEC_POLIST);
+      else goToSection(SEC_SUPPLIER);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="flex h-full" {...containerProps}>
+    <div className="flex h-full" {...containerProps} onKeyDownCapture={handleAltShortcuts}>
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <div className="flex-1 overflow-y-auto p-6 pb-0">
@@ -752,7 +846,7 @@ export function PurchaseOrdersClient({
             {/* Filter panel — always visible */}
             <div className="p-4">
               <div className="flex flex-wrap items-end gap-4">
-                <div className="space-y-1">
+                <div className="space-y-1" ref={browseSupplierRef}>
                   <label className="text-xs text-slate-700 uppercase tracking-wide">Supplier</label>
                   <div className="relative w-64">
                     <Combobox
@@ -770,13 +864,14 @@ export function PurchaseOrdersClient({
                     )}
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1" ref={browseDateRef}>
                   <label className="text-xs text-slate-700 uppercase tracking-wide">Date</label>
                   <div className="w-44">
                     <Input
                       type="date"
                       value={filterDate}
                       onChange={(e) => { setFilterDate(e.target.value); setIsListOpen(true); }}
+                      onKeyDown={handleBrowseDateKeyDown}
                       className="h-9 text-sm"
                     />
                   </div>
@@ -784,13 +879,22 @@ export function PurchaseOrdersClient({
               </div>
 
               {isListOpen && filteredPOs.length > 0 && (
-                <div className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100">
-                  {filteredPOs.map((po) => (
+                <div
+                  ref={poListRef}
+                  tabIndex={0}
+                  onKeyDown={handlePoListKeyDown}
+                  className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                >
+                  {filteredPOs.map((po, idx) => (
                     <button
                       key={po.id}
+                      tabIndex={-1}
                       onClick={() => handleSelect(po.id)}
+                      onMouseEnter={() => setPoListHighlight(idx)}
                       className={`w-full flex items-center gap-4 px-3 py-2 text-sm text-left transition-colors ${
-                        po.id === loadedPO?.id
+                        idx === poListHighlight
+                          ? "bg-blue-100 ring-1 ring-inset ring-blue-400"
+                          : po.id === loadedPO?.id
                           ? "bg-blue-50 border-l-2 border-blue-400"
                           : "hover:bg-slate-50"
                       }`}
@@ -847,7 +951,7 @@ export function PurchaseOrdersClient({
 
             {/* Header fields: PO Date + Update Stock — kept at the top of the create card */}
             <div className="p-4 flex flex-wrap items-end gap-4">
-              <div className="space-y-1" ref={dateSectionRef}>
+              <div className="space-y-1">
                 <label className="text-sm text-slate-600">PO Date</label>
                 <div className="w-40">
                   <Input

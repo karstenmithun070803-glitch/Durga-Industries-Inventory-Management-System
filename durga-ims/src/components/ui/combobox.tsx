@@ -100,6 +100,18 @@ export function Combobox({
         handleOpenChange(true);
         return;
       }
+      if (e.key === "Enter") {
+        // Empty cell (nothing picked yet) or an identifier dropdown → open to pick.
+        if (!value || openOnArrowDown) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleOpenChange(true);
+          return;
+        }
+        // Already filled → let the grid advance the Enter chain (don't reopen).
+        onGridKeyDown?.(e);
+        return;
+      }
       // Delegate grid arrow keys to the parent grid hook when combobox is closed
       onGridKeyDown?.(e);
     } else {

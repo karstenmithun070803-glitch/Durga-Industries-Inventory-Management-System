@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useReducer } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
-import { useFormSectionNav } from "@/hooks/use-form-section-nav";
+import { useFormSectionNav, focusGridRowZero } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -706,11 +706,7 @@ export function InvoiceClient({
         id: "grid",
         ref: gridSectionRef,
         isDisabled: () => isLoading,
-        onActivate: () => {
-          gridSectionRef.current
-            ?.querySelector<HTMLElement>('[data-grid-row="0"][data-grid-col="0"]')
-            ?.focus();
-        },
+        onActivate: () => focusGridRowZero(gridSectionRef.current),
       },
     ],
     isLoading: isLoading || isSaving,
