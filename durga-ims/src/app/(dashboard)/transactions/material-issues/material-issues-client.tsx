@@ -282,9 +282,29 @@ export function MaterialIssuesClient({
       },
     ],
     isLoading: isLoading || isPending,
+    // Tab: record loaded → into the grid; none → focus the Vehicle box. Inside grid → native.
+    onTab: (e) => {
+      const inGrid = gridSectionRef.current?.contains(document.activeElement);
+      if (inGrid) return;
+      e.preventDefault();
+      if (vehicleId && !isLoading) {
+        focusGridRowZero(gridSectionRef.current);
+      } else {
+        vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
+      }
+    },
   });
 
   goToSectionRef.current = goToSection;
+
+  // Deferred focus into the grid (Material row 1) after a vehicle record loads.
+  const [pendingGridFocus, setPendingGridFocus] = useState(false);
+  useEffect(() => {
+    if (pendingGridFocus && vehicleId && !isLoading) {
+      setPendingGridFocus(false);
+      goToSectionRef.current?.(3); // grid section (vehicle=0, date=1, margin=2, grid=3)
+    }
+  }, [pendingGridFocus, vehicleId, isLoading]);
 
   // Auto-load if initial vehicle ID provided
   useEffect(() => {
@@ -379,7 +399,7 @@ export function MaterialIssuesClient({
       toast.error("Failed to load vehicle record");
     } finally {
       setIsLoading(false);
-      goToSectionRef.current?.(1);
+      setPendingGridFocus(true); // drop into the grid (Material row 1) once state flushes
     }
   }
 
@@ -509,7 +529,28 @@ export function MaterialIssuesClient({
     setPendingAction(null);
   }
 
-  useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  // Hotkeys (Mac-aware: mod = Cmd on macOS / Ctrl on Windows)
+  const overlayOpen = () => !!document.querySelector('[role="dialog"], [cmdk-root]');
+  useHotkeys("mod+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  // "/" jumps to + opens the Vehicle box (skip when typing in a field)
+  useHotkeys(
+    "/",
+    (e) => {
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
+      e.preventDefault();
+      const trigger = vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]');
+      trigger?.focus();
+      trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    },
+    { enableOnFormTags: false }
+  );
+
+  // Alt+C → Cancel (raw e.code so macOS Option+C doesn't emit ç). Attached on the root container.
+  const handleAltShortcuts = (e: React.KeyboardEvent) => {
+    if (!e.altKey || e.metaKey || e.ctrlKey) return;
+    if (overlayOpen()) return;
+    if (e.code === "KeyC") { e.preventDefault(); handleCancel(); }
+  };
 
   const { subtotal, cgst, sgst, igst, grand } = calcTotals(rows);
   const hasFormContent = !!vehicleId;
@@ -531,7 +572,7 @@ export function MaterialIssuesClient({
   }, [vehicles, vehicleIssueDates]);
 
   return (
-    <div className="flex h-full flex-col" {...containerProps}>
+    <div className="flex h-full flex-col" {...containerProps} onKeyDownCapture={handleAltShortcuts}>
       <div className="flex-1 overflow-y-auto p-6 pb-0">
         {/* Header card */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
@@ -815,6 +856,7 @@ export function MaterialIssuesClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
+        confirmOnEnter
       />
 
       {/* Clone vehicle dialog */}

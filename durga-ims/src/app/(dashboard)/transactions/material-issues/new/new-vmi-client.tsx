@@ -367,7 +367,9 @@ export function NewVMIClient({
         ref: stageSectionRef,
         isDisabled: () => !vehicleId,
         onActivate: () => {
-          stageSectionRef.current?.querySelector<HTMLElement>("button")?.focus();
+          // Focus the dropdown trigger (not the ‹ chevron, which is disabled on stage 1).
+          (stageSectionRef.current?.querySelector<HTMLElement>("[data-stage-trigger]")
+            ?? stageSectionRef.current?.querySelector<HTMLElement>("button"))?.focus();
         },
       },
       {
@@ -378,10 +380,31 @@ export function NewVMIClient({
       },
     ],
     isLoading: isLoading || isPending,
+    // Tab: record loaded → into the grid; none → focus the Vehicle box. Inside grid → native.
+    onTab: (e) => {
+      const inGrid = gridSectionRef.current?.contains(document.activeElement);
+      if (inGrid) return;
+      e.preventDefault();
+      if (vehicleId && !isLoading) {
+        focusGridRowZero(gridSectionRef.current);
+      } else {
+        vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
+      }
+    },
   });
 
   // Keep goToSectionRef in sync so async callbacks can call it
   goToSectionRef.current = goToSection;
+
+  // Deferred focus into the grid (Material row 1): after a record load, and after a
+  // stage switch (grid re-renders the new stage's filtered rows first).
+  const [pendingGridFocus, setPendingGridFocus] = useState(false);
+  useEffect(() => {
+    if (pendingGridFocus && vehicleId && !isLoading) {
+      setPendingGridFocus(false);
+      goToSectionRef.current?.(3); // grid section (vehicle=0, date=1, stage=2, grid=3)
+    }
+  }, [pendingGridFocus, vehicleId, isLoading, activeStageId]);
 
   // Auto-load if initial vehicle ID provided
   useEffect(() => {
@@ -583,8 +606,7 @@ export function NewVMIClient({
       toast.error("Failed to load vehicle record");
     } finally {
       setIsLoading(false);
-      // Advance ring to Date section after vehicle loads
-      goToSectionRef.current?.(1);
+      setPendingGridFocus(true); // drop into the grid (Material row 1) once state flushes
     }
   }
 
@@ -1009,7 +1031,27 @@ export function NewVMIClient({
     setPendingAction(null);
   }
 
-  useHotkeys("ctrl+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("mod+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+
+  // Root capture-phase handler: mod+Arrow switches stage (must run in capture phase
+  // + preventDefault so macOS Cmd+←/→ doesn't trigger browser Back/Forward and lose
+  // in-memory stage edits). Alt+C cancels (raw e.code so Option+C doesn't emit ç).
+  const overlayOpen = () => !!document.querySelector('[role="dialog"], [cmdk-root]');
+  const handleRootCapture = (e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.code === "ArrowRight" || e.code === "ArrowLeft")) {
+      if (overlayOpen()) return; // a dropdown/dialog owns the keys
+      e.preventDefault();
+      e.stopPropagation();
+      navigateStage(e.code === "ArrowRight" ? 1 : -1);
+      setPendingGridFocus(true); // land on Material row 1 of the new stage
+      return;
+    }
+    if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyC") {
+      if (overlayOpen()) return;
+      e.preventDefault();
+      handleCancel();
+    }
+  };
 
   function toggleF2Mode() {
     if (savedStageIds.length === 0) return;
@@ -1050,7 +1092,7 @@ export function NewVMIClient({
   }, [vehicles, vehicleIssueDates]);
 
   return (
-    <div className="flex h-full flex-col" {...containerProps}>
+    <div className="flex h-full flex-col" {...containerProps} onKeyDownCapture={handleRootCapture}>
       <div className="flex-1 overflow-y-auto p-6 pb-0">
         {/* Header card */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
@@ -1101,6 +1143,36 @@ export function NewVMIClient({
                   <Popover open={stageDropOpen} onOpenChange={setStageDropOpen}>
                     <PopoverTrigger
                       disabled={isAnyStageLoading}
+                      data-stage-trigger
+                      onKeyDown={(e) => {
+                        if (stageDropOpen) return; // dropdown open → cmdk owns keys
+                        // Enter/Space drill into the grid (Material row 1); do NOT open the popover.
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          focusGridRowZero(gridSectionRef.current);
+                          return;
+                        }
+                        // Type-to-jump: a printable char opens the dropdown seeded with it.
+                        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const ch = e.key;
+                          setStageDropOpen(true);
+                          requestAnimationFrame(() => {
+                            const input = document.querySelector<HTMLInputElement>("[cmdk-root] input");
+                            if (input) {
+                              input.focus();
+                              const setter = Object.getOwnPropertyDescriptor(
+                                window.HTMLInputElement.prototype,
+                                "value"
+                              )?.set;
+                              setter?.call(input, ch);
+                              input.dispatchEvent(new Event("input", { bubbles: true }));
+                            }
+                          });
+                        }
+                      }}
                       className="w-52 flex items-center justify-between rounded-md border border-input bg-background px-3 h-9 text-sm hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       <span className="truncate text-left text-muted-foreground">
@@ -1482,6 +1554,7 @@ export function NewVMIClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
+        confirmOnEnter
       />
 
       {/* Clone vehicle dialog */}

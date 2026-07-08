@@ -710,6 +710,13 @@ export function InvoiceClient({
       },
     ],
     isLoading: isLoading || isSaving,
+    // Tab jumps into the grid from outside it; inside the grid, native Tab proceeds.
+    onTab: (e) => {
+      const inGrid = gridSectionRef.current?.contains(document.activeElement);
+      if (inGrid || isLoading) return;
+      e.preventDefault();
+      focusGridRowZero(gridSectionRef.current);
+    },
   });
 
   // Margin Enter handler — advance to Grid (section 3)
@@ -737,7 +744,7 @@ export function InvoiceClient({
   }, []);
 
   // ── Hotkeys ───────────────────────────────────────────────────────────────
-  useHotkeys("ctrl+s", (e) => { e.preventDefault(); if (activeView === "invoice") void handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("mod+s", (e) => { e.preventDefault(); if (activeView === "invoice") void handleSave(); }, { enableOnFormTags: true });
   useHotkeys("alt+n", (e) => { e.preventDefault(); if (!isSavingRef.current) handleNew(); }, { enableOnFormTags: true });
   useHotkeys("escape", () => { if (activeView === "insurance") setActiveView("invoice"); }, { enableOnFormTags: true });
 
