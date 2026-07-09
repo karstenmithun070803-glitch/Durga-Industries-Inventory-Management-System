@@ -485,8 +485,25 @@ export function NewVMIClient({
         stageIds.push(item.stage_id);
       }
     }
-    setSelectedStageIds(stageIds);
-    setActiveStageId(stageIds[0] ?? null);
+    if ((record.saved_stage_ids ?? []).length > 0) {
+      // Multi-stage Issued: select all master stages so unissued stages appear in main mode
+      setSelectedStageIds(stages.map((s) => s.id));
+      const savedSet = new Set(record.saved_stage_ids ?? []);
+      const firstUnissued = stages.find((s) => !savedSet.has(s.id));
+      if (firstUnissued) {
+        setF2Mode(false);
+        setActiveStageId(firstUnissued.id);
+      } else {
+        // All master stages issued — auto-enter F2
+        setF2Mode(true);
+        const firstSaved = stages.find((s) => savedSet.has(s.id));
+        setActiveStageId(firstSaved?.id ?? null);
+      }
+    } else {
+      // Old single-stage Issued record: unchanged behavior
+      setSelectedStageIds(stageIds);
+      setActiveStageId(stageIds[0] ?? null);
+    }
     setIssueDate(toISODate(record.issue_date));
     setMarginPct(record.margin_percentage ?? "0");
     setRows(miItemsToRows(record, record.margin_percentage ?? "0"));
@@ -881,8 +898,8 @@ export function NewVMIClient({
   }
 
   function handleSave() {
-    // Issued path: existing reverse+reapply flow
-    if (recordStatus === "Issued") {
+    // Old single-stage Issued path: existing reverse+reapply flow
+    if (recordStatus === "Issued" && savedStageIds.length === 0) {
       const err = validate();
       if (err) { toast.error(err); return; }
       if (hasZeroRateItems()) { setZeroRateDialogOpen(true); return; }
@@ -932,28 +949,34 @@ export function NewVMIClient({
     const savedStageId = activeStageId!;
     const stageItems = buildItemsPayload(rows.filter((r) => r.stage_id === savedStageId && r.material_id));
     startTransition(async () => {
-      try {
-        await saveVehicleStage(vehicleId, savedStageId, stageItems, issueDate, marginPct, loadedFY);
-      } catch (e) {
-        toast.error(formatActionError(e, "Save failed"));
-        return;
+      if (recordStatus !== "Issued") {
+        // Draft: persist to DB
+        try {
+          await saveVehicleStage(vehicleId, savedStageId, stageItems, issueDate, marginPct, loadedFY);
+        } catch (e) {
+          toast.error(formatActionError(e, "Save failed"));
+          return;
+        }
       }
-
+      // Both Draft and Issued: update state
       const newSaved = Array.from(new Set([...savedStageIds, savedStageId]));
       setSavedStageIds(newSaved);
       setHasExistingRecord(true);
-      setRecordStatus("Draft");
+      if (recordStatus !== "Issued") setRecordStatus("Draft");
       setIsDirty(false);
       toast.success("Stage saved");
 
-      try {
-        const updatedRecord = await getVehicleMaterialIssue(vehicleId, "NEW", loadedFY);
-        if (updatedRecord) {
-          setLoadedRecord(updatedRecord);
-          setSavedStageIds(updatedRecord.saved_stage_ids);
+      // Draft only: refresh loadedRecord from DB
+      if (recordStatus !== "Issued") {
+        try {
+          const updatedRecord = await getVehicleMaterialIssue(vehicleId, "NEW", loadedFY);
+          if (updatedRecord) {
+            setLoadedRecord(updatedRecord);
+            setSavedStageIds(updatedRecord.saved_stage_ids);
+          }
+        } catch {
+          // non-fatal refresh failure
         }
-      } catch {
-        // non-fatal refresh failure
       }
 
       if (!f2Mode) {
@@ -965,7 +988,7 @@ export function NewVMIClient({
         } else {
           setF2Mode(true);
           setActiveStageId(newSaved[0] ?? savedStageId);
-          toast.info("All stages saved — review and click Issue when ready");
+          toast.info("All stages saved — review and click Issue All when ready");
         }
       }
     });
@@ -979,8 +1002,13 @@ export function NewVMIClient({
     setIssueAllConfirmOpen(false);
     startTransition(async () => {
       try {
-        await issueDraftRecord(vehicleId, loadedFY, issueDate);
-        toast.success("Materials issued — stock deducted");
+        if (recordStatus === "Issued") {
+          await saveVehicleMaterialIssue(vehicleId, "NEW", buildPayload());
+          toast.success("Re-issued — stock updated");
+        } else {
+          await issueDraftRecord(vehicleId, loadedFY, issueDate);
+          toast.success("Materials issued — stock deducted");
+        }
         await loadVehicleRecord(vehicleId, loadedFY);
       } catch (e) {
         toast.error(formatActionError(e, "Issue failed"));
@@ -1055,18 +1083,18 @@ export function NewVMIClient({
 
   function toggleF2Mode() {
     if (savedStageIds.length === 0) return;
-    setF2Mode((prev) => {
-      const next = !prev;
-      if (next) {
-        setActiveStageId(savedStageIds[0]);
-      } else {
-        const firstUnsaved = stages.find(
-          (s) => selectedStageIds.includes(s.id) && !savedStageIds.includes(s.id)
-        );
-        setActiveStageId(firstUnsaved?.id ?? null);
-      }
-      return next;
-    });
+    if (f2Mode) {
+      // Leaving F2: only allowed if unsaved stages exist to show in main mode
+      const firstUnsaved = stages.find(
+        (s) => selectedStageIds.includes(s.id) && !savedStageIds.includes(s.id)
+      );
+      if (!firstUnsaved) return; // all stages issued — no main mode to show
+      setF2Mode(false);
+      setActiveStageId(firstUnsaved.id);
+    } else {
+      setF2Mode(true);
+      setActiveStageId(savedStageIds[0]);
+    }
   }
 
   // Ctrl+Shift+E — works on Mac and Windows without browser/extension interception
@@ -1236,7 +1264,7 @@ export function NewVMIClient({
                       {orderedStageIds.indexOf(activeStageId) + 1} / {orderedStageIds.length}
                     </span>
                   )}
-                  {activeStageId && (
+                  {activeStageId && recordStatus !== "Issued" && (
                     <button
                       onClick={handleRemoveCurrentStage}
                       disabled={isPending || isAnyStageLoading}
@@ -1264,7 +1292,7 @@ export function NewVMIClient({
               {vehicleId && (
                 <div className="flex flex-wrap items-end gap-4">
                   <div className="space-y-1">
-                    <label className="text-sm text-slate-600">Job No</label>
+                    <label className="text-sm text-slate-600">Job No / Reg No</label>
                     <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
                       {selectedVehicle?.job_ref_no || "—"}
                     </div>
@@ -1272,11 +1300,18 @@ export function NewVMIClient({
                 </div>
               )}
 
-              {recordStatus === "Issued" && (
+              {recordStatus === "Issued" && savedStageIds.length === 0 && (
                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-sm text-amber-800">
                     <span className="font-medium">Materials already issued for this vehicle.</span> Saving will reverse the current stock deductions and reapply them with the new values (atomic operation).
+                  </p>
+                </div>
+              )}
+              {recordStatus === "Issued" && savedStageIds.length > 0 && (
+                <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                  <p className="text-sm text-blue-800">
+                    <span className="font-medium">Issued — {savedStageIds.length} stage{savedStageIds.length !== 1 ? "s" : ""}.</span> Edit stages and click Re-Issue All to apply changes.
                   </p>
                 </div>
               )}
@@ -1376,37 +1411,47 @@ export function NewVMIClient({
                 onClick={handleSave}
                 disabled={
                   isPending || isLoading || isAnyStageLoading ||
-                  (recordStatus === "Issued"
-                    ? !isDirty
-                    : rows.filter((r) => r.stage_id === activeStageId && r.material_id).length === 0)
+                  rows.filter((r) => r.stage_id === activeStageId && r.material_id).length === 0
                 }
               >
-                {isPending ? "Saving…" : recordStatus === "Issued" ? "Save & Reapply" : "Save Stage"}
+                {isPending ? "Saving…" : (recordStatus === "Issued" && savedStageIds.length === 0) ? "Save & Reapply" : "Save Stage"}
               </Button>
 
-              {recordStatus === "Draft" && savedStageIds.length > 0 && (
+              {savedStageIds.length > 0 && (
                 <Button
                   className="h-10 px-5 bg-emerald-600 hover:bg-emerald-700"
                   onClick={handleIssueAll}
                   disabled={isPending || isLoading}
                 >
-                  Issue All
+                  {recordStatus === "Issued" ? "Re-Issue All" : "Issue All"}
                 </Button>
               )}
 
-              {recordStatus === "Draft" && savedStageIds.length > 0 && (
+              {savedStageIds.length > 0 && !f2Mode && (
                 <Button
                   variant="outline"
-                  className={cn("h-10 px-5", f2Mode && "bg-amber-50 border-amber-300 text-amber-800")}
+                  className="h-10 px-5"
                   onClick={toggleF2Mode}
                   disabled={isPending}
                   title="Toggle saved stages view (Ctrl+Shift+E)"
                 >
-                  {f2Mode ? "← Unsaved Stages" : "Review Saved ▸"}
+                  Review Saved ▸
                 </Button>
               )}
 
-              {f2Mode && (
+              {savedStageIds.length > 0 && f2Mode && stages.some((s) => selectedStageIds.includes(s.id) && !savedStageIds.includes(s.id)) && (
+                <Button
+                  variant="outline"
+                  className="h-10 px-5 bg-amber-50 border-amber-300 text-amber-800"
+                  onClick={toggleF2Mode}
+                  disabled={isPending}
+                  title="Toggle saved stages view (Ctrl+Shift+E)"
+                >
+                  ← Unsaved Stages
+                </Button>
+              )}
+
+              {f2Mode && recordStatus === "Draft" && (
                 <Button
                   variant="outline"
                   className="h-10 px-5"
@@ -1452,7 +1497,7 @@ export function NewVMIClient({
 
       {/* Zero-rate confirmation */}
       <Dialog open={zeroRateDialogOpen} onOpenChange={setZeroRateDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>Items with zero rate</DialogTitle>
             <DialogDescription>
@@ -1465,7 +1510,7 @@ export function NewVMIClient({
               onClick={() => {
                 setZeroRateDialogOpen(false);
                 setRows((prev) => prev.map((r) => ({ ...r, zeroRateConfirmed: r.rate === "0" ? true : r.zeroRateConfirmed })));
-                if (recordStatus === "Issued") setReapplyConfirmOpen(true);
+                if (recordStatus === "Issued" && savedStageIds.length === 0) setReapplyConfirmOpen(true);
                 else confirmSaveStage();
               }}
             >
@@ -1477,7 +1522,7 @@ export function NewVMIClient({
 
       {/* Issue confirmation (first save) */}
       <Dialog open={issueConfirmOpen} onOpenChange={setIssueConfirmOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>Issue & Deduct Stock?</DialogTitle>
             <DialogDescription>
@@ -1495,7 +1540,7 @@ export function NewVMIClient({
 
       {/* Reapply confirmation (subsequent saves) */}
       <Dialog open={reapplyConfirmOpen} onOpenChange={setReapplyConfirmOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>Reverse & Reapply Stock?</DialogTitle>
             <DialogDescription>
@@ -1511,19 +1556,22 @@ export function NewVMIClient({
         </DialogContent>
       </Dialog>
 
-      {/* Issue All confirmation */}
+      {/* Issue All / Re-Issue All confirmation */}
       <Dialog open={issueAllConfirmOpen} onOpenChange={setIssueAllConfirmOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" confirmNav>
           <DialogHeader>
-            <DialogTitle>Issue all saved stages?</DialogTitle>
+            <DialogTitle>{recordStatus === "Issued" ? "Re-Issue all stages?" : "Issue all saved stages?"}</DialogTitle>
             <DialogDescription>
-              This will finalize all {savedStageIds.length} saved stage{savedStageIds.length !== 1 ? "s" : ""} for <strong>{selectedVehicle?.job_ref_no}</strong> and deduct stock for all inventory items.
+              {recordStatus === "Issued"
+                ? <>This will reverse all current stock deductions for <strong>{selectedVehicle?.job_ref_no}</strong> and re-issue all materials including any new changes. The operation is atomic.</>
+                : <>This will finalize all {savedStageIds.length} saved stage{savedStageIds.length !== 1 ? "s" : ""} for <strong>{selectedVehicle?.job_ref_no}</strong> and deduct stock for all inventory items.</>
+              }
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIssueAllConfirmOpen(false)} disabled={isPending}>Cancel</Button>
             <Button onClick={confirmIssueAll} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-700">
-              {isPending ? "Processing…" : "Issue All & Deduct Stock"}
+              {isPending ? "Processing…" : recordStatus === "Issued" ? "Re-Issue All" : "Issue All & Deduct Stock"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1540,6 +1588,7 @@ export function NewVMIClient({
         confirmLabel="Delete"
         onConfirm={confirmDelete}
         isPending={isPending}
+        focusCancel
       />
 
       {/* Discard confirm */}
@@ -1554,7 +1603,6 @@ export function NewVMIClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
-        confirmOnEnter
       />
 
       {/* Clone vehicle dialog */}

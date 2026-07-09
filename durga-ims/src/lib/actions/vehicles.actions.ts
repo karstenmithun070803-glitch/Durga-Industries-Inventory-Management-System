@@ -50,7 +50,7 @@ export async function createVehicle(data: {
   type: string;
   customer_id?: string;
 }) {
-  if (!data.job_ref_no.trim()) throw new Error("Job number is required.");
+  if (!data.job_ref_no.trim()) throw new Error("Job No / Reg No is required.");
   try {
     await db.insert(vehicles).values({
       job_ref_no: data.job_ref_no.trim().toUpperCase(),
@@ -60,7 +60,7 @@ export async function createVehicle(data: {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "";
     if (msg.includes("vehicles_job_ref_no_unique"))
-      throw new Error(`Job number "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
+      throw new Error(`Job No / Reg No "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
     throw e;
   }
   revalidateTag(CACHE_TAGS.vehicles);
@@ -71,7 +71,7 @@ export async function updateVehicle(id: string, data: {
   type: string;
   customer_id?: string;
 }) {
-  if (!data.job_ref_no.trim()) throw new Error("Job number is required.");
+  if (!data.job_ref_no.trim()) throw new Error("Job No / Reg No is required.");
   try {
     await db.update(vehicles).set({
       job_ref_no: data.job_ref_no.trim().toUpperCase(),
@@ -81,7 +81,7 @@ export async function updateVehicle(id: string, data: {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "";
     if (msg.includes("vehicles_job_ref_no_unique"))
-      throw new Error(`Job number "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
+      throw new Error(`Job No / Reg No "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
     throw e;
   }
   revalidateTag(CACHE_TAGS.vehicles);
@@ -226,7 +226,7 @@ export async function createVehicleWithCustomer(data: {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "";
       if (msg.includes("vehicles_job_ref_no_unique"))
-        throw new Error(`DUPLICATE_JOB_REF:Job number "${data.job_ref_no.trim()}" already exists.`);
+        throw new Error(`DUPLICATE_JOB_REF:Job No / Reg No "${data.job_ref_no.trim()}" already exists.`);
       throw e;
     }
 

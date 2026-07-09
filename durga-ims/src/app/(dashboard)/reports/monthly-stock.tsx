@@ -285,22 +285,22 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             <table className="min-w-max w-full text-xs">
               <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Opening</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">PO Inward</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Issues</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Material</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Unit</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Opening</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">PO Inward</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Issues</th>
                   {showDetails && (
                     <>
-                      <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Reversals</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Adjustments</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Reversals</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Adjustments</th>
                     </>
                   )}
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Closing</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Closing</th>
                   {showPrices && (
                     <>
-                      <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Last Rate</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Closing Value</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Last Rate</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Closing Value</th>
                     </>
                   )}
                 </tr>
@@ -313,31 +313,31 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                     ? r.closing_stock * effectiveRate
                     : null;
                   return (
-                    <tr key={r.material_id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                    <tr key={r.material_id} className="border-t border-slate-200 hover:bg-slate-100">
                       <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">
                         <span className="font-mono text-slate-700 mr-1.5">
                           M-{String(r.material_no).padStart(4, "0")}
                         </span>
                         {r.material_name}
                       </td>
-                      <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.unit_name ?? "—"}</td>
-                      <td className="px-3 py-1.5 whitespace-nowrap text-right text-slate-600">{fmtQty(r.opening_stock)}</td>
-                      <td className="px-3 py-1.5 whitespace-nowrap text-right text-blue-700">
+                      <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.unit_name ?? "—"}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums text-slate-800">{fmtQty(r.opening_stock)}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums text-blue-700">
                         {r.po_inward > 0 ? `+${fmtQty(r.po_inward)}` : "—"}
                       </td>
-                      <td className="px-3 py-1.5 whitespace-nowrap text-right text-orange-700">
+                      <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums text-orange-700">
                         {r.issues > 0 ? `-${fmtQty(r.issues)}` : "—"}
                       </td>
                       {showDetails && (
                         <>
                           <td className={cn(
-                            "px-3 py-1.5 whitespace-nowrap text-right",
+                            "px-3 py-1.5 whitespace-nowrap text-right tabular-nums",
                             r.reversals > 0 ? "text-purple-700" : r.reversals < 0 ? "text-rose-700" : "text-slate-700"
                           )}>
                             {fmtSigned(r.reversals)}
                           </td>
                           <td className={cn(
-                            "px-3 py-1.5 whitespace-nowrap text-right",
+                            "px-3 py-1.5 whitespace-nowrap text-right tabular-nums",
                             r.adjustments > 0 ? "text-green-700" : r.adjustments < 0 ? "text-rose-700" : "text-slate-700"
                           )}>
                             {fmtSigned(r.adjustments)}
@@ -345,14 +345,14 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                         </>
                       )}
                       <td className={cn(
-                        "px-3 py-1.5 whitespace-nowrap text-right font-semibold",
+                        "px-3 py-1.5 whitespace-nowrap text-right tabular-nums font-semibold",
                         r.closing_stock < 0 ? "text-rose-600" : "text-slate-900"
                       )}>
                         {fmtQty(r.closing_stock)}
                       </td>
                       {showPrices && (
                         <>
-                          <td className="px-3 py-1.5 whitespace-nowrap text-right text-slate-600">
+                          <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums text-slate-800">
                             {effectiveRate !== null ? (
                               <span className="inline-flex items-center gap-1 justify-end">
                                 {fmtAmt(effectiveRate)}
@@ -360,7 +360,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                               </span>
                             ) : "—"}
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap text-right font-medium text-slate-800">
+                          <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums font-medium text-slate-800">
                             {closingValue !== null ? fmtAmt(closingValue) : "—"}
                           </td>
                         </>
@@ -378,21 +378,21 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                   </tr>
                 ) : (
                   <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                    <td colSpan={2} className="px-3 py-2 whitespace-nowrap text-right text-slate-600 font-medium">TOTAL</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtQty(totals.opening)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right text-blue-700">
+                    <td colSpan={2} className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-800 font-medium">TOTAL</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtQty(totals.opening)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-blue-700">
                       {totals.inward > 0 ? `+${fmtQty(totals.inward)}` : "—"}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right text-orange-700">
+                    <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-orange-700">
                       {totals.issues > 0 ? `-${fmtQty(totals.issues)}` : "—"}
                     </td>
                     {showDetails && (
                       <>
-                        <td className="px-3 py-2 whitespace-nowrap text-right">{fmtSigned(totals.reversals)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-right">{fmtSigned(totals.adjustments)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtSigned(totals.reversals)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtSigned(totals.adjustments)}</td>
                       </>
                     )}
-                    <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtQty(totals.closing)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-900">{fmtQty(totals.closing)}</td>
                     {showPrices && <td colSpan={2} />}
                   </tr>
                 )}

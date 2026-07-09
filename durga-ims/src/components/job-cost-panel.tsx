@@ -65,7 +65,7 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
           options={vehicleOptions}
           value={selectedVehicleId ?? ""}
           onChange={handleSelect}
-          placeholder="Search by job #, vehicle name, or customer..."
+          placeholder="Search by job no / reg no or customer..."
           searchPlaceholder="Type to search..."
         />
       </div>
@@ -84,7 +84,7 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
             )}>
               {result.vehicle.vehicle_type === "New" ? "New Build" : "Old Build"}
             </span>
-            <span className="text-slate-700">Job #{result.vehicle.job_ref_no}</span>
+            <span className="text-slate-700">Job No / Reg No: {result.vehicle.job_ref_no}</span>
             {result.vehicle.customer_name && (
               <span className="text-slate-600">{result.vehicle.customer_name}</span>
             )}

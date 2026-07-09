@@ -24,7 +24,6 @@ interface ParsedRow {
   tax_rate_id?: string | null;
   purchase_unit_id?: string;
   opening_stock?: string;
-  min_level?: string;
 }
 
 interface Props {
@@ -78,12 +77,11 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
         "Tax Rate %",
         "Purchase Unit",
         "Opening Stock",
-        "Min Stock Level",
       ],
-      ["(Example) ENGINE OIL 20W40", "27101990", "18", "LTR", "50", "10"],
+      ["(Example) ENGINE OIL 20W40", "27101990", "18", "LTR", "50"],
     ];
     const ws = xlsx.utils.aoa_to_sheet(mainData);
-    ws["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
+    ws["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }];
 
     const refData: (string | number)[][] = [
       ["REFERENCE — do not edit this sheet"],
@@ -176,10 +174,6 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
         const openingVal = parseFloat(openingStr);
         if (isNaN(openingVal) || openingVal < 0) errors.push("Opening Stock must be ≥ 0");
 
-        const minStr = String(row["Min Stock Level"] ?? "").trim() || "0";
-        const minVal = parseFloat(minStr);
-        if (isNaN(minVal) || minVal < 0) errors.push("Min Stock Level must be ≥ 0");
-
         if (errors.length > 0) {
           return { rowNum, displayName: rawName || `Row ${rowNum}`, status: "error" as const, errors };
         }
@@ -198,7 +192,6 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
           tax_rate_id: taxRateId,
           purchase_unit_id: purchaseUnitId,
           opening_stock: openingStr,
-          min_level: minStr,
         };
       });
 
@@ -216,7 +209,6 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
       tax_rate_id: r.tax_rate_id,
       purchase_unit_id: r.purchase_unit_id!,
       opening_stock: r.opening_stock,
-      min_level: r.min_level,
     }));
 
     setImportError(null);

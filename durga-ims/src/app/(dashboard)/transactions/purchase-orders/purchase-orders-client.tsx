@@ -642,12 +642,21 @@ export function PurchaseOrdersClient({
   const filledRows = rows.filter((r) => r.material_id);
   const hasFormContent = loadedPO !== null || isDirty;
 
-  // Combobox options for identifier dropdown
+  // Combobox options for identifier dropdown (descending — server order)
   const dropdownOptions = dropdownItems.map((item) => ({
     value: item.id,
     label: `${formatCode("PO-", item.poNumber, 4)} | ${item.supplierName ?? "Multi-supplier"} | ${formatDate(item.date)} [${item.status}]`,
     displayLabel: formatCode("PO-", item.poNumber, 4),
   }));
+
+  // Ascending variant for "PO No From" so the range start is easiest to find
+  const dropdownOptionsAsc = [...dropdownItems]
+    .sort((a, b) => a.poNumber - b.poNumber)
+    .map((item) => ({
+      value: item.id,
+      label: `${formatCode("PO-", item.poNumber, 4)} | ${item.supplierName ?? "Multi-supplier"} | ${formatDate(item.date)} [${item.status}]`,
+      displayLabel: formatCode("PO-", item.poNumber, 4),
+    }));
 
   // Batch print: filter POs in range by po_number
 
@@ -883,7 +892,7 @@ export function PurchaseOrdersClient({
                   ref={poListRef}
                   tabIndex={0}
                   onKeyDown={handlePoListKeyDown}
-                  className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                  className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   {filteredPOs.map((po, idx) => (
                     <button
@@ -893,10 +902,10 @@ export function PurchaseOrdersClient({
                       onMouseEnter={() => setPoListHighlight(idx)}
                       className={`w-full flex items-center gap-4 px-3 py-2 text-sm text-left transition-colors ${
                         idx === poListHighlight
-                          ? "bg-blue-100 ring-1 ring-inset ring-blue-400"
+                          ? "bg-blue-100"
                           : po.id === loadedPO?.id
-                          ? "bg-blue-50 border-l-2 border-blue-400"
-                          : "hover:bg-slate-50"
+                          ? "bg-blue-100"
+                          : "hover:bg-blue-100"
                       }`}
                     >
                       <span className="font-mono font-medium text-slate-800 w-16 shrink-0">
@@ -1148,7 +1157,7 @@ export function PurchaseOrdersClient({
             <div className="space-y-1">
               <label className="text-sm text-slate-600">PO No From</label>
               <Combobox
-                options={dropdownOptions}
+                options={dropdownOptionsAsc}
                 value={printFromId}
                 onChange={setPrintFromId}
                 placeholder="From…"
@@ -1193,7 +1202,7 @@ export function PurchaseOrdersClient({
 
       {/* ── Mark as Received dialog ── */}
       <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
-        <DialogContent data-testid="receive-confirm-dialog" className="max-w-md">
+        <DialogContent data-testid="receive-confirm-dialog" className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>
               Mark {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : "new PO"} as Received?
@@ -1240,7 +1249,7 @@ export function PurchaseOrdersClient({
         open={revertDialogOpen}
         onOpenChange={(open) => { setRevertDialogOpen(open); if (!open) setRevertError(null); }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>
               Revert {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : ""} to Draft?
@@ -1285,6 +1294,7 @@ export function PurchaseOrdersClient({
         confirmLabel="Delete"
         onConfirm={confirmDelete}
         isPending={isPending}
+        focusCancel
       />
 
       {/* ── Discard unsaved changes ── */}
@@ -1296,7 +1306,6 @@ export function PurchaseOrdersClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
-        confirmOnEnter
       />
     </div>
   );

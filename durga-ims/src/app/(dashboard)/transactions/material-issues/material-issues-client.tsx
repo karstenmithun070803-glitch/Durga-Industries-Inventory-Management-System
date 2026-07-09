@@ -588,6 +588,14 @@ export function MaterialIssuesClient({
                     onChange={handleFormVehicleChange}
                     placeholder="Select vehicle…"
                     openOnArrowDown
+                    onGridKeyDown={(e) => {
+                      // Vehicle → Right → Date (Down still opens the dropdown via openOnArrowDown)
+                      if (e.key === "ArrowRight") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dateSectionRef.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
+                      }
+                    }}
                   />
                 </div>
                 <span className="text-sm text-slate-600 shrink-0">Date</span>
@@ -596,6 +604,20 @@ export function MaterialIssuesClient({
                     type="date"
                     value={issueDate}
                     onChange={(e) => { setIssueDate(e.target.value); setIsDirty(true); }}
+                    onKeyDown={(e) => {
+                      // Native date input eats arrows, so route them explicitly.
+                      // Date → Left → Vehicle · Date → Down → Margin
+                      if (e.key === "ArrowLeft") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
+                      } else if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        marginInputRef.current?.focus();
+                        marginInputRef.current?.select();
+                      }
+                    }}
                     className="h-9 text-sm"
                     disabled={!vehicleId}
                     autoComplete="off"
@@ -606,7 +628,7 @@ export function MaterialIssuesClient({
               {vehicleId && (
                 <div className="flex flex-wrap items-end gap-4">
                   <div className="space-y-1">
-                    <label className="text-sm text-slate-600">Job No</label>
+                    <label className="text-sm text-slate-600">Job No / Reg No</label>
                     <div className="w-28 h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md">
                       {selectedVehicle?.job_ref_no || "—"}
                     </div>
@@ -628,9 +650,16 @@ export function MaterialIssuesClient({
                         }}
                         onFocus={(e) => e.target.select()}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") {
+                          if (e.key === "Enter" || e.key === "ArrowDown") {
+                            // Margin → Down / Enter → Material (grid row 1)
                             e.preventDefault();
+                            e.stopPropagation();
                             goToSection(3); // advance to Grid
+                          } else if (e.key === "ArrowUp") {
+                            // Margin → Up → Vehicle
+                            e.preventDefault();
+                            e.stopPropagation();
+                            vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
                           }
                         }}
                         className="h-9 text-sm"
@@ -774,7 +803,7 @@ export function MaterialIssuesClient({
 
       {/* Zero-rate confirmation */}
       <Dialog open={zeroRateDialogOpen} onOpenChange={setZeroRateDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>Items with zero rate</DialogTitle>
             <DialogDescription>
@@ -799,7 +828,7 @@ export function MaterialIssuesClient({
 
       {/* Issue confirmation (first save) */}
       <Dialog open={issueConfirmOpen} onOpenChange={setIssueConfirmOpen}>
-        <DialogContent data-testid="issue-confirm-dialog" className="max-w-md">
+        <DialogContent data-testid="issue-confirm-dialog" className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>Issue & Deduct Stock?</DialogTitle>
             <DialogDescription>
@@ -817,7 +846,7 @@ export function MaterialIssuesClient({
 
       {/* Reapply confirmation (subsequent saves) */}
       <Dialog open={reapplyConfirmOpen} onOpenChange={setReapplyConfirmOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>Reverse & Reapply Stock?</DialogTitle>
             <DialogDescription>
@@ -842,6 +871,7 @@ export function MaterialIssuesClient({
         confirmLabel="Delete"
         onConfirm={confirmDelete}
         isPending={isPending}
+        focusCancel
       />
 
       {/* Discard confirm */}
@@ -856,7 +886,6 @@ export function MaterialIssuesClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
-        confirmOnEnter
       />
 
       {/* Clone vehicle dialog */}

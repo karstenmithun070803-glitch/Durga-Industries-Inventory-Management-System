@@ -27,7 +27,6 @@ export interface StockMaterialRow {
   name: string;
   unit_name: string | null;
   current_stock: string;
-  min_level: string | null;
   max_level: string | null;
   last_po_rate: string | null;
   standard_cost: string | null;
@@ -36,7 +35,6 @@ export interface StockMaterialRow {
 
 export interface StockSummary {
   totalMaterials: number;
-  lowStockCount: number;
   outOfStockCount: number;
   totalStockValue: number;
   materialsExcludedFromValue: number;
@@ -110,7 +108,6 @@ export const getStockDashboardMaterials = unstable_cache(
       material_no: materials.material_no,
       name: materials.name,
       current_stock: materials.current_stock,
-      min_level: materials.min_level,
       max_level: materials.max_level,
       is_active: materials.is_active,
       unit_id: materials.purchase_unit_id,
@@ -123,7 +120,7 @@ export const getStockDashboardMaterials = unstable_cache(
   if (allMats.length === 0) {
     return {
       rows: [],
-      summary: { totalMaterials: 0, lowStockCount: 0, outOfStockCount: 0, totalStockValue: 0, materialsExcludedFromValue: 0, standardCostCount: 0 },
+      summary: { totalMaterials: 0, outOfStockCount: 0, totalStockValue: 0, materialsExcludedFromValue: 0, standardCostCount: 0 },
     };
   }
 
@@ -158,7 +155,6 @@ export const getStockDashboardMaterials = unstable_cache(
     name: m.name,
     unit_name: m.unit_id ? (unitMap.get(m.unit_id) ?? null) : null,
     current_stock: m.current_stock,
-    min_level: m.min_level,
     max_level: m.max_level,
     last_po_rate: rateMap.get(m.id) ?? null,
     standard_cost: m.standard_cost,
@@ -168,12 +164,6 @@ export const getStockDashboardMaterials = unstable_cache(
   // Summary metrics (active materials only)
   const activeMats = rows.filter((r) => r.is_active);
   const totalMaterials = activeMats.length;
-
-  const lowStockCount = activeMats.filter((r) => {
-    const stock = parseFloat(r.current_stock);
-    const minL = parseFloat(r.min_level ?? "0");
-    return stock > 0 && minL > 0 && stock < minL;
-  }).length;
 
   const outOfStockCount = activeMats.filter((r) => parseFloat(r.current_stock) === 0).length;
 
@@ -192,7 +182,7 @@ export const getStockDashboardMaterials = unstable_cache(
 
   return {
     rows,
-    summary: { totalMaterials, lowStockCount, outOfStockCount, totalStockValue, materialsExcludedFromValue, standardCostCount },
+    summary: { totalMaterials, outOfStockCount, totalStockValue, materialsExcludedFromValue, standardCostCount },
   };
 },
 ["stock-dashboard"],

@@ -35,7 +35,7 @@ function fmtQty(v: number) {
 }
 
 interface Props {
-  suppliers: { id: string; name: string }[];
+  suppliers: { id: string; code_no: number; name: string; gstin: string | null }[];
   materials: { id: string; name: string; material_no: number }[];
   defaultFY: string;
   companySetting?: CompanySetting;
@@ -63,7 +63,10 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   const [showTaxAmt, setShowTaxAmt] = useState(false);
   const fetchGenRef = useRef(0);
 
-  const supplierOptions = suppliers.map((s) => ({ value: s.id, label: s.name }));
+  const supplierOptions = suppliers.map((s) => ({
+    value: s.id,
+    label: s.gstin ? `${s.name} (${s.gstin})` : s.name,
+  }));
   const materialOptions = materials.map((m) => ({
     value: m.id,
     label: `M-${String(m.material_no).padStart(4, "0")} — ${m.name}`,
@@ -327,13 +330,13 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
               <table className="min-w-max w-full text-xs">
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
-                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Month</th>
-                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier</th>
-                    <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
-                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
-                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
-                    {showTaxAmt && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>}
-                    <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Total</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Month</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Supplier</th>
+                    <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Material</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Qty</th>
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Taxable</th>
+                    {showTaxAmt && <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Tax Amt</th>}
+                    <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -341,25 +344,25 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                     <tr><td colSpan={showTaxAmt ? 7 : 6} className="px-3 py-8 text-center text-slate-700">No received purchases in selected range.</td></tr>
                   ) : (
                     monthlyRows.map((r) => (
-                      <tr key={r.key} className="border-t border-slate-100 hover:bg-slate-50/50">
+                      <tr key={r.key} className="border-t border-slate-200 hover:bg-slate-100">
                         <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.monthLabel}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.supplier}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.material}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable)}</td>
-                        {showTaxAmt && <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.cgst + r.sgst + r.igst) > 0 ? fmtAmt(r.cgst + r.sgst + r.igst) : "—"}</td>}
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.total)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.supplier}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.material}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{fmtQty(r.qty)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{fmtAmt(r.taxable)}</td>
+                        {showTaxAmt && <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{(r.cgst + r.sgst + r.igst) > 0 ? fmtAmt(r.cgst + r.sgst + r.igst) : "—"}</td>}
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums font-semibold text-slate-800">{fmtAmt(r.total)}</td>
                       </tr>
                     ))
                   )}
                 </tbody>
                 <tfoot className="bg-slate-100 sticky bottom-0">
                   <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                    <td colSpan={3} className="px-3 py-2 whitespace-nowrap text-right text-slate-600 font-medium">TOTAL</td>
+                    <td colSpan={3} className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-800 font-medium">TOTAL</td>
                     <td />{/* Qty — no total */}
-                    <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
-                    {showTaxAmt && <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>}
-                    <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtAmt(totals.taxable)}</td>
+                    {showTaxAmt && <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>}
+                    <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-900">{fmtAmt(totals.total)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -370,17 +373,17 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
             <table className="min-w-max w-full text-xs">
               <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">PO #</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Date</th>
-                  {showBill && <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier Bill</th>}
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Supplier</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Qty</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Rate</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
-                  {showTaxAmt && <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>}
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Total</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">PO #</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Date</th>
+                  {showBill && <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Supplier Bill</th>}
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Supplier</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Material</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Qty</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Unit</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Rate</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Taxable</th>
+                  {showTaxAmt && <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Tax Amt</th>}
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -390,43 +393,43 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                       <tr
                         key={r.item_id}
                         className={cn(
-                          "hover:bg-slate-50/50",
-                          itemIdx === 0 ? "border-t-2 border-slate-200" : "border-t border-slate-100"
+                          "hover:bg-slate-100",
+                          itemIdx === 0 ? "border-t-2 border-slate-200" : "border-t border-slate-200"
                         )}
                       >
                         {itemIdx === 0 && (
                           <>
-                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800 align-top border-r border-slate-100">
+                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800 align-top border-r border-slate-200">
                               PO-{String(r.po_number).padStart(4, "0")}
                             </td>
-                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-600 align-top border-r border-slate-100">
+                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-800 align-top border-r border-slate-200">
                               {r.po_date}
                             </td>
                             {showBill && (
-                              <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-600 align-top border-r border-slate-100">
+                              <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-800 align-top border-r border-slate-200">
                                 {r.supplier_bill_no
                                   ? <span title={r.supplier_bill_date ?? undefined}>{r.supplier_bill_no}</span>
                                   : "—"}
                               </td>
                             )}
-                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-600 align-top border-r border-slate-100">
+                            <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-800 align-top border-r border-slate-200">
                               {r.supplier_name ?? "—"}
                             </td>
                           </>
                         )}
-                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.material_name}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtQty(r.qty)}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.unit_name ?? "—"}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.rate)}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_amount)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.material_name}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{fmtQty(r.qty)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.unit_name ?? "—"}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{fmtAmt(r.rate)}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{fmtAmt(r.taxable_amount)}</td>
                         {showTaxAmt && (
-                          <td className="px-3 py-1.5 whitespace-nowrap text-right">
+                          <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">
                             {(r.cgst_amount + r.sgst_amount + r.igst_amount) > 0
                               ? fmtAmt(r.cgst_amount + r.sgst_amount + r.igst_amount)
                               : "—"}
                           </td>
                         )}
-                        <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">
+                        <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums font-semibold text-slate-800">
                           {fmtAmt(r.total_amount)}
                         </td>
                       </tr>
@@ -436,15 +439,15 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
               </tbody>
               <tfoot className="bg-slate-100 sticky bottom-0">
                 <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={4 + (showBill ? 1 : 0)} className="px-3 py-2 whitespace-nowrap text-right text-slate-600 font-medium">
+                  <td colSpan={4 + (showBill ? 1 : 0)} className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-800 font-medium">
                     TOTAL {rows.filter((r) => r.status !== "Received").length > 0 && "(Received only)"}
                   </td>
                   <td />{/* Qty — no total */}
                   <td />{/* Unit */}
                   <td />{/* Rate — no total */}
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
-                  {showTaxAmt && <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>}
-                  <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.total)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtAmt(totals.taxable)}</td>
+                  {showTaxAmt && <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>}
+                  <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-900">{fmtAmt(totals.total)}</td>
                 </tr>
               </tfoot>
             </table>

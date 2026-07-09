@@ -12,6 +12,12 @@ function fmtAmt(v: number) {
   return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fmtAmtShort(v: number): string {
+  if (v >= 1_00_00_000) return `₹${(v / 1_00_00_000).toFixed(1)} Cr`;
+  if (v >= 1_00_000)    return `₹${(v / 1_00_000).toFixed(1)} L`;
+  return "₹" + Math.round(v).toLocaleString("en-IN");
+}
+
 function StatCard({
   label, value, sub, href, color,
 }: {
@@ -99,13 +105,14 @@ export default async function HomePage() {
         <StatCard
           label="Total Stock Value"
           value={fmtAmt(stats.totalStockValue)}
-          sub={`${stats.lowStockCount} below min · ${stats.materialsExcludedFromValue} excl. (no rate) · incl. GST basis`}
+          sub={`${stats.materialsExcludedFromValue} excl. (no rate) · incl. GST basis`}
           href="/stock"
-          color={stats.lowStockCount > 0 ? "amber" : "slate"}
+          color="slate"
         />
         <StatCard
           label={`FY ${fy} Sales`}
           value={fmtAmt(stats.fyTotalSales)}
+          sub={`VMI New: ${fmtAmtShort(stats.fyVMINewTotal)} · VMI Old: ${fmtAmtShort(stats.fyVMIOldTotal)}`}
           color="green"
         />
         <StatCard
@@ -138,7 +145,7 @@ export default async function HomePage() {
         <div>
           <SectionTitle>Recent Material Issues</SectionTitle>
           <RecentTable
-            headers={["Job No", "Date", "Status"]}
+            headers={["Job No / Reg No", "Date", "Status"]}
             rows={stats.recentMIs.map((r) => [
               <Link key={r.id} href={r.issue_type === "NEW" ? `/transactions/material-issues/new?vehicleId=${r.vehicle_id}` : `/transactions/material-issues?vehicleId=${r.vehicle_id}`} className="font-mono text-blue-600 hover:underline">
                 {r.job_ref_no ?? "—"}

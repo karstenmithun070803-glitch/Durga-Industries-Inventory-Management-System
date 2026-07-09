@@ -49,28 +49,18 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
               <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
             </View>
 
-            <Text style={styles.docTypeCentered}>INVOICE</Text>
+            <View style={{ borderBottomWidth: 1, borderBottomStyle: "dashed", borderBottomColor: "#000", marginTop: 8, marginBottom: 10, paddingBottom: 3 }}>
+              <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>INVOICE</Text>
+            </View>
 
-            {/* ── Two-column header: bill info left, customer info right ── */}
+            {/* ── Two-column header: vehicle/customer left, bill identifiers right ── */}
             <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
-              {/* Left column — bill info */}
+              {/* Left column — vehicle + customer details */}
               <View style={{ flex: 1 }}>
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabelInvoice}>BILL NO.</Text>
-                  <Text style={styles.infoLineValue}>: {first.bill_number}</Text>
-                </View>
-                <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabelInvoice}>BILL DATE</Text>
-                  <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
-                </View>
-                <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabelInvoice}>JOB NO.</Text>
+                  <Text style={styles.infoLineLabelInvoice}>JOB NO / REG NO</Text>
                   <Text style={styles.infoLineValue}>: {first.job_ref_no}</Text>
                 </View>
-              </View>
-
-              {/* Right column — customer info */}
-              <View style={{ flex: 1 }}>
                 {first.customer_name && (
                   <View style={styles.infoLine}>
                     <Text style={styles.infoLineLabelInvoice}>CUSTOMER</Text>
@@ -95,6 +85,18 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                     <Text style={styles.infoLineValue}>: {first.customer_state}</Text>
                   </View>
                 )}
+              </View>
+
+              {/* Right column — bill identifiers */}
+              <View style={{ flex: 1 }}>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabelInvoice}>BILL DATE</Text>
+                  <Text style={styles.infoLineValue}>: {fmtDate(first.bill_date)}</Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabelInvoice}>BILL NO.</Text>
+                  <Text style={styles.infoLineValue}>: {first.bill_number}</Text>
+                </View>
               </View>
             </View>
             {/* ── Table — simplified (no tax columns) ── */}
@@ -164,7 +166,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                   <Text style={styles.plainTableCellBold}>Rs. {fmtAmt(first.net_amount)}</Text>
                 </View>
               </View>
-              <Text style={{ marginTop: 6, fontSize: 9.5, fontFamily: "Helvetica-Oblique", color: "#374151" }}>
+              <Text style={{ marginTop: 6, fontSize: 9.5, fontFamily: "Times-Italic", color: "#374151" }}>
                 {numberToWords(parseFloat(first.net_amount || "0"))}
               </Text>
             </View>
@@ -176,7 +178,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
               <View style={{ flex: 1, paddingRight: 8 }}>
                 {companySetting?.bank_account_no && (
                   <View>
-                    <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: "#374151", marginBottom: 2 }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Times-Bold", color: "#374151", marginBottom: 2 }}>
                       Payment Details
                     </Text>
                     <Text style={{ fontSize: 9, color: "#374151" }}>
@@ -190,7 +192,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                   </View>
                 )}
                 {companySetting?.invoice_terms && (
-                  <Text style={{ fontSize: 10, color: "#6B7280", fontFamily: "Helvetica-Oblique", marginTop: companySetting?.bank_account_no ? 6 : 0 }}>
+                  <Text style={{ fontSize: 10, color: "#6B7280", fontFamily: "Times-Italic", marginTop: companySetting?.bank_account_no ? 6 : 0 }}>
                     Terms: {companySetting.invoice_terms}
                   </Text>
                 )}
@@ -212,7 +214,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
               <Text
                 style={styles.footerText}
                 render={({ pageNumber, totalPages }) =>
-                  `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          For ${COMPANY_NAME}`
+                  `Pg. ${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}`
                 }
               />
             </View>

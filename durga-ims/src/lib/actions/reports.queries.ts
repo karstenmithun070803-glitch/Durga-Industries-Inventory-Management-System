@@ -31,7 +31,7 @@ export const getVMINewVehiclesForReports = unstable_cache(
 export const getActiveSuppliersForReports = unstable_cache(
   async () =>
     db
-      .select({ id: suppliers.id, name: suppliers.name })
+      .select({ id: suppliers.id, code_no: suppliers.code_no, name: suppliers.name, gstin: suppliers.gstin })
       .from(suppliers)
       .where(eq(suppliers.is_active, true))
       .orderBy(suppliers.name),

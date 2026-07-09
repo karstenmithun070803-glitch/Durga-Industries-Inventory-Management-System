@@ -74,17 +74,14 @@ function fmtLastUpdated(d: Date): string {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) + ` at ${time}`;
 }
 
-type StockStatus = "ok" | "low" | "out";
+type StockStatus = "ok" | "out";
 
 function getStatus(row: StockMaterialRow): StockStatus {
-  const stock = parseFloat(row.current_stock);
-  if (stock === 0) return "out";
-  const minL = parseFloat(row.min_level ?? "0");
-  if (minL > 0 && stock < minL) return "low";
+  if (parseFloat(row.current_stock) === 0) return "out";
   return "ok";
 }
 
-type TabFilter = "all" | "low" | "out";
+type TabFilter = "all" | "out";
 
 const LEDGER_TYPE_COLOR: Record<string, string> = {
   PO_INWARD: "bg-blue-100 text-blue-700",
@@ -203,12 +200,6 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
     && Math.abs(delta) / currentQty > 0.5
     && Math.abs(delta) >= 10;
 
-  const minLevel = adjustMaterial?.min_level ? parseFloat(adjustMaterial.min_level) : 0;
-  const isBelowMinLevel = !isNaN(adjustedQty)
-    && adjustedQty >= 0
-    && minLevel > 0
-    && adjustedQty < minLevel;
-
   const deltaLabel = isNaN(adjustedQty)
     ? ""
     : delta === 0
@@ -236,8 +227,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
 
   const filtered = useMemo(() => {
     let result = rows;
-    if (tab === "low") result = result.filter((r) => getStatus(r) === "low");
-    else if (tab === "out") result = result.filter((r) => getStatus(r) === "out");
+    if (tab === "out") result = result.filter((r) => getStatus(r) === "out");
 
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -251,7 +241,6 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
   }, [rows, tab, search]);
 
   const tabCounts = useMemo(() => ({
-    low: rows.filter((r) => getStatus(r) === "low").length,
     out: rows.filter((r) => getStatus(r) === "out").length,
   }), [rows]);
 
@@ -379,7 +368,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       </div>
 
       {/* ── Summary cards ── */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <SummaryCard
           label="Total Materials"
           value={String(summary.totalMaterials)}
@@ -392,14 +381,6 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             summary.standardCostCount > 0 ? `${summary.standardCostCount} use standard cost` : null,
             summary.materialsExcludedFromValue > 0 ? `${summary.materialsExcludedFromValue} excl. (no cost set)` : null,
           ].filter(Boolean).join(" · ") || "based on last PO rate (incl. GST)"}
-        />
-        <SummaryCard
-          label="Low Stock"
-          value={String(summary.lowStockCount)}
-          sub="below minimum level"
-          accent={summary.lowStockCount > 0 ? "amber" : undefined}
-          onClick={() => setTab("low")}
-          clickable
         />
         <SummaryCard
           label="Out of Stock"
@@ -415,10 +396,9 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg flex flex-col">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
-          {(["all", "low", "out"] as TabFilter[]).map((t) => {
+          {(["all", "out"] as TabFilter[]).map((t) => {
             const label =
               t === "all" ? `All (${search.trim() ? filtered.length : summary.totalMaterials})`
-              : t === "low" ? `Low Stock (${tabCounts.low})`
               : `Out of Stock (${tabCounts.out})`;
             return (
               <button
@@ -449,8 +429,8 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             size="sm"
             className="h-8 text-xs ml-auto"
             onClick={() => {
-              const headers = ["Code", "Material Name", "Unit", "Current Stock", "Min Level", "Max Level", "Valuation Rate (incl. GST)", "Stock Value (incl. GST)", "Status"];
-              const statusLabel: Record<string, string> = { ok: "OK", low: "Low Stock", out: "Out of Stock" };
+              const headers = ["Code", "Material Name", "Unit", "Current Stock", "Max Level", "Valuation Rate (incl. GST)", "Stock Value (incl. GST)", "Status"];
+              const statusLabel: Record<string, string> = { ok: "OK", out: "Out of Stock" };
               const csvRows = filtered.map((r) => {
                 const stock = parseFloat(r.current_stock);
                 const poRate = r.last_po_rate !== null ? parseFloat(r.last_po_rate) : null;
@@ -461,7 +441,6 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                   r.name,
                   r.unit_name ?? "",
                   stock.toFixed(4),
-                  r.min_level ? parseFloat(r.min_level).toFixed(4) : "",
                   r.max_level ? parseFloat(r.max_level).toFixed(4) : "",
                   rate != null ? rate.toFixed(2) : "",
                   rate != null ? (stock * rate).toFixed(2) : "",
@@ -492,7 +471,6 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material Name</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Current Stock</th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Min Level</th>
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Last PO Rate (incl. GST)</th>
                 <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Stock Value (incl. GST)</th>
                 <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Status</th>
@@ -502,7 +480,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-12 text-center text-slate-700 text-sm">
+                  <td colSpan={8} className="px-3 py-12 text-center text-slate-700 text-sm">
                     No materials found.
                   </td>
                 </tr>
@@ -516,10 +494,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                   const isStdRate = poRate === null && stdRate !== null;
                   const value = rate !== null ? stock * rate : null;
 
-                  const rowBg =
-                    status === "out" ? "bg-red-50"
-                    : status === "low" ? "bg-amber-50"
-                    : "";
+                  const rowBg = status === "out" ? "bg-red-50" : "";
 
                   const isHighlighted = highlightedIndex === filteredIdx;
                   return (
@@ -544,9 +519,6 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-slate-800">
                         {fmtQty(row.current_stock)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
-                        {row.min_level && parseFloat(row.min_level) > 0 ? fmtQty(row.min_level) : "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
                         {rate !== null ? (
@@ -580,7 +552,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                           >
                             <SlidersHorizontal className="w-4 h-4" />
                           </button>
-                          {(status === "low" || status === "out") && (
+                          {status === "out" && (
                             <span onClick={(e) => e.stopPropagation()}>
                               <Link
                                 href={`/transactions/purchase-orders/new?prefill=${row.id}`}
@@ -809,15 +781,6 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               </div>
             )}
 
-            {/* Below min level warning */}
-            {isBelowMinLevel && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                <p className="text-xs text-amber-700">
-                  New quantity is below minimum stock level ({fmtQty(minLevel)} units).
-                </p>
-              </div>
-            )}
-
             {/* Unit Cost field (when no PO rate) */}
             {adjustMaterial?.last_po_rate === null && (
               <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
@@ -939,6 +902,5 @@ function SummaryCard({
 
 function StatusBadge({ status }: { status: StockStatus }) {
   if (status === "out") return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Out of Stock</span>;
-  if (status === "low") return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Low Stock</span>;
   return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>;
 }

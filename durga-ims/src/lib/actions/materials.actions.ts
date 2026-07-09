@@ -28,12 +28,10 @@ export async function createMaterial(data: {
   tax_rate_id?: string;
   purchase_unit_id?: string;
   opening_stock?: string;
-  min_level?: string;
 }) {
   if (!data.name.trim()) throw new Error("Material name is required");
   if (!data.purchase_unit_id) throw new Error("Purchase unit is required.");
   if (Number(data.opening_stock ?? 0) < 0) throw new Error("Opening stock cannot be negative");
-  if (Number(data.min_level ?? 0) < 0) throw new Error("Min level cannot be negative");
 
   const [dup] = await db.select({ id: materials.id }).from(materials)
     .where(ilike(materials.name, data.name.trim()));
@@ -46,7 +44,6 @@ export async function createMaterial(data: {
     purchase_unit_id: data.purchase_unit_id || null,
     opening_stock: data.opening_stock || "0",
     current_stock: data.opening_stock || "0",
-    min_level: data.min_level || "0",
   });
   revalidateTag(CACHE_TAGS.materials);
 }
@@ -56,7 +53,6 @@ export async function updateMaterial(id: string, data: {
   hsn_code?: string;
   tax_rate_id?: string;
   purchase_unit_id?: string;
-  min_level?: string;
   standard_cost?: string;
 }) {
   if (!data.name.trim()) throw new Error("Material name is required");
@@ -73,7 +69,6 @@ export async function updateMaterial(id: string, data: {
     hsn_code: data.hsn_code?.trim() || null,
     tax_rate_id: data.tax_rate_id || null,
     purchase_unit_id: data.purchase_unit_id || null,
-    min_level: data.min_level || "0",
     standard_cost: parsedCost !== null ? String(parsedCost) : null,
   }).where(eq(materials.id, id));
   revalidateTag(CACHE_TAGS.materials);
@@ -130,7 +125,6 @@ export async function bulkImportMaterials(
     tax_rate_id?: string | null;
     purchase_unit_id: string;
     opening_stock?: string;
-    min_level?: string;
   }>
 ): Promise<{ imported: number; skipped: number; skippedInactive: number }> {
   if (rows.length === 0) return { imported: 0, skipped: 0, skippedInactive: 0 };
@@ -162,7 +156,6 @@ export async function bulkImportMaterials(
         purchase_unit_id: r.purchase_unit_id,
         opening_stock: r.opening_stock || "0",
         current_stock: r.opening_stock || "0",
-        min_level: r.min_level || "0",
       }))
     );
   });

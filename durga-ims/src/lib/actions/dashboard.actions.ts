@@ -11,15 +11,16 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
-import { INVOICE_STATUS, PO_STATUS } from "@/lib/constants";
+import { MI_STATUS, PO_STATUS } from "@/lib/constants";
 import { CACHE_TAGS } from "@/lib/cache";
 
 export interface DashboardStats {
-  lowStockCount: number;
   totalStockValue: number;
   materialsExcludedFromValue: number;
   standardCostCount: number;
   fyTotalSales: number;
+  fyVMINewTotal: number;
+  fyVMIOldTotal: number;
   fyTotalPurchases: number;
   recentPOs: { id: string; po_number: number; po_date: string; status: string; supplier_name: string | null }[];
   recentMIs: { id: string; vehicle_id: string; job_ref_no: string | null; issue_date: string; status: string; issue_type: string }[];
@@ -31,7 +32,7 @@ export const getDashboardStats = unstable_cache(
   const fy = financialYear;
 
   const [
-    salesRow,
+    miSalesRows,
     purchaseRow,
     stockRows,
     recentPORows,
@@ -39,14 +40,18 @@ export const getDashboardStats = unstable_cache(
     recentInvoiceRows,
     latestRates,
   ] = await Promise.all([
-    // This FY total sales
+    // This FY total sales — VMI New + VMI Old material issues (Issued status only)
     db
-      .select({ total: sql<string>`COALESCE(SUM(${invoices.net_amount}), 0)` })
-      .from(invoices)
+      .select({
+        issue_type: materialIssues.issue_type,
+        total: sql<string>`COALESCE(SUM(${materialIssues.total_amount}), 0)`,
+      })
+      .from(materialIssues)
       .where(and(
-        eq(invoices.financial_year, fy),
-        eq(invoices.status, INVOICE_STATUS.FINALIZED),
-      )),
+        eq(materialIssues.financial_year, fy),
+        eq(materialIssues.status, MI_STATUS.ISSUED),
+      ))
+      .groupBy(materialIssues.issue_type),
 
     // This FY total purchases
     db
@@ -59,7 +64,7 @@ export const getDashboardStats = unstable_cache(
 
     // Active materials — id needed for rate map join
     db
-      .select({ id: materials.id, current_stock: materials.current_stock, min_level: materials.min_level, standard_cost: materials.standard_cost })
+      .select({ id: materials.id, current_stock: materials.current_stock, standard_cost: materials.standard_cost })
       .from(materials)
       .where(eq(materials.is_active, true)),
 
@@ -123,12 +128,6 @@ export const getDashboardStats = unstable_cache(
     `),
   ]);
 
-  const lowStockCount = stockRows.filter((r) => {
-    const stock = parseFloat(r.current_stock);
-    const min = r.min_level ? parseFloat(r.min_level) : 0;
-    return stock > 0 && min > 0 && stock < min;
-  }).length;
-
   // Compute totalStockValue using the same logic as getStockDashboardMaterials()
   const rateMap = new Map<string, string>(
     Array.from(latestRates).map((r) => [r.material_id, r.rate])
@@ -151,12 +150,16 @@ export const getDashboardStats = unstable_cache(
     }
   }
 
+  const fyVMINewTotal = parseFloat(miSalesRows.find((r) => r.issue_type === "NEW")?.total ?? "0");
+  const fyVMIOldTotal = parseFloat(miSalesRows.find((r) => r.issue_type === "OLD")?.total ?? "0");
+
   return {
-    lowStockCount,
     totalStockValue,
     materialsExcludedFromValue,
     standardCostCount,
-    fyTotalSales: parseFloat(salesRow[0]?.total ?? "0"),
+    fyTotalSales: fyVMINewTotal + fyVMIOldTotal,
+    fyVMINewTotal,
+    fyVMIOldTotal,
     fyTotalPurchases: parseFloat(purchaseRow[0]?.total ?? "0"),
     recentPOs: recentPORows.map((r) => ({
       id: r.id,

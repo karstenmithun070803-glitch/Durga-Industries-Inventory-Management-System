@@ -109,8 +109,8 @@ function PurchaseDetailDocument({
         <Text style={styles.companyDetailCentered}>{coAddress}</Text>
         <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
       </View>
-      <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>PURCHASE REPORT</Text>
-      <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+      <Text style={[styles.docTypeCentered, { fontSize: 11.5, marginTop: 4 }]}>PURCHASE REPORT</Text>
+      <Text style={{ fontSize: 8.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
         {filterParts.join("   |   ")}
       </Text>
       <View style={styles.separator} />
@@ -143,7 +143,7 @@ function PurchaseDetailDocument({
               ]}
             >
               <Text style={[styles.plainTableCell, { width: w.sno }]}>{itemIdx === 0 ? String(gIdx + 1) : ""}</Text>
-              <Text style={[styles.plainTableCell, { width: w.po, fontFamily: "Helvetica-Bold" }]}>{itemIdx === 0 ? `PO-${String(r.po_number).padStart(4, "0")}` : ""}</Text>
+              <Text style={[styles.plainTableCell, { width: w.po, fontFamily: "Times-Bold" }]}>{itemIdx === 0 ? `PO-${String(r.po_number).padStart(4, "0")}` : ""}</Text>
               <Text style={[styles.plainTableCell, { width: w.date }]}>{itemIdx === 0 ? r.po_date : ""}</Text>
               {showBill && <Text style={[styles.plainTableCell, { width: w.bill! }]}>{itemIdx === 0 ? (r.supplier_bill_no ?? "—") : ""}</Text>}
               <Text style={[styles.plainTableCell, { width: w.sup }]}>{itemIdx === 0 ? (r.supplier_name ?? "—") : ""}</Text>
@@ -226,8 +226,8 @@ function PurchaseMonthlyDocument({
         <Text style={styles.companyDetailCentered}>{coAddress}</Text>
         <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
       </View>
-      <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>PURCHASE REPORT — MONTHLY VIEW</Text>
-      <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+      <Text style={[styles.docTypeCentered, { fontSize: 11.5, marginTop: 4 }]}>PURCHASE REPORT — MONTHLY VIEW</Text>
+      <Text style={{ fontSize: 8.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
         {filterParts.join("   |   ")}
       </Text>
       <View style={styles.separator} />
@@ -249,7 +249,7 @@ function PurchaseMonthlyDocument({
         return (
           <View key={r.key} style={styles.plainTableRow}>
             <Text style={[styles.plainTableCell, { width: mw.sno }]}>{i + 1}</Text>
-            <Text style={[styles.plainTableCell, { width: mw.month, fontFamily: "Helvetica-Bold" }]}>{r.monthLabel}</Text>
+            <Text style={[styles.plainTableCell, { width: mw.month, fontFamily: "Times-Bold" }]}>{r.monthLabel}</Text>
             <Text style={[styles.plainTableCell, { width: mw.sup }]}>{r.supplier}</Text>
             <Text style={[styles.plainTableCell, { width: mw.mat }]}>{r.material}</Text>
             <Text style={[styles.plainTableCell, { width: mw.qty, textAlign: "right" }]}>{fmtQ(r.qty)}</Text>

@@ -15,7 +15,7 @@ import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { BulkImportDialog } from "@/components/masters/bulk-import-dialog";
 
-const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", opening_stock: "0", min_level: "0", standard_cost: "" };
+const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", opening_stock: "0", standard_cost: "" };
 
 interface Props { materials: Material[]; taxRates: TaxRate[]; units: Unit[]; }
 
@@ -60,7 +60,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
   function startEdit(m: Material) {
     setEditing(m);
     setFocusedIdx(-1);
-    const next = { name: m.name, hsn_code: m.hsn_code ?? "", tax_rate_id: m.tax_rate_id ?? "", purchase_unit_id: m.purchase_unit_id ?? "", opening_stock: m.opening_stock, min_level: m.min_level ?? "0", standard_cost: m.standard_cost ?? "" };
+    const next = { name: m.name, hsn_code: m.hsn_code ?? "", tax_rate_id: m.tax_rate_id ?? "", purchase_unit_id: m.purchase_unit_id ?? "", opening_stock: m.opening_stock, standard_cost: m.standard_cost ?? "" };
     setForm(next);
     originalFormRef.current = next;
   }
@@ -148,18 +148,12 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                 searchPlaceholder="Search units..."
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {!editing && (
-                <div className="space-y-1.5">
-                  <label className="text-xs text-slate-600">Opening Stock</label>
-                  <Input type="number" min="0" step="any" value={form.opening_stock} onChange={(e) => set("opening_stock", e.target.value)} />
-                </div>
-              )}
+            {!editing && (
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-600">Min Level</label>
-                <Input type="number" min="0" step="any" value={form.min_level} onChange={(e) => set("min_level", e.target.value)} />
+                <label className="text-xs text-slate-600">Opening Stock</label>
+                <Input type="number" min="0" step="any" value={form.opening_stock} onChange={(e) => set("opening_stock", e.target.value)} />
               </div>
-            </div>
+            )}
             {editing && (
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-600">Standard Cost (₹) <span className="text-slate-700">— for valuation when no PO rate</span></label>
@@ -218,34 +212,32 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                     <th className="px-3 py-1.5 text-left font-medium whitespace-nowrap sticky left-0 z-20 bg-slate-700 w-12">S.No</th>
                     <th className="px-3 py-1.5 text-left font-medium whitespace-nowrap sticky left-12 z-20 bg-slate-700 w-28">Material Code</th>
                     <th className="px-3 py-1.5 text-left font-medium whitespace-nowrap sticky left-40 z-20 bg-slate-700 w-44 border-r border-slate-600">Material Name</th>
-                    {["HSN", "Tax Rate", "Unit", "Min", "Stock"].map((h) => (
+                    {["HSN", "Tax Rate", "Unit", "Stock"].map((h) => (
                       <th key={h} className="px-3 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-700">No materials found</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-700">No materials found</td></tr>
                   )}
                   {visible.map((m, i) => {
                     const purUnit = units.find((u) => u.id === m.purchase_unit_id);
                     const taxRate = taxRates.find((t) => t.id === m.tax_rate_id);
-                    const stockLow = m.min_level && parseFloat(m.current_stock) < parseFloat(m.min_level);
-                    const stickyBg = !m.is_active ? "bg-slate-50" : stockLow ? "bg-red-50" : "bg-white";
+                    const stickyBg = !m.is_active ? "bg-slate-50" : i % 2 === 1 ? "bg-slate-50" : "bg-white";
                     return (
                       <tr
                         key={m.id}
-                        className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !m.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : stockLow ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-blue-50/40"}`}
+                        className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !m.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
                         onClick={() => startEdit(m)}
                       >
-                        <td className={`px-3 py-1.5 text-slate-600 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
-                        <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("M", m.material_no)}</td>
-                        <td className={`px-3 py-1.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{m.name}</td>
-                        <td className="px-3 py-1.5 text-slate-600 font-mono text-xs">{m.hsn_code ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-slate-600 text-xs">{taxRate ? taxRate.description : "—"}</td>
-                        <td className="px-3 py-1.5 text-slate-600">{purUnit?.unit_name ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-slate-600">{m.min_level ?? "—"}</td>
-                        <td className={`px-3 py-1.5 font-semibold ${stockLow ? "text-red-600" : "text-slate-800"}`}>{m.current_stock}</td>
+                        <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                        <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("M", m.material_no)}</td>
+                        <td className={`px-3 py-1.5 font-medium group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-40 z-10 w-44 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.15)] ${stickyBg}`}>{m.name}</td>
+                        <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 font-mono text-xs">{m.hsn_code ?? "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 text-xs">{taxRate ? taxRate.description : "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{purUnit?.unit_name ?? "—"}</td>
+                        <td className="px-3 py-1.5 font-semibold text-slate-800 group-hover:text-slate-900 tabular-nums">{m.current_stock}</td>
                       </tr>
                     );
                   })}

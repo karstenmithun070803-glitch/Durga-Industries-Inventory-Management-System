@@ -110,7 +110,6 @@ export const materials = pgTable(
     conversion_value: numeric("conversion_value", { precision: 10, scale: 4 }).default("1"),
     opening_stock: numeric("opening_stock", { precision: 12, scale: 4 }).notNull().default("0"),
     current_stock: numeric("current_stock", { precision: 12, scale: 4 }).notNull().default("0"),
-    min_level: numeric("min_level", { precision: 12, scale: 4 }).default("0"),
     max_level: numeric("max_level", { precision: 12, scale: 4 }),
     standard_cost: numeric("standard_cost", { precision: 14, scale: 4 }),
     ...softDelete,

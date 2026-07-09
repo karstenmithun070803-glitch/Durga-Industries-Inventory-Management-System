@@ -192,7 +192,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
           {/* Vehicle labels */}
           <div className="flex items-center gap-3 text-xs text-slate-600">
             <span className="font-medium text-slate-700">{v1Label}</span>
-            <span className="text-slate-300">vs</span>
+            <span className="text-slate-500">vs</span>
             <span className="font-medium text-slate-700">{v2Label}</span>
             <span className="text-slate-700 ml-1">— FY {fy}</span>
           </div>
@@ -241,16 +241,16 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
               </thead>
               <tbody>
                 {displayRows.map((r, i) => (
-                  <tr key={`${r.code}-${r.stage_name}`} className="border-t border-slate-100 hover:bg-slate-50/50">
-                    <td className="px-3 py-1.5 text-slate-600">{i + 1}</td>
-                    <td className="px-3 py-1.5 text-slate-700">{r.material_name}</td>
-                    <td className="px-3 py-1.5 text-slate-600">{r.stage_name}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700">{fmtQty(r.qty1)}</td>
-                    {!hideAmounts && <td className="px-3 py-1.5 text-right text-slate-600">{r.amt1 > 0 ? fmtAmt(r.amt1) : "—"}</td>}
-                    <td className="px-3 py-1.5 text-right text-slate-700">{fmtQty(r.qty2)}</td>
-                    {!hideAmounts && <td className="px-3 py-1.5 text-right text-slate-600">{r.amt2 > 0 ? fmtAmt(r.amt2) : "—"}</td>}
+                  <tr key={`${r.code}-${r.stage_name}`} className="border-t border-slate-200 hover:bg-slate-100">
+                    <td className="px-3 py-1.5 text-slate-800">{i + 1}</td>
+                    <td className="px-3 py-1.5 text-slate-800">{r.material_name}</td>
+                    <td className="px-3 py-1.5 text-slate-800">{r.stage_name}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-800 tabular-nums">{fmtQty(r.qty1)}</td>
+                    {!hideAmounts && <td className="px-3 py-1.5 text-right text-slate-800 tabular-nums">{r.amt1 > 0 ? fmtAmt(r.amt1) : "—"}</td>}
+                    <td className="px-3 py-1.5 text-right text-slate-800 tabular-nums">{fmtQty(r.qty2)}</td>
+                    {!hideAmounts && <td className="px-3 py-1.5 text-right text-slate-800 tabular-nums">{r.amt2 > 0 ? fmtAmt(r.amt2) : "—"}</td>}
                     <td className={cn(
-                      "px-3 py-1.5 text-right font-medium",
+                      "px-3 py-1.5 text-right font-medium tabular-nums",
                       r.diff !== 0 ? "text-amber-700" : "text-slate-700"
                     )}>
                       {r.diff !== 0 ? (r.diff > 0 ? "+" : "") + fmtQty(r.diff) : "—"}

@@ -124,7 +124,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
   }, [rows, isCancelledOnlyView]);
 
   function downloadCsv() {
-    const headers = ["Bill #", "Date", "Job Ref", "Type", "Customer", "GSTIN", "Taxable", "Tax Amt", "Gross Total", "Discount", "Net Amount"];
+    const headers = ["Bill #", "Date", "Job No / Reg No", "Type", "Customer", "GSTIN", "Taxable", "Tax Amt", "Gross Total", "Discount", "Net Amount"];
     const csvRows = rows.map((r) => [
       r.bill_number, r.bill_date, r.job_ref_no ?? "",
       r.vehicle_type === "New" ? "New Build" : r.vehicle_type === "Old" ? "Old Build" : "",
@@ -229,18 +229,18 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
             <table className="min-w-max w-full text-xs">
               <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Bill #</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Date</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Job Ref</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Type</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Customer</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">GSTIN</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Taxable</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Tax Amt</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Gross</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Discount</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Net Amount</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Status</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Bill #</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Date</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Job No / Reg No</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Type</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Customer</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">GSTIN</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Taxable</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Tax Amt</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Gross</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Discount</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Net Amount</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -248,13 +248,13 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                   <tr
                     key={r.id}
                     className={cn(
-                      "border-t border-slate-100 hover:bg-slate-50/50",
+                      "border-t border-slate-200 hover:bg-slate-100",
                       r.status === "Cancelled" && "opacity-60 line-through-cells"
                     )}
                   >
                     <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.bill_number}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.bill_date}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.job_ref_no ?? "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.bill_date}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.job_ref_no ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap">
                       {r.vehicle_type ? (
                         <span className={cn(
@@ -265,13 +265,13 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                         </span>
                       ) : "—"}
                     </td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{r.customer_name ?? "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.customer_name ?? "—"}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap text-slate-700 font-mono text-xs">{r.customer_gstin ?? "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.taxable_value)}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{(r.total_cgst + r.total_sgst + r.total_igst) > 0 ? fmtAmt(r.total_cgst + r.total_sgst + r.total_igst) : "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{fmtAmt(r.gross_total)}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right">{r.discount > 0 ? fmtAmt(r.discount) : "—"}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">{fmtAmt(r.net_amount)}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{fmtAmt(r.taxable_value)}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{(r.total_cgst + r.total_sgst + r.total_igst) > 0 ? fmtAmt(r.total_cgst + r.total_sgst + r.total_igst) : "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{fmtAmt(r.gross_total)}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums">{r.discount > 0 ? fmtAmt(r.discount) : "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums font-semibold text-slate-800">{fmtAmt(r.net_amount)}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap">
                       <span className={cn(
                         "px-2 py-0.5 rounded-full text-xs font-medium",
@@ -288,18 +288,18 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
               {/* Totals row */}
               <tfoot className="bg-slate-100 sticky bottom-0">
                 <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
-                  <td colSpan={6} className="px-3 py-2 whitespace-nowrap text-right text-slate-600 font-medium">
+                  <td colSpan={6} className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-800 font-medium">
                     {isCancelledOnlyView
                       ? "Reference Total (void — excluded from GST)"
                       : rows.some((r) => r.status === "Cancelled")
                         ? "TOTAL (Cancelled excluded)"
                         : "TOTAL"}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.taxable)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmt(totals.gross)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right">{totals.discount > 0 ? fmtAmt(totals.discount) : "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-right text-slate-900">{fmtAmt(totals.net)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtAmt(totals.taxable)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{totals.tax > 0 ? fmtAmt(totals.tax) : "—"}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtAmt(totals.gross)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{totals.discount > 0 ? fmtAmt(totals.discount) : "—"}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-900">{fmtAmt(totals.net)}</td>
                   <td />
                 </tr>
               </tfoot>

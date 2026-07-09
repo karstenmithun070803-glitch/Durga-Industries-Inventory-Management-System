@@ -37,6 +37,8 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
   const isDuplicateName = form.customer_name.trim() !== "" &&
     customers.some((c) =>
       c.customer_name.toLowerCase() === form.customer_name.trim().toLowerCase() &&
+      (c.address_1 ?? "").trim().toLowerCase() === (form.address_1 ?? "").trim().toLowerCase() &&
+      (c.gstin ?? "").trim().toLowerCase() === (form.gstin ?? "").trim().toLowerCase() &&
       c.id !== editing?.id
     );
 
@@ -118,7 +120,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
               <label className="text-xs text-slate-600">Customer Name *</label>
               <Input ref={firstFieldRef} data-testid="customer-name-input" placeholder="Full name" value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
               {isDuplicateName && (
-                <p className="text-xs text-red-500 mt-0.5">A customer named &ldquo;{form.customer_name.trim()}&rdquo; already exists.</p>
+                <p className="text-xs text-red-500 mt-0.5">A customer named &ldquo;{form.customer_name.trim()}&rdquo; with the same address and GSTIN already exists. Change the address or GSTIN.</p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -219,21 +221,21 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                     <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-700">No customers found</td></tr>
                   )}
                   {visible.map((c, i) => {
-                    const stickyBg = !c.is_active ? "bg-slate-50" : "bg-white";
+                    const stickyBg = !c.is_active ? "bg-slate-50" : i % 2 === 1 ? "bg-slate-50" : "bg-white";
                     const addr = [c.address_1, c.address_2, c.street].filter(Boolean).join(", ") || "—";
                     return (
                     <tr
                       key={c.id}
-                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
                       onClick={() => startEdit(c)}
                     >
-                      <td className={`px-3 py-1.5 text-slate-600 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
-                      <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("C", c.customer_no)}</td>
-                      <td className={`px-3 py-1.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{c.customer_name}</td>
-                      <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{addr}</td>
-                      <td className="px-3 py-1.5 text-slate-600">{c.city ?? "—"}</td>
-                      <td className="px-3 py-1.5 text-slate-600">{c.state ?? "—"}</td>
-                      <td className="px-3 py-1.5 text-slate-600 font-mono text-xs">{c.gstin ?? "—"}</td>
+                      <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                      <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("C", c.customer_no)}</td>
+                      <td className={`px-3 py-1.5 font-medium group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-40 z-10 w-44 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.15)] ${stickyBg}`}>{c.customer_name}</td>
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 whitespace-nowrap">{addr}</td>
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{c.city ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{c.state ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 font-mono text-xs">{c.gstin ?? "—"}</td>
                     </tr>
                   );
                   })}
@@ -256,11 +258,16 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
           ["Available States (copy exact name into State column)"],
           ...INDIAN_STATES.map((s) => [s]),
         ]}}
-        existingKeys={new Set(customers.map((c) => c.customer_name.toUpperCase()))}
+        existingKeys={new Set(customers.map((c) =>
+          `${c.customer_name.toUpperCase()}|${(c.address_1 ?? '').trim().toUpperCase()}|${(c.gstin ?? '').trim().toUpperCase()}`
+        ))}
         processRow={(row) => {
           const errors: string[] = [];
           const name = row["Customer Name"]?.trim() ?? "";
           if (!name) errors.push("Customer Name is required");
+
+          const address1 = row["Address Line 1"]?.trim() || null;
+          const gstin = row["GSTIN"]?.trim().toUpperCase() || null;
 
           const stateRaw = row["State"]?.trim() ?? "";
           let resolvedState: string | null = null;
@@ -273,15 +280,15 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
           return {
             errors,
             displayName: name || "—",
-            dedupKey: name,
+            dedupKey: `${name.toUpperCase()}|${(address1 ?? '').toUpperCase()}|${(gstin ?? '').toUpperCase()}`,
             data: {
               customer_name: name,
-              address_1: row["Address Line 1"]?.trim() || null,
+              address_1: address1,
               address_2: row["Address Line 2"]?.trim() || null,
               street: row["Street"]?.trim() || null,
               city: row["City"]?.trim() || null,
               state: resolvedState,
-              gstin: row["GSTIN"]?.trim().toUpperCase() || null,
+              gstin,
             },
           };
         }}

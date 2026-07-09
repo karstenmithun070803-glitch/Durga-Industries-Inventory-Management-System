@@ -48,8 +48,8 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
     sno:      "5%",
     bill:     "9%",
     date:     "11%",
-    vehicle:  "15%",
-    customer: "20%",
+    vehicle:  "18%",
+    customer: "17%",
     taxable:  "12%",
     tax:      "11%",
     discount: "10%",  // conditional
@@ -67,8 +67,8 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>INVOICE SUMMARY REPORT</Text>
-        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+        <Text style={[styles.docTypeCentered, { fontSize: 11.5, marginTop: 4 }]}>INVOICE SUMMARY REPORT</Text>
+        <Text style={{ fontSize: 8.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
           {filterParts.join("   |   ")}
         </Text>
 
@@ -79,7 +79,7 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           <Text style={[styles.plainTableHeadCell, { width: W.sno }]}>S.No</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.bill }]}>Bill #</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.date }]}>Date</Text>
-          <Text style={[styles.plainTableHeadCell, { width: W.vehicle }]}>Job Ref</Text>
+          <Text style={[styles.plainTableHeadCell, { width: W.vehicle }]}>Job No / Reg No</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.customer }]}>Customer</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.taxable, textAlign: "right" }]}>Taxable</Text>
           <Text style={[styles.plainTableHeadCell, { width: W.tax, textAlign: "right" }]}>Tax Amt</Text>
@@ -99,7 +99,7 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           return (
             <View key={r.id} style={styles.plainTableRow}>
               <Text style={[cellStyle, { width: W.sno }]}>{i + 1}</Text>
-              <Text style={[cellStyle, { width: W.bill, fontFamily: "Helvetica-Bold" }]}>{r.bill_number}</Text>
+              <Text style={[cellStyle, { width: W.bill, fontFamily: "Times-Bold" }]}>{r.bill_number}</Text>
               <Text style={[cellStyle, { width: W.date }]}>{r.bill_date}</Text>
               <Text style={[cellStyle, { width: W.vehicle }]}>{r.job_ref_no ?? "—"}</Text>
               <Text style={[cellStyle, { width: W.customer }]}>{r.customer_name ?? "—"}</Text>

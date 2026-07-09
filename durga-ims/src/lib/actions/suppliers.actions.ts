@@ -4,7 +4,7 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { suppliers, purchaseOrderItems, purchaseOrders } from "@/lib/db/schema";
-import { eq, and, ilike, ne } from "drizzle-orm";
+import { eq, and, ilike, ne, sql } from "drizzle-orm";
 
 // ─── Reads (cached) ──────────────────────────────────────────────────────────
 
@@ -32,8 +32,12 @@ export async function createSupplier(data: {
 }) {
   if (!data.name.trim()) throw new Error("Supplier name is required");
   const [dup] = await db.select({ id: suppliers.id }).from(suppliers)
-    .where(ilike(suppliers.name, data.name.trim()));
-  if (dup) throw new Error(`A supplier named "${data.name.trim()}" already exists.`);
+    .where(and(
+      ilike(suppliers.name, data.name.trim()),
+      sql`LOWER(TRIM(COALESCE(${suppliers.address}, ''))) = LOWER(${data.address?.trim() ?? ''})`,
+      sql`LOWER(TRIM(COALESCE(${suppliers.gstin}, ''))) = LOWER(${data.gstin?.trim() ?? ''})`
+    ));
+  if (dup) throw new Error(`A supplier named "${data.name.trim()}" with the same address and GSTIN already exists. Change the address or GSTIN to save a different record.`);
 
   await db.insert(suppliers).values({
     name: data.name.trim(),
@@ -56,8 +60,13 @@ export async function updateSupplier(id: string, data: {
 }) {
   if (!data.name.trim()) throw new Error("Supplier name is required");
   const [dup] = await db.select({ id: suppliers.id }).from(suppliers)
-    .where(and(ilike(suppliers.name, data.name.trim()), ne(suppliers.id, id)));
-  if (dup) throw new Error(`A supplier named "${data.name.trim()}" already exists.`);
+    .where(and(
+      ilike(suppliers.name, data.name.trim()),
+      sql`LOWER(TRIM(COALESCE(${suppliers.address}, ''))) = LOWER(${data.address?.trim() ?? ''})`,
+      sql`LOWER(TRIM(COALESCE(${suppliers.gstin}, ''))) = LOWER(${data.gstin?.trim() ?? ''})`,
+      ne(suppliers.id, id)
+    ));
+  if (dup) throw new Error(`A supplier named "${data.name.trim()}" with the same address and GSTIN already exists. Change the address or GSTIN to save a different record.`);
 
   await db.update(suppliers).set({
     name: data.name.trim(),
@@ -106,14 +115,22 @@ export async function bulkImportSuppliers(
 ): Promise<{ imported: number; skipped: number }> {
   if (rows.length === 0) return { imported: 0, skipped: 0 };
 
-  const existing = await db.select({ name: suppliers.name }).from(suppliers);
-  const existingNames = new Set(existing.map((s) => s.name.toUpperCase()));
+  const existing = await db.select({
+    name: suppliers.name,
+    address: suppliers.address,
+    gstin: suppliers.gstin,
+  }).from(suppliers);
+  const existingKeys = new Set(
+    existing.map((s) =>
+      `${s.name.toUpperCase()}|${(s.address ?? '').trim().toUpperCase()}|${(s.gstin ?? '').trim().toUpperCase()}`
+    )
+  );
 
   let skipped = 0;
   const batchSeen = new Set<string>();
   const toInsert = rows.filter((r) => {
-    const key = r.name.toUpperCase();
-    if (existingNames.has(key) || batchSeen.has(key)) { skipped++; return false; }
+    const key = `${r.name.toUpperCase()}|${(r.address ?? '').trim().toUpperCase()}|${(r.gstin ?? '').trim().toUpperCase()}`;
+    if (existingKeys.has(key) || batchSeen.has(key)) { skipped++; return false; }
     batchSeen.add(key);
     return true;
   });

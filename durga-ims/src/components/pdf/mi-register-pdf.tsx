@@ -79,7 +79,7 @@ export function MIRegisterDocument({ rows, showRates, companySetting }: Props) {
                   <Text style={styles.infoLineValue}>: {fmtDate(first.issue_date)}</Text>
                 </View>
                 <View style={styles.infoLine}>
-                  <Text style={styles.infoLineLabelMI}>VEHICLE / JOB</Text>
+                  <Text style={styles.infoLineLabelMI}>JOB NO / REG NO</Text>
                   <Text style={styles.infoLineValue}>: {jobLabel}</Text>
                 </View>
               </View>

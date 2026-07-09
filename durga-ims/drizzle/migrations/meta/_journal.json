@@ -57,6 +57,13 @@
       "when": 1783424809881,
       "tag": "0007_mute_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783591136975,
+      "tag": "0008_cooing_zombie",
+      "breakpoints": true
     }
   ]
 }

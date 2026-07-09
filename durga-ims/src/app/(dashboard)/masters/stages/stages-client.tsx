@@ -386,11 +386,11 @@ export function StagesClient({ stages, materials, units }: Props) {
                         key={row._key}
                         className={
                           i % 2 === 0
-                            ? "bg-white border-t border-slate-100"
-                            : "bg-slate-50/60 border-t border-slate-100"
+                            ? "bg-white border-t border-slate-200"
+                            : "bg-slate-50 border-t border-slate-200"
                         }
                       >
-                        <td className="px-2 py-1 text-slate-700 text-xs text-center">
+                        <td className="px-2 py-1 text-slate-800 text-xs text-center">
                           {row.material_id ? i + 1 : ""}
                         </td>
                         <td className="px-1 py-1">
@@ -422,8 +422,8 @@ export function StagesClient({ stages, materials, units }: Props) {
                             className="h-8 text-sm"
                           />
                         </td>
-                        <td className="px-2 py-1 text-xs text-slate-600 truncate">
-                          {row.unit_name || <span className="text-slate-300">—</span>}
+                        <td className="px-2 py-1 text-xs text-slate-800 truncate">
+                          {row.unit_name || <span className="text-slate-500">—</span>}
                         </td>
                         <td className="px-1 py-1 text-center">
                           {row.material_id && (
@@ -552,23 +552,23 @@ export function StagesClient({ stages, materials, units }: Props) {
                     <tr
                       key={s.id}
                       onClick={() => startEdit(s)}
-                      className={`border-t border-slate-100 cursor-pointer ${
+                      className={`group border-t border-slate-200 cursor-pointer ${
                         i === focusedIdx
-                          ? "ring-1 ring-inset ring-blue-400 bg-blue-50"
+                          ? "ring-1 ring-inset ring-blue-500 bg-blue-50"
                           : !s.is_active
                           ? "opacity-50 bg-slate-50 hover:bg-slate-100"
-                          : "hover:bg-blue-50/40"
+                          : "hover:bg-slate-400 hover:text-slate-900"
                       }`}
                     >
-                      <td className="px-3 py-1.5 text-slate-600">{i + 1}</td>
-                      <td className="px-3 py-1.5 font-mono text-xs font-medium text-slate-700">
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
+                      <td className="px-3 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">
                         {s.stage_code}
                       </td>
-                      <td className="px-3 py-1.5 font-medium">{s.stage_name}</td>
-                      <td className="px-3 py-1.5 text-slate-600 text-xs">
+                      <td className="px-3 py-1.5 font-medium group-hover:text-slate-900">{s.stage_name}</td>
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 text-xs">
                         {s.materials.length > 0
                           ? `${s.materials.length} material${s.materials.length === 1 ? "" : "s"}`
-                          : <span className="text-slate-300">None</span>}
+                          : <span className="text-slate-500">None</span>}
                       </td>
                       <td className="px-3 py-1.5">
                         {s.is_active ? (

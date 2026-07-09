@@ -4,14 +4,15 @@ export const COMPANY_NAME = "DURGA INDUSTRIES";
 export const COMPANY_ADDRESS = "S.FNO.1994/2, MADURAI NEW BYE PASS RD, NEAR PERIYAR ARCH, KARUR - 639002";
 export const COMPANY_GSTIN = "33AALPU5476B1ZJ";
 
-// ── Base definitions at document (current) sizes ─────────────────────────────
+// ── Base definitions = document scale (invoices / slips / POs / job-cost) ────────
 // Plain object so both scales can spread from it safely. `docStyles` uses these
-// sizes verbatim (invoices / slips / POs / job-cost); `styles` (the report scale)
-// overrides only the font sizes below to a smaller, less-crowded proportion.
+// sizes verbatim; body sits at 11pt — sized up for Times New Roman's smaller
+// x-height so single-record docs read comfortably. `styles` (the report scale)
+// overrides the font sizes below to a smaller, denser proportion (9.5pt body).
 const base = {
   page: {
-    fontFamily: "Helvetica",
-    fontSize: 10,
+    fontFamily: "Times-Roman",
+    fontSize: 11,
     paddingTop: 30,
     paddingBottom: 40,
     paddingHorizontal: 32,
@@ -20,21 +21,21 @@ const base = {
 
   // ── Document-style centered company block ──────────────────────────────────
   companyNameCentered: {
-    fontSize: 18,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 19,
+    fontFamily: "Times-Bold",
     textAlign: "center",
     letterSpacing: 1,
     color: "#000",
   },
   companyDetailCentered: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     textAlign: "center",
     color: "#000",
     marginTop: 2,
   },
   docTypeCentered: {
-    fontSize: 13,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 14,
+    fontFamily: "Times-Bold",
     textAlign: "center",
     marginTop: 8,
     marginBottom: 10,
@@ -47,23 +48,23 @@ const base = {
     marginBottom: 3,
   },
   infoLineLabel: {
-    fontSize: 10,
+    fontSize: 11,
     width: 145,
     color: "#000",
   },
   infoLineLabelInvoice: {
-    fontSize: 10,
+    fontSize: 11,
     width: 105,
     color: "#000",
   },
   infoLineLabelMI: {
-    fontSize: 10,
+    fontSize: 11,
     width: 90,
     color: "#000",
   },
   infoLineValue: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    fontFamily: "Times-Bold",
     color: "#000",
     flex: 1,
   },
@@ -84,8 +85,8 @@ const base = {
     paddingVertical: 3,
   },
   plainTableHeadCell: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    fontFamily: "Times-Bold",
     color: "#000",
     paddingRight: 3,
   },
@@ -94,13 +95,13 @@ const base = {
     paddingVertical: 4,
   },
   plainTableCell: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#000",
     paddingRight: 3,
   },
   plainTableCellBold: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    fontFamily: "Times-Bold",
     color: "#000",
     paddingRight: 3,
   },
@@ -118,7 +119,7 @@ const base = {
     marginBottom: 4,
   },
   footerText: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     textAlign: "right",
     color: "#000",
   },
@@ -132,8 +133,8 @@ const base = {
     marginBottom: 1,
   },
   stageHeaderText: {
-    fontSize: 8.5,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 9.5,
+    fontFamily: "Times-Bold",
     color: "#475569",
     textTransform: "uppercase",
   },
@@ -141,7 +142,7 @@ const base = {
   // ── Legacy styles kept for any future reuse ────────────────────────────────
   companyName: {
     fontSize: 14,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Times-Bold",
     color: "#0f172a",
     letterSpacing: 0.5,
   },
@@ -162,25 +163,26 @@ const base = {
 // today's sizes. Alias in those components via `import { docStyles as styles }`.
 export const docStyles = StyleSheet.create(base);
 
-// Report scale (default) — tabular list reports. Font sizes reduced ~1.5pt so
-// dense reports (Purchase Report, etc.) are less crowded; only fontSize and row
-// padding differ from `base`. All widths/margins/separators stay identical.
+// Report scale (default) — tabular list reports. Body lands ~9.5pt: reduced vs the
+// original 10pt to de-crowd, but sized up for Times New Roman's smaller x-height so it
+// stays readable in print. Only fontSize and row padding differ from `base`; all
+// widths/margins/separators stay identical (9.5pt Times ≈ 8.5pt Helvetica in width).
 export const styles = StyleSheet.create({
   ...base,
-  page: { ...base.page, fontSize: 8.5 },
-  companyNameCentered: { ...base.companyNameCentered, fontSize: 16 },
-  companyDetailCentered: { ...base.companyDetailCentered, fontSize: 8 },
-  docTypeCentered: { ...base.docTypeCentered, fontSize: 11 },
-  infoLineLabel: { ...base.infoLineLabel, fontSize: 8.5 },
-  infoLineLabelInvoice: { ...base.infoLineLabelInvoice, fontSize: 8.5 },
-  infoLineLabelMI: { ...base.infoLineLabelMI, fontSize: 8.5 },
-  infoLineValue: { ...base.infoLineValue, fontSize: 8.5 },
+  page: { ...base.page, fontSize: 9.5 },
+  companyNameCentered: { ...base.companyNameCentered, fontSize: 17 },
+  companyDetailCentered: { ...base.companyDetailCentered, fontSize: 9 },
+  docTypeCentered: { ...base.docTypeCentered, fontSize: 12 },
+  infoLineLabel: { ...base.infoLineLabel, fontSize: 9.5 },
+  infoLineLabelInvoice: { ...base.infoLineLabelInvoice, fontSize: 9.5 },
+  infoLineLabelMI: { ...base.infoLineLabelMI, fontSize: 9.5 },
+  infoLineValue: { ...base.infoLineValue, fontSize: 9.5 },
   plainTableHead: { ...base.plainTableHead, paddingVertical: 2 },
-  plainTableHeadCell: { ...base.plainTableHeadCell, fontSize: 8.5 },
+  plainTableHeadCell: { ...base.plainTableHeadCell, fontSize: 9.5 },
   plainTableRow: { ...base.plainTableRow, paddingVertical: 3 },
-  plainTableCell: { ...base.plainTableCell, fontSize: 8.5 },
-  plainTableCellBold: { ...base.plainTableCellBold, fontSize: 8.5 },
-  footerText: { ...base.footerText, fontSize: 8 },
+  plainTableCell: { ...base.plainTableCell, fontSize: 9.5 },
+  plainTableCellBold: { ...base.plainTableCellBold, fontSize: 9.5 },
+  footerText: { ...base.footerText, fontSize: 8.5 },
 });
 
 export function fmtAmt(v: string | null | undefined): string {

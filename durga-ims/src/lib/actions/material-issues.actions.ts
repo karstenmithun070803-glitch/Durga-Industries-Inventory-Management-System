@@ -196,7 +196,6 @@ export const getActiveIssueMaterials = unstable_cache(
           purchase_unit_name: pu.unit_name,
           sales_unit_id: materials.sales_unit_id,
           current_stock: materials.current_stock,
-          min_level: materials.min_level,
         })
         .from(materials)
         .leftJoin(taxRates, eq(materials.tax_rate_id, taxRates.id))

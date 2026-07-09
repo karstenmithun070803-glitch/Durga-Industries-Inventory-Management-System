@@ -53,13 +53,13 @@ export function MasterLayout({ title, formPanel, tablePanel }: Props) {
       <h1 className="text-xl font-semibold text-slate-800">{title}</h1>
       <div className="flex gap-5 flex-1 min-h-0">
         {/* Left: form */}
-        <div className="w-80 shrink-0 bg-white rounded-lg border border-slate-200 p-5 h-fit">
+        <div className="w-80 shrink-0 bg-white rounded-lg border border-slate-200 shadow-sm p-5 h-fit">
           <form autoComplete="off" onSubmit={(e) => e.preventDefault()} onKeyDown={handleFormKeyDown}>
             {formPanel}
           </form>
         </div>
         {/* Right: table */}
-        <div className="flex-1 min-w-0 bg-white rounded-lg border border-slate-200 flex flex-col min-h-0">
+        <div className="flex-1 min-w-0 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col min-h-0">
           {tablePanel}
         </div>
       </div>

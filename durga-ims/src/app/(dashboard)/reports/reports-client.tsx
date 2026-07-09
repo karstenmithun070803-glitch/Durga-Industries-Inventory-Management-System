@@ -18,7 +18,7 @@ type ReportTab = "invoice-summary" | "purchase" | "monthly-stock" | "job-cost" |
 interface Props {
   vehicles: { id: string; job_ref_no: string }[];
   stageVehicles: { id: string; job_ref_no: string }[];
-  suppliers: { id: string; name: string }[];
+  suppliers: { id: string; code_no: number; name: string; gstin: string | null }[];
   materials: { id: string; name: string; material_no: number }[];
   customers: { id: string; customer_name: string; gstin: string | null }[];
   stages: { id: string; stage_code: string; stage_name: string }[];

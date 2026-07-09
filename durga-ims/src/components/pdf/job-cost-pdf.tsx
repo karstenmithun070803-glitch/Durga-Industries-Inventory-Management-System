@@ -44,7 +44,7 @@ export function JobCostDocument({ result, companySetting }: Props) {
         {/* Vehicle info */}
         <View style={{ marginTop: 10, marginBottom: 6 }}>
           <View style={styles.infoLine}>
-            <Text style={styles.infoLineLabel}>JOB NO.</Text>
+            <Text style={styles.infoLineLabel}>JOB NO / REG NO</Text>
             <Text style={styles.infoLineValue}>: {jobLabel}</Text>
           </View>
           <View style={styles.infoLine}>

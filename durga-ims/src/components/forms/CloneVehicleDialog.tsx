@@ -138,7 +138,7 @@ export function CloneVehicleDialog({
   }
 
   function validate(): string | null {
-    if (!jobRefNo.trim()) return "Job ref no is required.";
+    if (!jobRefNo.trim()) return "Job No / Reg No is required.";
     if (!isExistingCustomer && !customerName.trim()) return "Customer name is required.";
     return null;
   }
@@ -170,7 +170,7 @@ export function CloneVehicleDialog({
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         if (msg.startsWith("DUPLICATE_JOB_REF:")) {
-          setJobRefError("This job ref no already exists.");
+          setJobRefError("This job no / reg no already exists.");
         } else {
           toast.error(formatActionError(e, "Clone failed"));
         }
@@ -195,7 +195,7 @@ export function CloneVehicleDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="clone-job-ref">Job Ref No <span className="text-red-500">*</span></Label>
+                <Label htmlFor="clone-job-ref">Job No / Reg No <span className="text-red-500">*</span></Label>
                 <Input
                   id="clone-job-ref"
                   value={jobRefNo}

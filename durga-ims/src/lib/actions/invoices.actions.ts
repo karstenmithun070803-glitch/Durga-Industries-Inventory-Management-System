@@ -150,7 +150,7 @@ export const getActiveVehiclesForInvoice = unstable_cache(
       })
       .from(vehicles)
       .leftJoin(customers, eq(vehicles.customer_id, customers.id))
-      .where(eq(vehicles.is_active, true))
+      .where(and(eq(vehicles.is_active, true), eq(vehicles.type, "Old")))
       .orderBy(vehicles.job_ref_no),
   ["inv-active-vehicles"],
   { tags: [CACHE_TAGS.vehicles], revalidate: false }

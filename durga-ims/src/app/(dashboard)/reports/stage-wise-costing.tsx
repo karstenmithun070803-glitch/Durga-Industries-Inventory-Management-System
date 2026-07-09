@@ -303,20 +303,20 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                     <tr
                       key={r.code}
                       className={cn(
-                        "border-t border-slate-100 hover:bg-slate-50/50",
+                        "border-t border-slate-200 hover:bg-slate-100",
                         r.is_direct && "bg-amber-50/60 italic"
                       )}
                     >
-                      <td className="px-3 py-1.5 font-mono text-slate-600">{r.code}</td>
+                      <td className="px-3 py-1.5 font-mono text-slate-800">{r.code}</td>
                       <td className="px-3 py-1.5 text-slate-700">{r.name}</td>
-                      <td className="px-3 py-1.5 text-right font-medium text-slate-800">{fmtAmt(r.amount)}</td>
+                      <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">{fmtAmt(r.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-slate-100 sticky bottom-0">
                   <tr className="border-t-2 border-slate-300 font-semibold text-slate-800">
                     <td colSpan={2} className="px-3 py-2 text-right">TOTAL</td>
-                    <td className="px-3 py-2 text-right">{fmtAmt(grandTotal)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtAmt(grandTotal)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -333,19 +333,19 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                 </thead>
                 <tbody>
                   {displayMaterialRows.map((r, i) => (
-                    <tr key={r.code + i} className="border-t border-slate-100 hover:bg-slate-50/50">
-                      <td className="px-3 py-1.5 text-slate-600">{i + 1}</td>
-                      <td className="px-3 py-1.5 font-mono text-slate-600">{r.code}</td>
+                    <tr key={r.code + i} className="border-t border-slate-200 hover:bg-slate-100">
+                      <td className="px-3 py-1.5 text-slate-800">{i + 1}</td>
+                      <td className="px-3 py-1.5 font-mono text-slate-800">{r.code}</td>
                       <td className="px-3 py-1.5 text-slate-700">{r.name}</td>
                       <td className="px-3 py-1.5 text-slate-700 text-xs">{r.stages || "—"}</td>
-                      <td className="px-3 py-1.5 text-right font-medium text-slate-800">{fmtAmt(r.amount)}</td>
+                      <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">{fmtAmt(r.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-slate-100 sticky bottom-0">
                   <tr className="border-t-2 border-slate-300 font-semibold text-slate-800">
                     <td colSpan={4} className="px-3 py-2 text-right">TOTAL</td>
-                    <td className="px-3 py-2 text-right">{fmtAmt(grandTotal)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtAmt(grandTotal)}</td>
                   </tr>
                 </tfoot>
               </table>

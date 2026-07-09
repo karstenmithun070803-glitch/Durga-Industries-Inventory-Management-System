@@ -172,12 +172,12 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
                   {visible.map((t, i) => (
                     <tr
                       key={t.id}
-                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !t.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !t.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
                       onClick={() => startEdit(t)}
                     >
-                      <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
-                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{formatCode("T", t.vat_code, 2)}</td>
-                      <td className="px-4 py-1.5 font-medium">{parseFloat(t.tax_percentage)}%</td>
+                      <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
+                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">{formatCode("T", t.vat_code, 2)}</td>
+                      <td className="px-4 py-1.5 font-medium group-hover:text-slate-900 tabular-nums">{parseFloat(t.tax_percentage)}%</td>
                     </tr>
                   ))}
                 </tbody>

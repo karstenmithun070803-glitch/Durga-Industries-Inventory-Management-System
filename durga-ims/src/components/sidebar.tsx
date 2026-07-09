@@ -107,10 +107,10 @@ export function Sidebar() {
                 <button
                   onClick={() => toggle(item.label)}
                   className={cn(
-                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-semibold transition-colors",
                     isActive
                       ? "text-white bg-slate-700"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                      : "text-white hover:bg-slate-800"
                   )}
                 >
                   <item.icon className="w-4 h-4 shrink-0" />
@@ -130,10 +130,10 @@ export function Sidebar() {
                           key={child.href}
                           href={child.href}
                           className={cn(
-                            "flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors",
+                            "flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-semibold transition-colors",
                             active
-                              ? "text-white bg-slate-700 font-medium"
-                              : "text-slate-400 hover:text-white hover:bg-slate-800"
+                              ? "text-white bg-slate-700"
+                              : "text-white hover:bg-slate-800"
                           )}
                         >
                           <child.icon className="w-3.5 h-3.5 shrink-0" />
@@ -153,10 +153,10 @@ export function Sidebar() {
               key={item.href}
               href={item.href!}
               className={cn(
-                "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-semibold transition-colors",
                 active
                   ? "text-white bg-slate-700"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : "text-white hover:bg-slate-800"
               )}
             >
               <item.icon className="w-4 h-4 shrink-0" />

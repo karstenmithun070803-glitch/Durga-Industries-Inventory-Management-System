@@ -26,7 +26,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
   const margin = parseFloat(slip.margin_percentage || "0");
   const mf = showAdvRate ? 1 + margin / 100 : 1;
 
-  const docLabel = `Job: ${slip.job_ref_no}`;
+  const docLabel = `Job No / Reg No: ${slip.job_ref_no}`;
 
   const subtotal = slip.items.reduce((s, r) => s + parseFloat(r.amount || "0") * mf, 0);
   const cgstTotal = slip.items.reduce((s, r) => s + parseFloat(r.cgst_amount || "0") * mf, 0);
@@ -50,7 +50,9 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={styles.docTypeCentered}>VEHICLE MATERIAL ISSUE SLIP</Text>
+        <View style={{ borderBottomWidth: 1, borderBottomStyle: "dashed", borderBottomColor: "#000", marginTop: 8, marginBottom: 10, paddingBottom: 3 }}>
+          <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>ESTIMATION</Text>
+        </View>
 
         {/* Slip info */}
         <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
@@ -60,7 +62,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
               <Text style={styles.infoLineValue}>: {fmtDate(slip.issue_date)}</Text>
             </View>
             <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabelMI}>VEHICLE / JOB</Text>
+              <Text style={styles.infoLineLabelMI}>JOB NO / REG NO</Text>
               <Text style={styles.infoLineValue}>
                 : {slip.job_ref_no}
               </Text>
@@ -104,7 +106,6 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
           <View style={styles.plainTableHead}>
             <Text style={[styles.plainTableHeadCell, { width: "6%" }]}>No.</Text>
             <Text style={[styles.plainTableHeadCell, { flex: 1, marginLeft: 4 }]}>Material</Text>
-            <Text style={[styles.plainTableHeadCell, { width: "15%" }]}>Contractor</Text>
             <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Qty</Text>
             <Text style={[styles.plainTableHeadCell, { width: "7%", marginLeft: 4 }]}>Unit</Text>
             <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Rate</Text>
@@ -147,7 +148,6 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
                 <View key={item.id} style={styles.plainTableRow}>
                   <Text style={[styles.plainTableCell, { width: "6%" }]}>{sNo}</Text>
                   <Text style={[styles.plainTableCell, { flex: 1, marginLeft: 4 }]}>{item.material_name}</Text>
-                  <Text style={[styles.plainTableCell, { width: "15%" }]}>{item.contractor_name ?? "—"}</Text>
                   <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtQty(item.qty)}</Text>
                   <Text style={[styles.plainTableCell, { width: "7%", marginLeft: 4 }]}>{item.unit_name ?? "—"}</Text>
                   <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtAmt(String(rate))}</Text>

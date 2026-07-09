@@ -172,14 +172,14 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
                   {visible.map((c, i) => (
                     <tr
                       key={c.id}
-                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
                       onClick={() => startEdit(c)}
                     >
-                      <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
-                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{formatCode("CON", c.code_no, 2)}</td>
-                      <td className="px-4 py-1.5 font-medium">{c.name}</td>
-                      <td className="px-4 py-1.5 text-slate-600">{c.role ?? "—"}</td>
-                      <td className="px-4 py-1.5 text-slate-600">{c.contact ?? "—"}</td>
+                      <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
+                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">{formatCode("CON", c.code_no, 2)}</td>
+                      <td className="px-4 py-1.5 font-medium group-hover:text-slate-900">{c.name}</td>
+                      <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{c.role ?? "—"}</td>
+                      <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{c.contact ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

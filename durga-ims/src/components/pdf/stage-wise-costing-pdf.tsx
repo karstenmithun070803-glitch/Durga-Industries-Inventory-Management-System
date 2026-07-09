@@ -53,9 +53,9 @@ export function StageWiseCostingDocument({
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>{title}</Text>
-        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
-          {`Job No.: ${jobLabel}   |   FY ${fy}${marginPct !== 0 ? `   |   Margin: ${marginPct}%` : ""}${asOfDate ? `   |   As Of: ${asOfDate.split("-").reverse().join("/")}` : ""}`}
+        <Text style={[styles.docTypeCentered, { fontSize: 11.5, marginTop: 4 }]}>{title}</Text>
+        <Text style={{ fontSize: 8.5, color: "#6B7280", textAlign: "center", marginBottom: 6 }}>
+          {`Job No / Reg No: ${jobLabel}   |   FY ${fy}${marginPct !== 0 ? `   |   Margin: ${marginPct}%` : ""}${asOfDate ? `   |   As Of: ${asOfDate.split("-").reverse().join("/")}` : ""}`}
         </Text>
         <Text style={{ fontSize: 9, color: "#9CA3AF", textAlign: "center", marginBottom: 4 }}>
           Amounts include tax (GST included)
@@ -68,7 +68,7 @@ export function StageWiseCostingDocument({
           <View style={[styles.plainTableHead, { marginTop: 4 }]}>
             <Text style={[styles.plainTableHeadCell, { width: W.code }]}>Code</Text>
             <Text style={[styles.plainTableHeadCell, { width: W.name }]}>Stage Name</Text>
-            <Text style={[styles.plainTableHeadCell, { width: W.amount, textAlign: "right" }]}>Amount (₹)</Text>
+            <Text style={[styles.plainTableHeadCell, { width: W.amount, textAlign: "right" }]}>Amount (Rs.)</Text>
           </View>
         ) : (
           <View style={[styles.plainTableHead, { marginTop: 4 }]}>
@@ -76,7 +76,7 @@ export function StageWiseCostingDocument({
             <Text style={[styles.plainTableHeadCell, { width: W.code }]}>Mat. No</Text>
             <Text style={[styles.plainTableHeadCell, { width: W.name }]}>Material Name</Text>
             <Text style={[styles.plainTableHeadCell, { width: (W as { stages: string }).stages }]}>Stages</Text>
-            <Text style={[styles.plainTableHeadCell, { width: W.amount, textAlign: "right" }]}>Amount (₹)</Text>
+            <Text style={[styles.plainTableHeadCell, { width: W.amount, textAlign: "right" }]}>Amount (Rs.)</Text>
           </View>
         )}
 
@@ -89,8 +89,8 @@ export function StageWiseCostingDocument({
                 key={r.code}
                 style={[styles.plainTableRow, r.is_direct ? { backgroundColor: "#FFFBEB" } : {}]}
               >
-                <Text style={[styles.plainTableCell, { width: W.code, fontFamily: "Helvetica-Oblique" }]}>{r.code}</Text>
-                <Text style={[styles.plainTableCell, { width: W.name, fontFamily: r.is_direct ? "Helvetica-Oblique" : "Helvetica" }]}>{r.name}</Text>
+                <Text style={[styles.plainTableCell, { width: W.code, fontFamily: "Times-Italic" }]}>{r.code}</Text>
+                <Text style={[styles.plainTableCell, { width: W.name, fontFamily: r.is_direct ? "Times-Italic" : "Times-Roman" }]}>{r.name}</Text>
                 <Text style={[styles.plainTableCellBold, { width: W.amount, textAlign: "right" }]}>{fmt(r.amount)}</Text>
               </View>
             ))

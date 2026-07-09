@@ -43,15 +43,53 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  confirmNav = false,
+  confirmNavFocus = "last",
+  onKeyDown,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  /** Enable keyboard nav for a Cancel/Confirm button dialog: ←/→ moves between
+   *  footer buttons, and one is focused on open (see confirmNavFocus). */
+  confirmNav?: boolean
+  /** Which footer button to focus on open: "last" = Confirm (default), "first" = Cancel. */
+  confirmNavFocus?: "first" | "last"
 }) {
+  const popupRef = React.useRef<HTMLDivElement | null>(null)
+
+  // Focus the chosen footer button on open (after base-ui's own initial focus).
+  React.useEffect(() => {
+    if (!confirmNav) return
+    const id = requestAnimationFrame(() => {
+      const sel = `[data-slot="dialog-footer"] button:${confirmNavFocus}-of-type`
+      popupRef.current?.querySelector<HTMLElement>(sel)?.focus()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [confirmNav, confirmNavFocus])
+
+  function handleKeyDown(e: Parameters<NonNullable<DialogPrimitive.Popup.Props["onKeyDown"]>>[0]) {
+    if (confirmNav && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      const btns = Array.from(
+        e.currentTarget.querySelectorAll<HTMLButtonElement>('[data-slot="dialog-footer"] button')
+      )
+      if (btns.length >= 2) {
+        e.preventDefault()
+        const idx = btns.indexOf(document.activeElement as HTMLButtonElement)
+        const dir = e.key === "ArrowRight" ? 1 : -1
+        const start = idx === -1 ? (dir === 1 ? -1 : 0) : idx
+        btns[(start + dir + btns.length) % btns.length].focus()
+      }
+    }
+    onKeyDown?.(e)
+  }
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
+        ref={popupRef}
         data-slot="dialog-content"
+        onKeyDown={handleKeyDown}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className

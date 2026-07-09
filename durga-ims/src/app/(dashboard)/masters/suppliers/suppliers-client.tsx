@@ -38,6 +38,8 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   const isDuplicateName = form.name.trim() !== "" &&
     suppliers.some((s) =>
       s.name.toLowerCase() === form.name.trim().toLowerCase() &&
+      (s.address ?? "").trim().toLowerCase() === (form.address ?? "").trim().toLowerCase() &&
+      (s.gstin ?? "").trim().toLowerCase() === (form.gstin ?? "").trim().toLowerCase() &&
       s.id !== editing?.id
     );
 
@@ -119,7 +121,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
               <label className="text-xs text-slate-600">Supplier Name *</label>
               <Input ref={firstFieldRef} placeholder="Company name" value={form.name} onChange={(e) => set("name", e.target.value)} />
               {isDuplicateName && (
-                <p className="text-xs text-red-500 mt-0.5">A supplier named &ldquo;{form.name.trim()}&rdquo; already exists.</p>
+                <p className="text-xs text-red-500 mt-0.5">A supplier named &ldquo;{form.name.trim()}&rdquo; with the same address and GSTIN already exists. Change the address or GSTIN.</p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -206,19 +208,19 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                     <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-700">No suppliers found</td></tr>
                   )}
                   {visible.map((s, i) => {
-                    const stickyBg = !s.is_active ? "bg-slate-50" : "bg-white";
+                    const stickyBg = !s.is_active ? "bg-slate-50" : i % 2 === 1 ? "bg-slate-50" : "bg-white";
                     return (
                     <tr
                       key={s.id}
-                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !s.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !s.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
                       onClick={() => startEdit(s)}
                     >
-                      <td className={`px-3 py-1.5 text-slate-600 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
-                      <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("S", s.code_no)}</td>
-                      <td className={`px-3 py-1.5 font-medium sticky left-40 z-10 w-44 border-r border-slate-200 ${stickyBg}`}>{s.name}</td>
-                      <td className="px-3 py-1.5 text-slate-600"><div className="min-w-[180px] max-w-sm break-words">{s.address ?? "—"}</div></td>
-                      <td className="px-3 py-1.5 text-slate-600">{s.state ?? "—"}</td>
-                      <td className="px-3 py-1.5 text-slate-600 font-mono text-xs">{s.gstin ?? "—"}</td>
+                      <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                      <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("S", s.code_no)}</td>
+                      <td className={`px-3 py-1.5 font-medium group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-40 z-10 w-44 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.15)] ${stickyBg}`}>{s.name}</td>
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900"><div className="min-w-[180px] max-w-sm break-words">{s.address ?? "—"}</div></td>
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{s.state ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 font-mono text-xs">{s.gstin ?? "—"}</td>
                     </tr>
                     );
                   })}
@@ -241,11 +243,16 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
           ["Available States (copy exact name into State column)"],
           ...INDIAN_STATES.map((s) => [s]),
         ]}}
-        existingKeys={new Set(suppliers.map((s) => s.name.toUpperCase()))}
+        existingKeys={new Set(suppliers.map((s) =>
+          `${s.name.toUpperCase()}|${(s.address ?? '').trim().toUpperCase()}|${(s.gstin ?? '').trim().toUpperCase()}`
+        ))}
         processRow={(row) => {
           const errors: string[] = [];
           const name = row["Supplier Name"]?.trim() ?? "";
           if (!name) errors.push("Supplier Name is required");
+
+          const address = row["Address"]?.trim() || null;
+          const gstin = row["GSTIN"]?.trim().toUpperCase() || null;
 
           const stateRaw = row["State"]?.trim() ?? "";
           let resolvedState: string | null = null;
@@ -258,12 +265,12 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
           return {
             errors,
             displayName: name || "—",
-            dedupKey: name,
+            dedupKey: `${name.toUpperCase()}|${(address ?? '').toUpperCase()}|${(gstin ?? '').toUpperCase()}`,
             data: {
               name,
-              address: row["Address"]?.trim() || null,
+              address,
               state: resolvedState,
-              gstin: row["GSTIN"]?.trim().toUpperCase() || null,
+              gstin,
             },
           };
         }}

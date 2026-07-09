@@ -4,7 +4,7 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { customers, vehicles } from "@/lib/db/schema";
-import { eq, and, count, ilike, ne } from "drizzle-orm";
+import { eq, and, count, ilike, ne, sql } from "drizzle-orm";
 
 // ─── Reads (cached) ──────────────────────────────────────────────────────────
 
@@ -33,8 +33,12 @@ export async function createCustomer(data: {
 }) {
   if (!data.customer_name.trim()) throw new Error("Customer name is required");
   const [dup] = await db.select({ id: customers.id }).from(customers)
-    .where(ilike(customers.customer_name, data.customer_name.trim()));
-  if (dup) throw new Error(`A customer named "${data.customer_name.trim()}" already exists.`);
+    .where(and(
+      ilike(customers.customer_name, data.customer_name.trim()),
+      sql`LOWER(TRIM(COALESCE(${customers.address_1}, ''))) = LOWER(${data.address_1?.trim() ?? ''})`,
+      sql`LOWER(TRIM(COALESCE(${customers.gstin}, ''))) = LOWER(${data.gstin?.trim() ?? ''})`
+    ));
+  if (dup) throw new Error(`A customer named "${data.customer_name.trim()}" with the same address and GSTIN already exists. Change the address or GSTIN to save a different record.`);
 
   await db.insert(customers).values({
     customer_name: data.customer_name.trim(),
@@ -59,8 +63,13 @@ export async function updateCustomer(id: string, data: {
 }) {
   if (!data.customer_name.trim()) throw new Error("Customer name is required");
   const [dup] = await db.select({ id: customers.id }).from(customers)
-    .where(and(ilike(customers.customer_name, data.customer_name.trim()), ne(customers.id, id)));
-  if (dup) throw new Error(`A customer named "${data.customer_name.trim()}" already exists.`);
+    .where(and(
+      ilike(customers.customer_name, data.customer_name.trim()),
+      sql`LOWER(TRIM(COALESCE(${customers.address_1}, ''))) = LOWER(${data.address_1?.trim() ?? ''})`,
+      sql`LOWER(TRIM(COALESCE(${customers.gstin}, ''))) = LOWER(${data.gstin?.trim() ?? ''})`,
+      ne(customers.id, id)
+    ));
+  if (dup) throw new Error(`A customer named "${data.customer_name.trim()}" with the same address and GSTIN already exists. Change the address or GSTIN to save a different record.`);
 
   await db.update(customers).set({
     customer_name: data.customer_name.trim(),
@@ -111,14 +120,22 @@ export async function bulkImportCustomers(
 ): Promise<{ imported: number; skipped: number }> {
   if (rows.length === 0) return { imported: 0, skipped: 0 };
 
-  const existing = await db.select({ customer_name: customers.customer_name }).from(customers);
-  const existingNames = new Set(existing.map((c) => c.customer_name.toUpperCase()));
+  const existing = await db.select({
+    customer_name: customers.customer_name,
+    address_1: customers.address_1,
+    gstin: customers.gstin,
+  }).from(customers);
+  const existingKeys = new Set(
+    existing.map((c) =>
+      `${c.customer_name.toUpperCase()}|${(c.address_1 ?? '').trim().toUpperCase()}|${(c.gstin ?? '').trim().toUpperCase()}`
+    )
+  );
 
   let skipped = 0;
   const batchSeen = new Set<string>();
   const toInsert = rows.filter((r) => {
-    const key = r.customer_name.toUpperCase();
-    if (existingNames.has(key) || batchSeen.has(key)) { skipped++; return false; }
+    const key = `${r.customer_name.toUpperCase()}|${(r.address_1 ?? '').trim().toUpperCase()}|${(r.gstin ?? '').trim().toUpperCase()}`;
+    if (existingKeys.has(key) || batchSeen.has(key)) { skipped++; return false; }
     batchSeen.add(key);
     return true;
   });

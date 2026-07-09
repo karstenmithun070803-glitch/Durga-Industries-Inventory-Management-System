@@ -768,7 +768,7 @@ export function InvoiceClient({
   const vehicleOptions = vehicles
     .filter(v => {
       if (vehicleId && v.id === vehicleId) return true;
-      return isNewMode ? v.type === "New" : v.type === "Old";
+      return v.type === "Old";
     })
     .map(v => ({
       value: v.id,
@@ -922,7 +922,7 @@ export function InvoiceClient({
                       value={vehicleId}
                       onChange={handleVehicleChange}
                       placeholder="Select vehicle / job…"
-                      searchPlaceholder="Search by job no or vehicle…"
+                      searchPlaceholder="Search by job no / reg no or vehicle…"
                     />
                   )}
                 </div>

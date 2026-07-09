@@ -63,11 +63,11 @@ export function VehicleComparisonDocument({
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <Text style={[styles.docTypeCentered, { fontSize: 10.5, marginTop: 4 }]}>VEHICLE COMPARISON REPORT</Text>
-        <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginBottom: 2 }}>
+        <Text style={[styles.docTypeCentered, { fontSize: 11.5, marginTop: 4 }]}>VEHICLE COMPARISON REPORT</Text>
+        <Text style={{ fontSize: 8.5, color: "#6B7280", textAlign: "center", marginBottom: 2 }}>
           {v1Name}  vs  {v2Name}
         </Text>
-        <Text style={{ fontSize: 8, color: "#9CA3AF", textAlign: "center", marginBottom: 6 }}>
+        <Text style={{ fontSize: 8.5, color: "#9CA3AF", textAlign: "center", marginBottom: 6 }}>
           {filterParts.join("   |   ")}
         </Text>
 

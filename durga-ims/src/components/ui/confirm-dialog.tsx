@@ -18,8 +18,8 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   onConfirm: () => void;
   isPending?: boolean;
-  /** When true, pressing Enter anywhere in the dialog triggers Confirm (dialog has no text inputs). */
-  confirmOnEnter?: boolean;
+  /** Focus Cancel (instead of Confirm) on open — use for destructive Delete dialogs. */
+  focusCancel?: boolean;
 }
 
 export function ConfirmDialog({
@@ -30,24 +30,11 @@ export function ConfirmDialog({
   confirmLabel = "Delete",
   onConfirm,
   isPending,
-  confirmOnEnter = false,
+  focusCancel = false,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-sm"
-        onKeyDown={
-          confirmOnEnter
-            ? (e) => {
-                if (e.key === "Enter" && !isPending) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onConfirm();
-                }
-              }
-            : undefined
-        }
-      >
+      <DialogContent className="max-w-sm" confirmNav confirmNavFocus={focusCancel ? "first" : "last"}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

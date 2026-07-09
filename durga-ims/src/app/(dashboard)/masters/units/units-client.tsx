@@ -152,12 +152,12 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                   {visible.map((unit, i) => (
                     <tr
                       key={unit.id}
-                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !unit.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !unit.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
                       onClick={() => startEdit(unit)}
                     >
-                      <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
-                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{formatCode("U", unit.unit_code, 2)}</td>
-                      <td className="px-4 py-1.5 font-medium text-slate-800">{unit.unit_name}</td>
+                      <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
+                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">{formatCode("U", unit.unit_code, 2)}</td>
+                      <td className="px-4 py-1.5 font-medium text-slate-800 group-hover:text-slate-900">{unit.unit_name}</td>
                     </tr>
                   ))}
                 </tbody>

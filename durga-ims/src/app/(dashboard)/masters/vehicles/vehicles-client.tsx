@@ -113,7 +113,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Vehicle" : "Add Vehicle"}</p>
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-600">Job No. *</label>
+              <label className="text-xs text-slate-600">Job No / Reg No *</label>
               <Input
                 ref={firstFieldRef}
                 placeholder="e.g. 2026/001"
@@ -171,7 +171,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               <Input
                 ref={searchRef}
                 autoComplete="off"
-                placeholder="Search by job number or customer..."
+                placeholder="Search by job no / reg no or customer..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
                 onKeyDown={(e) => {
@@ -195,7 +195,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-700 text-white">
                   <tr>
-                    {["S.No", "Job No.", "Type", "Customer"].map((h) => (
+                    {["S.No", "Job No / Reg No", "Type", "Customer"].map((h) => (
                       <th key={h} className="px-4 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -207,15 +207,15 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                   {visible.map((v, i) => (
                     <tr
                       key={v.id}
-                      className={`border-t border-slate-100 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-400 bg-blue-50" : !v.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-blue-50/40"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !v.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
                       onClick={() => startEdit(v)}
                     >
-                      <td className="px-4 py-1.5 text-slate-600">{i + 1}</td>
-                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700">{v.job_ref_no}</td>
+                      <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
+                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">{v.job_ref_no}</td>
                       <td className="px-4 py-1.5">
                         <Badge variant={v.type === "New" ? "default" : "secondary"}>{v.type}</Badge>
                       </td>
-                      <td className="px-4 py-1.5 text-slate-600">{v.customer_name ?? "—"}</td>
+                      <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{v.customer_name ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -229,7 +229,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         onOpenChange={setImportOpen}
         title="Import Vehicles / Jobs"
         templateFileName="vehicles-import-template.xlsx"
-        templateColumns={["Job Ref No", "Type", "Customer Name"]}
+        templateColumns={["Job No / Reg No", "Type", "Customer Name"]}
         exampleRow={["JB-2024-001", "New", "Ravi Motors"]}
         referenceSheet={{ rows: [
           ["REFERENCE — do not edit this sheet"],
@@ -244,11 +244,11 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         existingKeys={new Set(vehicles.map((v) => v.job_ref_no.toUpperCase()))}
         processRow={(row) => {
           const errors: string[] = [];
-          const jobRef = (row["Job Ref No"]?.trim() ?? "").toUpperCase();
+          const jobRef = (row["Job No / Reg No"]?.trim() ?? "").toUpperCase();
           const typeRaw = row["Type"]?.trim() ?? "";
           const custNameRaw = row["Customer Name"]?.trim() ?? "";
 
-          if (!jobRef) errors.push("Job Ref No is required");
+          if (!jobRef) errors.push("Job No / Reg No is required");
           if (!typeRaw) errors.push("Type is required (New or Old)");
 
           const normalizedType = typeRaw

@@ -86,15 +86,15 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
             </View>
 
             {/* ── Document type ── */}
-            <Text style={styles.docTypeCentered}>PURCHASE ORDER</Text>
+            <View style={{ borderBottomWidth: 1, borderBottomStyle: "dashed", borderBottomColor: "#000", marginTop: 8, marginBottom: 10, paddingBottom: 3 }}>
+              <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>PURCHASE ORDER</Text>
+            </View>
 
             {/* ── Info block ── */}
-            <View style={styles.infoLine}>
+            <View style={{ flexDirection: "row", marginBottom: 3 }}>
               <Text style={styles.infoLineLabel}>PURCHASE ORDER NO.</Text>
-              <Text style={styles.infoLineValue}>: {poLabel}</Text>
-            </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabel}>DATE</Text>
+              <Text style={{ fontSize: 10, fontFamily: "Times-Bold", width: 80 }}>: {poLabel}</Text>
+              <Text style={[styles.infoLineLabel, { width: 50 }]}>DATE</Text>
               <Text style={styles.infoLineValue}>: {fmtDate(first.po_date)}</Text>
             </View>
             <View style={styles.infoLine}>
@@ -112,7 +112,7 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
             {!first.affects_stock && (
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabel}>STOCK UPDATE</Text>
-                <Text style={[styles.infoLineValue, { fontFamily: "Helvetica" }]}>: No (accounting only)</Text>
+                <Text style={[styles.infoLineValue, { fontFamily: "Times-Roman" }]}>: No (accounting only)</Text>
               </View>
             )}
 
@@ -145,7 +145,7 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
                 return (
                   <View key={r.item_id ?? idx} style={styles.plainTableRow}>
                     <Text style={[styles.plainTableCell, { width: "7%" }]}>{idx + 1}</Text>
-                    <Text style={[styles.plainTableCell, { flex: 1, textAlign: "center" }]}>{r.material_name ?? "—"}</Text>
+                    <Text style={[styles.plainTableCell, { flex: 1, textAlign: "left" }]}>{r.material_name ?? "—"}</Text>
                     <Text style={[styles.plainTableCell, { width: "12%", textAlign: "right" }]}>
                       {fmtQty(r.qty)}
                     </Text>
