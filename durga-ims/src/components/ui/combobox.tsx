@@ -132,9 +132,15 @@ export function Combobox({
         return;
       }
       if (e.key === "Enter") {
-        // Vertical form dialogs: never open on Enter — let it bubble so the form
-        // chain advances to the next field (typing / Alt+↓ open the dropdown).
-        if (advanceOnEnter) return;
+        // Vertical form dialogs: never open on Enter. preventDefault stops the native
+        // button click from toggling the popover; stopPropagation avoids a second
+        // advance from the container handler; the chain is invoked explicitly.
+        if (advanceOnEnter) {
+          e.preventDefault();
+          e.stopPropagation();
+          onGridKeyDown?.(e);
+          return;
+        }
         // Empty cell (nothing picked yet) or an identifier dropdown → open to pick.
         if (!value || openOnArrowDown) {
           e.preventDefault();

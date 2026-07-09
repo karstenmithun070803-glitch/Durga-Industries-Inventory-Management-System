@@ -98,7 +98,6 @@ export function CloneVehicleDialog({
   // ── Keyboard: same vertical-form chain the masters pages use ────────────────
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const customerNameRef = useRef<HTMLInputElement>(null);
-  const submitRef = useRef<HTMLButtonElement>(null);
 
   // Focus Job No when the dialog opens (DialogContent uses confirmNavFocus="none",
   // so it does not steal focus to the footer).
@@ -110,11 +109,13 @@ export function CloneVehicleDialog({
 
   // Enter/↓/→ next field, ↑/← previous. Disabled fields are skipped, so selecting an
   // existing customer (which disables everything below) lands Enter on Clone & Create.
-  const handleFormKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
+  const handleFormKeyDown = useCallback((e: React.KeyboardEvent<Element>) => {
     handleVerticalFormKeyDown(e, {
       trapTab: false, // the dialog already focus-traps; trapping would strand Cancel/X
       advanceOnComboboxEnter: true,
-      extraStops: () => [submitRef.current],
+      // Final stop = the primary footer button (Clone & Create). Cancel is the FIRST
+      // footer button, so it stays out of the Enter chain — Enter must never cancel.
+      extraSelector: '[data-slot="dialog-footer"] button:last-of-type:not([disabled])',
     });
   }, []);
 
@@ -267,6 +268,7 @@ export function CloneVehicleDialog({
                 searchPlaceholder="Search by name…"
                 emptyText="No customers found."
                 advanceOnEnter
+                onGridKeyDown={handleFormKeyDown}
               />
             </div>
 
@@ -313,6 +315,7 @@ export function CloneVehicleDialog({
                     placeholder="Select state…"
                     searchPlaceholder="Search states…"
                     advanceOnEnter
+                    onGridKeyDown={handleFormKeyDown}
                   />
                 )}
               </div>
@@ -389,7 +392,7 @@ export function CloneVehicleDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isPending}>Cancel</Button>
-          <Button ref={submitRef} onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
             {isPending ? "Creating…" : "Clone & Create →"}
           </Button>
         </DialogFooter>

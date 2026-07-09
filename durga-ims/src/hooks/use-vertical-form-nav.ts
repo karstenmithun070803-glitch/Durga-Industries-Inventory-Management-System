@@ -17,8 +17,13 @@ export const FORM_FOCUSABLE =
 export interface VerticalFormNavOptions {
   /** Trap Tab (masters forms do). A dialog must NOT trap it — base-ui already focus-traps. */
   trapTab?: boolean;
-  /** Elements appended after the fields, e.g. a submit button as the final Enter stop. */
-  extraStops?: () => (HTMLElement | null | undefined)[];
+  /**
+   * CSS selector (resolved within the root) for stops appended AFTER the fields —
+   * e.g. a dialog's submit button as the final Enter stop. Resolved from the DOM on
+   * purpose: `Button` is a base-ui component that does not forward a React ref, so a
+   * ref-based stop silently ends up null and Enter dies on the last field.
+   */
+  extraSelector?: string;
   /**
    * Let Enter on a closed combobox trigger ADVANCE the chain instead of firing natively.
    * Pair with `advanceOnEnter` on the Combobox (which stops it from opening).
@@ -28,8 +33,8 @@ export interface VerticalFormNavOptions {
 }
 
 export function handleVerticalFormKeyDown(
-  e: React.KeyboardEvent<HTMLElement>,
-  { trapTab = true, extraStops, advanceOnComboboxEnter = false }: VerticalFormNavOptions = {}
+  e: React.KeyboardEvent<Element>,
+  { trapTab = true, extraSelector, advanceOnComboboxEnter = false }: VerticalFormNavOptions = {}
 ): void {
   // A combobox dropdown is open → pass all keys through to cmdk.
   if (document.querySelector("[cmdk-root]")) return;
@@ -43,21 +48,34 @@ export function handleVerticalFormKeyDown(
   const isUp = e.key === "ArrowUp" || e.key === "ArrowLeft";
   if (!isDown && !isUp) return;
 
+  const target = e.target as HTMLElement;
+
+  // ←/→ pressed on a footer button belong to the dialog's footer nav (Cancel ↔ Confirm),
+  // which already handled them. Keyed off the EVENT TARGET, not document.activeElement,
+  // because the footer handler runs first and has already moved focus.
+  if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && target.closest('[data-slot="dialog-footer"]')) {
+    return;
+  }
+
   // Let Enter fire natively on real action buttons (submit / cancel). A combobox
   // trigger is also a BUTTON, but may opt into advancing the chain instead.
-  const target = e.target as HTMLElement;
   if (e.key === "Enter" && target.tagName === "BUTTON") {
     const isCombobox = advanceOnComboboxEnter && target.matches("[role='combobox']");
     if (!isCombobox) return;
   }
 
-  const root = e.currentTarget;
+  // Resolve the root defensively: this handler may be invoked from the container
+  // (masters <form>, dialog popup) OR delegated from a combobox trigger, in which
+  // case currentTarget is the trigger itself.
+  const self = e.currentTarget as HTMLElement;
+  const root = (self.closest<HTMLElement>('[data-slot="dialog-content"]') ?? self) as HTMLElement;
+
   const fields = Array.from(root.querySelectorAll<HTMLElement>(FORM_FOCUSABLE)).filter(
     (el) => !el.closest("[hidden]") && (el as HTMLInputElement).type !== "hidden"
   );
-  const extras = (extraStops?.() ?? []).filter(
-    (el): el is HTMLElement => !!el && !(el as HTMLButtonElement).disabled
-  );
+  const extras = extraSelector
+    ? Array.from(root.querySelectorAll<HTMLElement>(extraSelector))
+    : [];
   const chain = [...fields, ...extras];
 
   const idx = chain.indexOf(document.activeElement as HTMLElement);
