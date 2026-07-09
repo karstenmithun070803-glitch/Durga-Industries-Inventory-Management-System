@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, useTransition } from "react";
+import { handleVerticalFormKeyDown } from "@/hooks/use-vertical-form-nav";
 import {
   Dialog,
   DialogContent,
@@ -94,6 +95,29 @@ export function CloneVehicleDialog({
     []
   );
 
+  // ── Keyboard: same vertical-form chain the masters pages use ────────────────
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+  const customerNameRef = useRef<HTMLInputElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
+
+  // Focus Job No when the dialog opens (DialogContent uses confirmNavFocus="none",
+  // so it does not steal focus to the footer).
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => firstFieldRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  // Enter/↓/→ next field, ↑/← previous. Disabled fields are skipped, so selecting an
+  // existing customer (which disables everything below) lands Enter on Clone & Create.
+  const handleFormKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
+    handleVerticalFormKeyDown(e, {
+      trapTab: false, // the dialog already focus-traps; trapping would strand Cancel/X
+      advanceOnComboboxEnter: true,
+      extraStops: () => [submitRef.current],
+    });
+  }, []);
+
   function handleCustomerSelect(val: string) {
     setSelectedCustomerId(val);
     if (!val) {
@@ -145,7 +169,13 @@ export function CloneVehicleDialog({
 
   function handleSubmit() {
     const err = validate();
-    if (err) { toast.error(err); return; }
+    if (err) {
+      toast.error(err);
+      // Send focus to the field that needs fixing, not leave it on the button.
+      if (!jobRefNo.trim()) firstFieldRef.current?.focus();
+      else customerNameRef.current?.focus();
+      return;
+    }
     setJobRefError("");
 
     startTransition(async () => {
@@ -171,6 +201,7 @@ export function CloneVehicleDialog({
         const msg = e instanceof Error ? e.message : String(e);
         if (msg.startsWith("DUPLICATE_JOB_REF:")) {
           setJobRefError("This job no / reg no already exists.");
+          firstFieldRef.current?.focus();
         } else {
           toast.error(formatActionError(e, "Clone failed"));
         }
@@ -180,7 +211,12 @@ export function CloneVehicleDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-lg max-h-[90vh] overflow-y-auto"
+        confirmNav
+        confirmNavFocus="none"
+        onKeyDown={handleFormKeyDown}
+      >
         <DialogHeader>
           <DialogTitle>Clone Vehicle Materials</DialogTitle>
           <DialogDescription>
@@ -197,6 +233,7 @@ export function CloneVehicleDialog({
               <div className="space-y-1.5">
                 <Label htmlFor="clone-job-ref">Job No / Reg No <span className="text-red-500">*</span></Label>
                 <Input
+                  ref={firstFieldRef}
                   id="clone-job-ref"
                   value={jobRefNo}
                   onChange={(e) => { setJobRefNo(e.target.value.toUpperCase()); setJobRefError(""); }}
@@ -229,6 +266,7 @@ export function CloneVehicleDialog({
                 placeholder="Search active customers…"
                 searchPlaceholder="Search by name…"
                 emptyText="No customers found."
+                advanceOnEnter
               />
             </div>
 
@@ -238,6 +276,7 @@ export function CloneVehicleDialog({
                 {isExistingCustomer && <span className="ml-1 text-slate-700 font-normal">(read-only — edit in Customer Master)</span>}
               </Label>
               <Input
+                ref={customerNameRef}
                 id="clone-customer-name"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
@@ -273,6 +312,7 @@ export function CloneVehicleDialog({
                     onChange={setState}
                     placeholder="Select state…"
                     searchPlaceholder="Search states…"
+                    advanceOnEnter
                   />
                 )}
               </div>
@@ -349,7 +389,7 @@ export function CloneVehicleDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isPending}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+          <Button ref={submitRef} onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
             {isPending ? "Creating…" : "Clone & Create →"}
           </Button>
         </DialogFooter>

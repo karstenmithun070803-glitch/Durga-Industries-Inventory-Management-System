@@ -52,14 +52,17 @@ function DialogContent({
   /** Enable keyboard nav for a Cancel/Confirm button dialog: ←/→ moves between
    *  footer buttons, and one is focused on open (see confirmNavFocus). */
   confirmNav?: boolean
-  /** Which footer button to focus on open: "last" = Confirm (default), "first" = Cancel. */
-  confirmNavFocus?: "first" | "last"
+  /**
+   * Which footer button to focus on open: "last" = Confirm, "first" = Cancel,
+   * "none" = don't move focus (for form dialogs that focus their first field).
+   */
+  confirmNavFocus?: "first" | "last" | "none"
 }) {
   const popupRef = React.useRef<HTMLDivElement | null>(null)
 
   // Focus the chosen footer button on open (after base-ui's own initial focus).
   React.useEffect(() => {
-    if (!confirmNav) return
+    if (!confirmNav || confirmNavFocus === "none") return
     const id = requestAnimationFrame(() => {
       const sel = `[data-slot="dialog-footer"] button:${confirmNavFocus}-of-type`
       popupRef.current?.querySelector<HTMLElement>(sel)?.focus()
@@ -69,15 +72,19 @@ function DialogContent({
 
   function handleKeyDown(e: Parameters<NonNullable<DialogPrimitive.Popup.Props["onKeyDown"]>>[0]) {
     if (confirmNav && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-      const btns = Array.from(
-        e.currentTarget.querySelectorAll<HTMLButtonElement>('[data-slot="dialog-footer"] button')
-      )
-      if (btns.length >= 2) {
-        e.preventDefault()
+      // A dropdown owns the keys while open.
+      if (!document.querySelector("[cmdk-root]")) {
+        const btns = Array.from(
+          e.currentTarget.querySelectorAll<HTMLButtonElement>('[data-slot="dialog-footer"] button')
+        )
         const idx = btns.indexOf(document.activeElement as HTMLButtonElement)
-        const dir = e.key === "ArrowRight" ? 1 : -1
-        const start = idx === -1 ? (dir === 1 ? -1 : 0) : idx
-        btns[(start + dir + btns.length) % btns.length].focus()
+        // Only act when focus is ALREADY on a footer button. Otherwise leave the
+        // event alone so ←/→ keep working inside inputs and the combobox search.
+        if (btns.length >= 2 && idx !== -1) {
+          e.preventDefault()
+          const dir = e.key === "ArrowRight" ? 1 : -1
+          btns[(idx + dir + btns.length) % btns.length].focus()
+        }
       }
     }
     onKeyDown?.(e)

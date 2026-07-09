@@ -113,7 +113,7 @@ export function StagesClient({ stages, materials, units }: Props) {
 
   const materialOptions = materials.map((m) => ({
     value: m.id,
-    label: `${formatCode("M", m.material_no)} — ${m.name}`,
+    label: `${formatCode("M-", m.material_no)} — ${m.name}`,
   }));
 
   // ── Form helpers ──────────────────────────────────────────────────────────
@@ -556,7 +556,7 @@ export function StagesClient({ stages, materials, units }: Props) {
                         i === focusedIdx
                           ? "ring-1 ring-inset ring-blue-500 bg-blue-50"
                           : !s.is_active
-                          ? "opacity-50 bg-slate-50 hover:bg-slate-100"
+                          ? "opacity-50 bg-slate-50 hover:bg-rowhover"
                           : "hover:bg-rowhover hover:text-slate-900"
                       }`}
                     >

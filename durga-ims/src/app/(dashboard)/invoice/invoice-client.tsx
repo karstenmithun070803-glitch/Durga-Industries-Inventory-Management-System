@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useReducer } from "r
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useFormSectionNav, focusGridRowZero } from "@/hooks/use-form-section-nav";
+import { isOverlayOpen } from "@/lib/overlay";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -433,7 +434,7 @@ export function InvoiceClient({
       vehicle_id: vehicleId,
       slip_ids: [],
       bill_date: billDate,
-      inv_prefix: "",
+      inv_prefix: "D",
       financial_year: activeFY,
       tax_percentage: "0",
       material_margin: materialMargin || "0",
@@ -481,7 +482,7 @@ export function InvoiceClient({
   function handleNew() {
     resetForm();
     setIsNewMode(true);
-    peekNextBillNumber(null, activeFY).then(setBillNumber).catch(() => setBillNumber("—"));
+    peekNextBillNumber("D", activeFY).then(setBillNumber).catch(() => setBillNumber("—"));
     setTimeout(() => identifierRef.current?.focus(), 100);
   }
 
@@ -744,9 +745,9 @@ export function InvoiceClient({
   }, []);
 
   // ── Hotkeys ───────────────────────────────────────────────────────────────
-  useHotkeys("mod+s", (e) => { e.preventDefault(); if (activeView === "invoice") void handleSave(); }, { enableOnFormTags: true });
-  useHotkeys("alt+n", (e) => { e.preventDefault(); if (!isSavingRef.current) handleNew(); }, { enableOnFormTags: true });
-  useHotkeys("escape", () => { if (activeView === "insurance") setActiveView("invoice"); }, { enableOnFormTags: true });
+  useHotkeys("mod+s", (e) => { if (isOverlayOpen()) return; e.preventDefault(); if (activeView === "invoice") void handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("alt+n", (e) => { if (isOverlayOpen()) return; e.preventDefault(); if (!isSavingRef.current) handleNew(); }, { enableOnFormTags: true });
+  useHotkeys("escape", () => { if (isOverlayOpen()) return; if (activeView === "insurance") setActiveView("invoice"); }, { enableOnFormTags: true });
 
   // ── Dropdown options ──────────────────────────────────────────────────────
   const filteredDropdownItems = useMemo(() => {

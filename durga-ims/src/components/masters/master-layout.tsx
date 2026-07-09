@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useCallback } from "react";
+import { handleVerticalFormKeyDown } from "@/hooks/use-vertical-form-nav";
 
 interface Props {
   title: string;
@@ -8,44 +9,11 @@ interface Props {
   tablePanel: ReactNode;
 }
 
-const FOCUSABLE =
-  "input:not([disabled]), select:not([disabled]), [role='combobox']:not([disabled]), textarea:not([disabled])";
-
 export function MasterLayout({ title, formPanel, tablePanel }: Props) {
+  // Masters keep the original semantics: Tab trapped, no extra stops,
+  // Enter on a combobox trigger fires natively (opens the dropdown).
   const handleFormKeyDown = useCallback((e: React.KeyboardEvent<HTMLFormElement>) => {
-    // When combobox dropdown is open, pass all keys through to cmdk
-    if (document.querySelector("[cmdk-root]")) return;
-
-    if (e.key === "Tab") {
-      e.preventDefault();
-      return;
-    }
-
-    const isDown = e.key === "ArrowDown" || e.key === "Enter" || e.key === "ArrowRight";
-    const isUp = e.key === "ArrowUp" || e.key === "ArrowLeft";
-    if (!isDown && !isUp) return;
-
-    // Let Enter fire normally on buttons (combobox triggers, submit, etc.)
-    if (e.key === "Enter" && (e.target as HTMLElement).tagName === "BUTTON") return;
-
-    e.preventDefault();
-
-    const form = e.currentTarget;
-    const focusables = Array.from(form.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-      (el) => !el.closest("[hidden]") && (el as HTMLInputElement).type !== "hidden"
-    );
-    const current = document.activeElement as HTMLElement;
-    const idx = focusables.indexOf(current);
-    if (idx === -1) {
-      focusables[0]?.focus();
-      return;
-    }
-
-    if (isDown) {
-      focusables[idx + 1]?.focus();
-    } else {
-      focusables[idx - 1]?.focus();
-    }
+    handleVerticalFormKeyDown(e, { trapTab: true });
   }, []);
 
   return (
@@ -58,8 +26,9 @@ export function MasterLayout({ title, formPanel, tablePanel }: Props) {
             {formPanel}
           </form>
         </div>
-        {/* Right: table */}
-        <div className="flex-1 min-w-0 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col min-h-0">
+        {/* Right: table — overflow-hidden clips the full-width row-hover band to the
+            card's rounded corners (the scroll container is the child below). */}
+        <div className="flex-1 min-w-0 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col min-h-0 overflow-hidden">
           {tablePanel}
         </div>
       </div>

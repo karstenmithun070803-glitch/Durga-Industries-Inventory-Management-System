@@ -18,8 +18,13 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   onConfirm: () => void;
   isPending?: boolean;
-  /** Focus Cancel (instead of Confirm) on open — use for destructive Delete dialogs. */
-  focusCancel?: boolean;
+  /**
+   * Focus the Confirm button on open so Enter completes immediately.
+   * Opt-in ONLY for non-destructive confirms (e.g. "Discard unsaved changes?").
+   * Default is Cancel-focused: this dialog's confirm button is destructive
+   * (Delete / Deactivate), so it must fail safe — an accidental Enter can never destroy.
+   */
+  focusConfirm?: boolean;
 }
 
 export function ConfirmDialog({
@@ -30,11 +35,11 @@ export function ConfirmDialog({
   confirmLabel = "Delete",
   onConfirm,
   isPending,
-  focusCancel = false,
+  focusConfirm = false,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm" confirmNav confirmNavFocus={focusCancel ? "first" : "last"}>
+      <DialogContent className="max-w-sm" confirmNav confirmNavFocus={focusConfirm ? "last" : "first"}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

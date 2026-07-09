@@ -234,7 +234,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       result = result.filter(
         (r) =>
           r.name.toLowerCase().includes(s) ||
-          formatCode("M", r.material_no).toLowerCase().includes(s)
+          formatCode("M-",r.material_no).toLowerCase().includes(s)
       );
     }
     return result;
@@ -393,7 +393,8 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       </div>
 
       {/* ── Materials Table ── */}
-      <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg flex flex-col">
+      {/* overflow-hidden clips the full-width row-hover band to the card's rounded corners */}
+      <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg flex flex-col overflow-hidden">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
           {(["all", "out"] as TabFilter[]).map((t) => {
@@ -437,7 +438,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                 const stdRate = r.standard_cost !== null ? parseFloat(r.standard_cost) : null;
                 const rate = poRate ?? stdRate;
                 return [
-                  formatCode("M", r.material_no),
+                  formatCode("M-",r.material_no),
                   r.name,
                   r.unit_name ?? "",
                   stock.toFixed(4),
@@ -494,7 +495,11 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                   const isStdRate = poRate === null && stdRate !== null;
                   const value = rate !== null ? stock * rate : null;
 
-                  const rowBg = status === "out" ? "bg-red-50" : "";
+                  // Out-of-stock rows keep their red status tint on hover (darken it)
+                  // rather than being overwritten by the neutral hover band.
+                  const rowBg = status === "out"
+                    ? "bg-red-50 hover:bg-red-100"
+                    : "hover:bg-rowhover";
 
                   const isHighlighted = highlightedIndex === filteredIdx;
                   return (
@@ -502,14 +507,14 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                       key={row.id}
                       data-highlighted={isHighlighted || undefined}
                       className={cn(
-                        "border-t border-slate-200 hover:bg-rowhover transition-colors cursor-pointer",
+                        "border-t border-slate-200 transition-colors cursor-pointer",
                         rowBg,
                         isHighlighted && "ring-1 ring-inset ring-blue-500 bg-blue-50"
                       )}
                       onClick={() => openHistory(row)}
                     >
                       <td className="px-3 py-2 whitespace-nowrap text-slate-800 font-mono text-xs">
-                        {formatCode("M", row.material_no)}
+                        {formatCode("M-",row.material_no)}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-800">
                         {row.name}
@@ -582,7 +587,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             <SheetTitle className="text-base">
               Stock History — {historyMaterial?.name}
               <span className="ml-2 text-xs font-normal text-slate-700 font-mono">
-                {historyMaterial ? formatCode("M", historyMaterial.material_no) : ""}
+                {historyMaterial ? formatCode("M-",historyMaterial.material_no) : ""}
               </span>
             </SheetTitle>
           </SheetHeader>
@@ -666,7 +671,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             <DialogTitle>
               Adjust Stock — {adjustMaterial?.name}
               <span className="ml-2 text-xs font-normal text-slate-700 font-mono">
-                {adjustMaterial ? formatCode("M", adjustMaterial.material_no) : ""}
+                {adjustMaterial ? formatCode("M-",adjustMaterial.material_no) : ""}
               </span>
             </DialogTitle>
             <DialogDescription>

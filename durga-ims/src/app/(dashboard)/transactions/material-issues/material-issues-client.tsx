@@ -531,11 +531,12 @@ export function MaterialIssuesClient({
 
   // Hotkeys (Mac-aware: mod = Cmd on macOS / Ctrl on Windows)
   const overlayOpen = () => !!document.querySelector('[role="dialog"], [cmdk-root]');
-  useHotkeys("mod+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("mod+s", (e) => { if (overlayOpen()) return; e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
   // "/" jumps to + opens the Vehicle box (skip when typing in a field)
   useHotkeys(
     "/",
     (e) => {
+      if (overlayOpen()) return; // a dialog/dropdown owns the keys
       if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
       e.preventDefault();
       const trigger = vehicleSectionRef.current?.querySelector<HTMLElement>('[role="combobox"]');
@@ -871,7 +872,6 @@ export function MaterialIssuesClient({
         confirmLabel="Delete"
         onConfirm={confirmDelete}
         isPending={isPending}
-        focusCancel
       />
 
       {/* Discard confirm */}
@@ -886,6 +886,7 @@ export function MaterialIssuesClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
+        focusConfirm
       />
 
       {/* Clone vehicle dialog */}

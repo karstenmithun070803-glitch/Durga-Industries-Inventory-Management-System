@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { isOverlayOpen } from "@/lib/overlay";
 
 interface UseMasterKeyboardNavOptions {
   searchRef: RefObject<HTMLInputElement | null>;
@@ -22,6 +23,7 @@ export function useMasterKeyboardNav({
   useHotkeys(
     "/",
     (e) => {
+      if (isOverlayOpen()) return;
       if (document.activeElement?.tagName === "INPUT") return;
       e.preventDefault();
       searchRef.current?.focus();
@@ -33,6 +35,7 @@ export function useMasterKeyboardNav({
   useHotkeys(
     "ctrl+s",
     (e) => {
+      if (isOverlayOpen()) return;
       e.preventDefault();
       if (saveRef.current && !saveRef.current.disabled) {
         saveRef.current.click();
@@ -44,6 +47,7 @@ export function useMasterKeyboardNav({
   useHotkeys(
     "alt+n",
     (e) => {
+      if (isOverlayOpen()) return;
       e.preventDefault();
       onNew?.();
     },

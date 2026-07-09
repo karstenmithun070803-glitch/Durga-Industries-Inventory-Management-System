@@ -69,7 +69,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   }));
   const materialOptions = materials.map((m) => ({
     value: m.id,
-    label: `M-${String(m.material_no).padStart(4, "0")} — ${m.name}`,
+    label: `M-${String(m.material_no).padStart(3, "0")} — ${m.name}`,
   }));
 
   function runReport() {
@@ -400,7 +400,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                         {itemIdx === 0 && (
                           <>
                             <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800 align-top border-r border-slate-200">
-                              PO-{String(r.po_number).padStart(4, "0")}
+                              D-{String(r.po_number).padStart(4, "0")}
                             </td>
                             <td rowSpan={group.length} className="px-3 py-1.5 whitespace-nowrap text-slate-800 align-top border-r border-slate-200">
                               {r.po_date}

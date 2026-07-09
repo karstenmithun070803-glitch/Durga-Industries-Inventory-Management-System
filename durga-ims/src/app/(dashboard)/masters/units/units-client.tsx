@@ -32,7 +32,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
   const visible = useMemo(() =>
     units.filter((u) => showInactive ? !u.is_active : u.is_active).filter((u) =>
       u.unit_name.toLowerCase().includes(search.toLowerCase()) ||
-      matchesCode(search, "U", u.unit_code, 2)
+      matchesCode(search, "U-", u.unit_code, 2)
     ),
     [units, search, showInactive]
   );
@@ -152,11 +152,11 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                   {visible.map((unit, i) => (
                     <tr
                       key={unit.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !unit.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-rowhover hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !unit.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(unit)}
                     >
                       <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
-                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">{formatCode("U", unit.unit_code, 2)}</td>
+                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">{formatCode("U-", unit.unit_code, 2)}</td>
                       <td className="px-4 py-1.5 font-medium text-slate-800 group-hover:text-slate-900">{unit.unit_name}</td>
                     </tr>
                   ))}

@@ -1119,7 +1119,7 @@ export function NewVMIClient({
     setPendingAction(null);
   }
 
-  useHotkeys("mod+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("mod+s", (e) => { if (overlayOpen()) return; e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
 
   // Root capture-phase handler: mod+Arrow switches stage (must run in capture phase
   // + preventDefault so macOS Cmd+←/→ doesn't trigger browser Back/Forward and lose
@@ -1158,7 +1158,7 @@ export function NewVMIClient({
   }
 
   // Ctrl+Shift+E — works on Mac and Windows without browser/extension interception
-  useHotkeys("ctrl+shift+e", (e) => { e.preventDefault(); toggleF2Mode(); }, { enableOnFormTags: true });
+  useHotkeys("ctrl+shift+e", (e) => { if (overlayOpen()) return; e.preventDefault(); toggleF2Mode(); }, { enableOnFormTags: true });
 
   const displayRows = (recordStatus === "Issued" && savedStageIds.length > 0)
     ? rows.filter((r) => r.material_id && r.stage_id && savedStageIds.includes(r.stage_id))
@@ -1251,7 +1251,12 @@ export function NewVMIClient({
                           const ch = e.key;
                           setStageDropOpen(true);
                           requestAnimationFrame(() => {
-                            const input = document.querySelector<HTMLInputElement>("[cmdk-root] input");
+                            // Scope to THIS dropdown's popover — a bare `[cmdk-root] input`
+                            // lookup can hit a different field's list if one is still closing.
+                            const scope = document.querySelector<HTMLElement>("[data-stage-dropdown]");
+                            const input =
+                              scope?.querySelector<HTMLInputElement>("input") ??
+                              document.querySelector<HTMLInputElement>("[cmdk-root] input");
                             if (input) {
                               input.focus();
                               const setter = Object.getOwnPropertyDescriptor(
@@ -1264,7 +1269,7 @@ export function NewVMIClient({
                           });
                         }
                       }}
-                      className="w-52 flex items-center justify-between rounded-md border border-input bg-background px-3 h-9 text-sm hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="w-52 flex items-center justify-between rounded-md border border-input bg-background px-3 h-9 text-sm hover:bg-rowhover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       <span className="truncate text-left text-muted-foreground">
                         {activeStageId
@@ -1273,7 +1278,7 @@ export function NewVMIClient({
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </PopoverTrigger>
-                    <PopoverContent className="w-52 p-0" align="start">
+                    <PopoverContent data-stage-dropdown="" className="w-52 p-0" align="start">
                       <Command>
                         <CommandInput placeholder="Search stage..." />
                         <CommandList>
@@ -1651,7 +1656,6 @@ export function NewVMIClient({
         confirmLabel="Delete"
         onConfirm={confirmDelete}
         isPending={isPending}
-        focusCancel
       />
 
       {/* Discard confirm */}
@@ -1666,6 +1670,7 @@ export function NewVMIClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
+        focusConfirm
       />
 
       {/* Clone vehicle dialog */}

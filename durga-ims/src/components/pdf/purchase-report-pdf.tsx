@@ -143,7 +143,7 @@ function PurchaseDetailDocument({
               ]}
             >
               <Text style={[styles.plainTableCell, { width: w.sno }]}>{itemIdx === 0 ? String(gIdx + 1) : ""}</Text>
-              <Text style={[styles.plainTableCell, { width: w.po, fontFamily: "Times-Bold" }]}>{itemIdx === 0 ? `PO-${String(r.po_number).padStart(4, "0")}` : ""}</Text>
+              <Text style={[styles.plainTableCell, { width: w.po, fontFamily: "Times-Bold" }]}>{itemIdx === 0 ? `D-${String(r.po_number).padStart(4, "0")}` : ""}</Text>
               <Text style={[styles.plainTableCell, { width: w.date }]}>{itemIdx === 0 ? r.po_date : ""}</Text>
               {showBill && <Text style={[styles.plainTableCell, { width: w.bill! }]}>{itemIdx === 0 ? (r.supplier_bill_no ?? "—") : ""}</Text>}
               <Text style={[styles.plainTableCell, { width: w.sup }]}>{itemIdx === 0 ? (r.supplier_name ?? "—") : ""}</Text>

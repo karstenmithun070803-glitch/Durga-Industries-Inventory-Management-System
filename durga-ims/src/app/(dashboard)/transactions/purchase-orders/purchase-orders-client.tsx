@@ -526,7 +526,7 @@ export function PurchaseOrdersClient({
           await receivePurchaseOrder(loadedPO.id);
           const matCount = rows.filter((r) => r.material_id).length;
           toast.success(
-            `${formatCode("PO-", loadedPO.po_number, 4)} received. Stock updated for ${matCount} material${matCount !== 1 ? "s" : ""}.`
+            `${formatCode("D-",loadedPO.po_number, 4)} received. Stock updated for ${matCount} material${matCount !== 1 ? "s" : ""}.`
           );
           await refreshDropdown();
           const updated = await getPurchaseOrderById(loadedPO.id);
@@ -553,7 +553,7 @@ export function PurchaseOrdersClient({
         setRevertError(result.error);
         return;
       }
-      toast.success(`${formatCode("PO-", loadedPO.po_number, 4)} reverted to Draft`);
+      toast.success(`${formatCode("D-",loadedPO.po_number, 4)} reverted to Draft`);
       setRevertDialogOpen(false);
       await refreshDropdown();
       const updated = await getPurchaseOrderById(loadedPO.id);
@@ -619,9 +619,9 @@ export function PurchaseOrdersClient({
 
   // Hotkeys (Mac-aware: mod = Cmd on macOS / Ctrl on Windows)
   const overlayOpen = () => !!document.querySelector('[role="dialog"], [cmdk-root]');
-  useHotkeys("mod+s", (e) => { e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("mod+s", (e) => { if (overlayOpen()) return; e.preventDefault(); handleSave(); }, { enableOnFormTags: true });
   useHotkeys("mod+enter", (e) => { e.preventDefault(); if (!overlayOpen()) handleMarkAsReceived(); }, { enableOnFormTags: true });
-  useHotkeys("alt+n", (e) => { e.preventDefault(); handleNew(); }, { enableOnFormTags: true });
+  useHotkeys("alt+n", (e) => { if (overlayOpen()) return; e.preventDefault(); handleNew(); }, { enableOnFormTags: true });
 
   // Alt+C / Alt+A: bound via raw keydown on e.code (Option+letter emits ç/å on macOS,
   // so the react-hotkeys-hook key-string is unreliable). Attached on the root container.
@@ -645,8 +645,8 @@ export function PurchaseOrdersClient({
   // Combobox options for identifier dropdown (descending — server order)
   const dropdownOptions = dropdownItems.map((item) => ({
     value: item.id,
-    label: `${formatCode("PO-", item.poNumber, 4)} | ${item.supplierName ?? "Multi-supplier"} | ${formatDate(item.date)} [${item.status}]`,
-    displayLabel: formatCode("PO-", item.poNumber, 4),
+    label: `${formatCode("D-",item.poNumber, 4)} | ${item.supplierName ?? "Multi-supplier"} | ${formatDate(item.date)} [${item.status}]`,
+    displayLabel: formatCode("D-",item.poNumber, 4),
   }));
 
   // Ascending variant for "PO No From" so the range start is easiest to find
@@ -654,8 +654,8 @@ export function PurchaseOrdersClient({
     .sort((a, b) => a.poNumber - b.poNumber)
     .map((item) => ({
       value: item.id,
-      label: `${formatCode("PO-", item.poNumber, 4)} | ${item.supplierName ?? "Multi-supplier"} | ${formatDate(item.date)} [${item.status}]`,
-      displayLabel: formatCode("PO-", item.poNumber, 4),
+      label: `${formatCode("D-",item.poNumber, 4)} | ${item.supplierName ?? "Multi-supplier"} | ${formatDate(item.date)} [${item.status}]`,
+      displayLabel: formatCode("D-",item.poNumber, 4),
     }));
 
   // Batch print: filter POs in range by po_number
@@ -909,7 +909,7 @@ export function PurchaseOrdersClient({
                       }`}
                     >
                       <span className="font-mono font-medium text-slate-800 w-16 shrink-0">
-                        {formatCode("PO-", po.poNumber, 4)}
+                        {formatCode("D-",po.poNumber, 4)}
                       </span>
                       <span className="flex-1 text-slate-600 truncate">
                         {po.supplierName ?? "—"}
@@ -936,7 +936,7 @@ export function PurchaseOrdersClient({
                 <div className="mt-3 flex items-center gap-3">
                   <span className="text-sm text-slate-600 shrink-0">PO No</span>
                   <div className="h-9 px-3 flex items-center text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md min-w-[80px]">
-                    {formatCode("PO-", loadedPO.po_number, 4)}
+                    {formatCode("D-",loadedPO.po_number, 4)}
                   </div>
                   {poStatus && (
                     <span data-testid="po-status-badge" className={`px-2 py-0.5 rounded text-sm font-medium ${
@@ -1205,7 +1205,7 @@ export function PurchaseOrdersClient({
         <DialogContent data-testid="receive-confirm-dialog" className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>
-              Mark {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : "new PO"} as Received?
+              Mark {loadedPO ? formatCode("D-",loadedPO.po_number, 4) : "new PO"} as Received?
             </DialogTitle>
             <DialogDescription>
               {affectsStock
@@ -1252,7 +1252,7 @@ export function PurchaseOrdersClient({
         <DialogContent className="max-w-md" confirmNav>
           <DialogHeader>
             <DialogTitle>
-              Revert {loadedPO ? formatCode("PO-", loadedPO.po_number, 4) : ""} to Draft?
+              Revert {loadedPO ? formatCode("D-",loadedPO.po_number, 4) : ""} to Draft?
             </DialogTitle>
             <DialogDescription>
               {loadedPO?.affects_stock
@@ -1294,7 +1294,6 @@ export function PurchaseOrdersClient({
         confirmLabel="Delete"
         onConfirm={confirmDelete}
         isPending={isPending}
-        focusCancel
       />
 
       {/* ── Discard unsaved changes ── */}
@@ -1306,6 +1305,7 @@ export function PurchaseOrdersClient({
         confirmLabel="Discard"
         onConfirm={confirmDiscard}
         isPending={isPending}
+        focusConfirm
       />
     </div>
   );

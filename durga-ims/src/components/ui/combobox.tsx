@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useId } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -42,6 +42,12 @@ interface ComboboxProps {
   onGridKeyDown?: (e: React.KeyboardEvent) => void;
   /** When true, pressing ↓ on a closed combobox opens it (use for identifier dropdowns at top of screens) */
   openOnArrowDown?: boolean;
+  /**
+   * When true, Enter on a CLOSED combobox does not open it — the event is left to
+   * bubble so a surrounding form chain can advance to the next field. Typing still
+   * opens (type-to-open), and Alt+↓ opens explicitly. Use in vertical form dialogs.
+   */
+  advanceOnEnter?: boolean;
   /** Max options rendered in the DOM at once — prevents layout thrashing with large lists (default 150) */
   maxDisplay?: number;
 }
@@ -59,11 +65,28 @@ export function Combobox({
   gridCol,
   onGridKeyDown,
   openOnArrowDown = false,
+  advanceOnEnter = false,
   maxDisplay = 150,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const selected = options.find((o) => o.value === value);
+
+  // Identifies THIS combobox's popover. The popover renders in a portal, so we can't
+  // reach it by DOM nesting — and a bare `[cmdk-root] input` lookup grabs whichever list
+  // happens to be first in the document, which can be a *different* field's list while
+  // one popover is closing and another opens. Strip characters useId() may emit that are
+  // invalid in a CSS attribute selector.
+  const popoverId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+
+  /** The search input of THIS combobox's open popover (falls back to the old global lookup). */
+  function getOwnSearchInput(): HTMLInputElement | null {
+    const scope = document.querySelector<HTMLElement>(`[data-combobox-id="${popoverId}"]`);
+    return (
+      scope?.querySelector<HTMLInputElement>("input") ??
+      document.querySelector<HTMLInputElement>("[cmdk-root] input")
+    );
+  }
 
   // Limit DOM nodes: filter manually then slice, so cmdk never renders >maxDisplay items.
   // When search is empty, always ensure the selected item appears even if outside the slice.
@@ -93,6 +116,14 @@ export function Combobox({
 
   function handleTriggerKeyDown(e: React.KeyboardEvent) {
     if (!open) {
+      // Alt+↓ always opens — the standard combobox affordance. Needed where plain ↓
+      // is claimed by the surrounding nav (grid rows / vertical form chain).
+      if (e.key === "ArrowDown" && e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleOpenChange(true);
+        return;
+      }
       // ↓ opens dropdown (identifier dropdowns only)
       if (e.key === "ArrowDown" && openOnArrowDown) {
         e.preventDefault();
@@ -101,6 +132,9 @@ export function Combobox({
         return;
       }
       if (e.key === "Enter") {
+        // Vertical form dialogs: never open on Enter — let it bubble so the form
+        // chain advances to the next field (typing / Alt+↓ open the dropdown).
+        if (advanceOnEnter) return;
         // Empty cell (nothing picked yet) or an identifier dropdown → open to pick.
         if (!value || openOnArrowDown) {
           e.preventDefault();
@@ -128,7 +162,7 @@ export function Combobox({
       if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
-        const input = document.querySelector<HTMLInputElement>("[cmdk-root] input");
+        const input = getOwnSearchInput();
         if (input) {
           input.focus();
           input.dispatchEvent(new KeyboardEvent("keydown", { key: e.key, bubbles: true, cancelable: true }));
@@ -158,7 +192,7 @@ export function Combobox({
         </span>
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--anchor-width)] p-0" align="start">
+      <PopoverContent data-combobox-id={popoverId} className="w-[var(--anchor-width)] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput autoFocus placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
           <CommandList>

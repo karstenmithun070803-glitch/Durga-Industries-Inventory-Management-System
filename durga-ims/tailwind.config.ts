@@ -33,6 +33,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Sidebar nav labels only (tabs + sub-tabs) — IBM Plex Sans.
+        nav: ["var(--font-nav)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       fontSize: {
         xs:   ["0.75rem",   { lineHeight: "1rem" }],

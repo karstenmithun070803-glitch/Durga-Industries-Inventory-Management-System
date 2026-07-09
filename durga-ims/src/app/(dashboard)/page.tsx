@@ -130,7 +130,7 @@ export default async function HomePage() {
             headers={["PO #", "Date", "Supplier", "Status"]}
             rows={stats.recentPOs.map((r) => [
               <Link key={r.id} href={`/transactions/purchase-orders?id=${r.id}`} className="font-mono text-blue-600 hover:underline">
-                PO-{String(r.po_number).padStart(4, "0")}
+                D-{String(r.po_number).padStart(4, "0")}
               </Link>,
               r.po_date,
               r.supplier_name ?? "—",

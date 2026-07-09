@@ -266,7 +266,7 @@ const TransactionRow = React.memo(
       });
 
     return (
-      <tr className="group border-t border-slate-200">
+      <tr className="border-t border-slate-200">
         <td className="px-3 py-1.5 text-slate-800">{rowIndex + 1}</td>
         {showStageColumn && (
           <td className="px-3 py-1.5 font-mono text-xs text-slate-700 whitespace-nowrap">
@@ -276,16 +276,15 @@ const TransactionRow = React.memo(
 
         {/* Material Code — read-only, auto-filled */}
         <td className="px-3 py-1.5 font-mono text-sm text-slate-700 whitespace-nowrap">
-          {row.material_no ? formatCode("M", row.material_no) : "—"}
+          {row.material_no ? formatCode("M-",row.material_no) : "—"}
         </td>
 
         {/* Material Name combobox */}
-        <td className="px-3 py-1.5 group-hover:bg-rowhover">
+        <td className="px-3 py-1.5">
           {readOnly ? (
             <span className="text-slate-800">{row.material_name}</span>
           ) : (
             <Combobox
-              className="group-hover:bg-rowhover group-hover:border-slate-400"
               options={materialOptions}
               value={row.material_id}
               onChange={(v) => handleMaterialSelect(row._key, v)}
@@ -310,12 +309,11 @@ const TransactionRow = React.memo(
 
         {/* Supplier combobox — PO mode only */}
         {!isIssueMode && !isInvoiceMode && (
-          <td className="px-3 py-1.5 group-hover:bg-rowhover">
+          <td className="px-3 py-1.5">
             {readOnly ? (
               <span className="text-slate-800">{row.supplier_name || "—"}</span>
             ) : (
               <Combobox
-                className="group-hover:bg-rowhover group-hover:border-slate-400"
                 options={supplierOptions}
                 value={row.supplier_id}
                 onChange={(v) => handleSupplierSelect(row._key, v)}
@@ -334,12 +332,11 @@ const TransactionRow = React.memo(
 
         {/* Contractor combobox — issue mode only (optional, nullable) */}
         {isIssueMode && (
-          <td className="px-3 py-1.5 group-hover:bg-rowhover">
+          <td className="px-3 py-1.5">
             {readOnly ? (
               <span className="text-slate-800">{row.contractor_name || "—"}</span>
             ) : (
               <Combobox
-                className="group-hover:bg-rowhover group-hover:border-slate-400"
                 options={contractorOptions}
                 value={row.contractor_id}
                 onChange={(v) => handleContractorSelect(row._key, v)}
@@ -652,7 +649,7 @@ export function TransactionGrid({
         .sort((a, b) => a.material_no - b.material_no)
         .map((m) => ({
           value: m.id,
-          label: isInvoiceMode ? m.name : `${formatCode("M", m.material_no)} — ${m.name}`,
+          label: isInvoiceMode ? m.name : `${formatCode("M-",m.material_no)} — ${m.name}`,
         })),
     [materials, isInvoiceMode]
   );
@@ -663,7 +660,7 @@ export function TransactionGrid({
         .sort((a, b) => a.code_no - b.code_no)
         .map((s) => ({
           value: s.id,
-          label: `${formatCode("S", s.code_no)} — ${s.name}`,
+          label: `${formatCode("S-", s.code_no)} — ${s.name}`,
         })),
     [suppliers]
   );
@@ -675,7 +672,7 @@ export function TransactionGrid({
         .sort((a, b) => a.code_no - b.code_no)
         .map((c) => ({
           value: c.id,
-          label: `${formatCode("CON", c.code_no, 2)} — ${c.name}`,
+          label: `${formatCode("CON-", c.code_no, 2)} — ${c.name}`,
         })),
     ],
     [contractors]

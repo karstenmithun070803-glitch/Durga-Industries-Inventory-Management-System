@@ -107,7 +107,7 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
             <View key={r.material_id} style={styles.plainTableRow}>
               <Text style={[styles.plainTableCell, { width: "4%" }]}>{i + 1}</Text>
               <Text style={[styles.plainTableCell, { width: "28%" }]}>
-                M-{String(r.material_no).padStart(4, "0")} {r.material_name}
+                M-{String(r.material_no).padStart(3, "0")} {r.material_name}
               </Text>
               <Text style={[styles.plainTableCell, { width: "5%" }]}>{r.unit_name ?? "—"}</Text>
               <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQ(r.opening_stock)}</Text>

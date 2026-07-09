@@ -51,7 +51,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
       return (
         m.name.toLowerCase().includes(q) ||
         (m.hsn_code ?? "").includes(q) ||
-        matchesCode(search, "M", m.material_no)
+        matchesCode(search, "M-", m.material_no)
       );
     }),
     [materials, search, showInactive]
@@ -141,7 +141,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Purchase Unit *</label>
               <Combobox
-                options={activeUnits.map((u) => ({ value: u.id, label: `${formatCode("U", u.unit_code, 2)} — ${u.unit_name}` }))}
+                options={activeUnits.map((u) => ({ value: u.id, label: `${formatCode("U-", u.unit_code, 2)} — ${u.unit_name}` }))}
                 value={form.purchase_unit_id}
                 onChange={(v) => set("purchase_unit_id", v)}
                 placeholder="Select unit..."
@@ -228,11 +228,11 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                     return (
                       <tr
                         key={m.id}
-                        className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !m.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-rowhover hover:text-slate-900"}`}
+                        className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !m.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
                         onClick={() => startEdit(m)}
                       >
                         <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-rowhover group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
-                        <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:bg-rowhover group-hover:text-slate-900 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("M", m.material_no)}</td>
+                        <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:bg-rowhover group-hover:text-slate-900 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("M-", m.material_no)}</td>
                         <td className={`px-3 py-1.5 font-medium group-hover:bg-rowhover group-hover:text-slate-900 sticky left-40 z-10 w-44 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.15)] ${stickyBg}`}>{m.name}</td>
                         <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 font-mono text-xs">{m.hsn_code ?? "—"}</td>
                         <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 text-xs">{taxRate ? taxRate.description : "—"}</td>

@@ -294,7 +294,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
                         {r.customer_name ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-xs text-slate-600 whitespace-nowrap">
-                        {formatCode("M", r.material_no)}
+                        {formatCode("M-", r.material_no)}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-slate-700 text-xs">
                         {r.material_name}

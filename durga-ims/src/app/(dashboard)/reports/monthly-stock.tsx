@@ -72,7 +72,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
 
   const materialOptions = materials.map((m) => ({
     value: m.id,
-    label: `M-${String(m.material_no).padStart(4, "0")} — ${m.name}`,
+    label: `M-${String(m.material_no).padStart(3, "0")} — ${m.name}`,
   }));
 
   function runReport() {
@@ -133,7 +133,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
 
     const csvRows = rows.map((r) => {
       const base = [
-        `M-${String(r.material_no).padStart(4, "0")} ${r.material_name}`,
+        `M-${String(r.material_no).padStart(3, "0")} ${r.material_name}`,
         r.unit_name ?? "",
         r.opening_stock.toFixed(3),
         r.po_inward.toFixed(3),
@@ -316,7 +316,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                     <tr key={r.material_id} className="border-t border-slate-200 hover:bg-rowhover">
                       <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">
                         <span className="font-mono text-slate-700 mr-1.5">
-                          M-{String(r.material_no).padStart(4, "0")}
+                          M-{String(r.material_no).padStart(3, "0")}
                         </span>
                         {r.material_name}
                       </td>

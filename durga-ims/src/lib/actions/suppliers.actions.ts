@@ -90,7 +90,7 @@ export async function deleteSupplier(id: string) {
   if (draftPO.length > 0) {
     const [sup] = await db.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, id));
     throw new Error(
-      `Cannot deactivate "${sup?.name}": they are referenced in Draft PO-${String(draftPO[0].po_number).padStart(4, "0")}. Complete or delete that PO first.`
+      `Cannot deactivate "${sup?.name}": they are referenced in Draft D-${String(draftPO[0].po_number).padStart(4, "0")}. Complete or delete that PO first.`
     );
   }
 

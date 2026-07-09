@@ -1466,6 +1466,7 @@ export async function cloneVehicleMaterialIssue(
     .select({
       id: materialIssues.id,
       margin_percentage: materialIssues.margin_percentage,
+      saved_stage_ids: materialIssues.saved_stage_ids,
     })
     .from(materialIssues)
     .where(
@@ -1556,6 +1557,7 @@ export async function cloneVehicleMaterialIssue(
         total_amount: totalAmount,
         financial_year: financialYear,
         status: "Draft",
+        saved_stage_ids: srcIssue.saved_stage_ids ?? [],
       })
       .returning({ id: materialIssues.id });
 

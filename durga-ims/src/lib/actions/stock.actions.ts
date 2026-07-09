@@ -237,7 +237,7 @@ export async function getStockMovementHistory(
     let reference_label = "Manual";
     if (e.reference_type === "purchase_order" && e.reference_id) {
       const num = poMap.get(e.reference_id);
-      reference_label = num ? `PO-${String(num).padStart(4, "0")}` : "PO";
+      reference_label = num ? `D-${String(num).padStart(4, "0")}` : "PO";
     } else if (e.reference_type === "material_issue" && e.reference_id) {
       const num = miMap.get(e.reference_id);
       reference_label = (num != null) ? `MI-${String(num).padStart(4, "0")}` : "MI Issue";

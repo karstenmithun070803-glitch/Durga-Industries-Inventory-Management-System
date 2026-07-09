@@ -106,7 +106,7 @@ export async function deleteMaterial(id: string) {
     .limit(1);
   if (openPO.length > 0)
     throw new Error(
-      `Cannot deactivate "${mat?.name}": referenced in Draft PO-${String(openPO[0].po_number).padStart(4, "0")}. Complete or delete that PO first.`
+      `Cannot deactivate "${mat?.name}": referenced in Draft D-${String(openPO[0].po_number).padStart(4, "0")}. Complete or delete that PO first.`
     );
 
   await db.update(materials).set({ is_active: false }).where(eq(materials.id, id));
