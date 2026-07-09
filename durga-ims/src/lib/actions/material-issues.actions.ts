@@ -778,6 +778,11 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
       );
     }
 
+    // Derive stage IDs from payload to keep saved_stage_ids consistent with issued content
+    const newStageIds = Array.from(new Set(
+      data.items.filter(i => i.stage_id).map(i => i.stage_id as string)
+    ));
+
     // stage_id is immutable after issue — do not update it
     await tx
       .update(materialIssues)
@@ -786,6 +791,7 @@ export async function updateIssuedMaterialIssue(id: string, data: IssueHeaderInp
         vehicle_id: data.vehicle_id,
         margin_percentage: data.margin_percentage || "0",
         total_amount: data.total_amount || "0",
+        ...(newStageIds.length > 0 ? { saved_stage_ids: newStageIds } : {}),
       })
       .where(eq(materialIssues.id, id));
   });

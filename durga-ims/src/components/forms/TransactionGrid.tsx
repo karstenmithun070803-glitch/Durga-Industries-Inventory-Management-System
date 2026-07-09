@@ -266,26 +266,26 @@ const TransactionRow = React.memo(
       });
 
     return (
-      <tr className="group border-t border-slate-200 hover:bg-slate-400 hover:text-slate-900">
-        <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{rowIndex + 1}</td>
+      <tr className="group border-t border-slate-200">
+        <td className="px-3 py-1.5 text-slate-800">{rowIndex + 1}</td>
         {showStageColumn && (
-          <td className="px-3 py-1.5 font-mono text-xs text-slate-700 group-hover:text-slate-900 whitespace-nowrap">
+          <td className="px-3 py-1.5 font-mono text-xs text-slate-700 whitespace-nowrap">
             {row.stage_name || "—"}
           </td>
         )}
 
         {/* Material Code — read-only, auto-filled */}
-        <td className="px-3 py-1.5 font-mono text-sm text-slate-700 group-hover:text-slate-900 whitespace-nowrap">
+        <td className="px-3 py-1.5 font-mono text-sm text-slate-700 whitespace-nowrap">
           {row.material_no ? formatCode("M", row.material_no) : "—"}
         </td>
 
         {/* Material Name combobox */}
-        <td className="px-3 py-1.5">
+        <td className="px-3 py-1.5 group-hover:bg-rowhover">
           {readOnly ? (
-            <span className="text-slate-800 group-hover:text-slate-900">{row.material_name}</span>
+            <span className="text-slate-800">{row.material_name}</span>
           ) : (
             <Combobox
-              className="group-hover:bg-slate-400 group-hover:border-slate-500"
+              className="group-hover:bg-rowhover group-hover:border-slate-400"
               options={materialOptions}
               value={row.material_id}
               onChange={(v) => handleMaterialSelect(row._key, v)}
@@ -303,19 +303,19 @@ const TransactionRow = React.memo(
 
         {/* HSN — read-only, auto-filled, issue mode and invoice mode */}
         {(isIssueMode || isInvoiceMode) && (
-          <td className="px-3 py-1.5 font-mono text-sm text-slate-800 group-hover:text-slate-900 whitespace-nowrap">
+          <td className="px-3 py-1.5 font-mono text-sm text-slate-800 whitespace-nowrap">
             {row.hsn_code || "—"}
           </td>
         )}
 
         {/* Supplier combobox — PO mode only */}
         {!isIssueMode && !isInvoiceMode && (
-          <td className="px-3 py-1.5">
+          <td className="px-3 py-1.5 group-hover:bg-rowhover">
             {readOnly ? (
-              <span className="text-slate-800 group-hover:text-slate-900">{row.supplier_name || "—"}</span>
+              <span className="text-slate-800">{row.supplier_name || "—"}</span>
             ) : (
               <Combobox
-                className="group-hover:bg-slate-400 group-hover:border-slate-500"
+                className="group-hover:bg-rowhover group-hover:border-slate-400"
                 options={supplierOptions}
                 value={row.supplier_id}
                 onChange={(v) => handleSupplierSelect(row._key, v)}
@@ -334,12 +334,12 @@ const TransactionRow = React.memo(
 
         {/* Contractor combobox — issue mode only (optional, nullable) */}
         {isIssueMode && (
-          <td className="px-3 py-1.5">
+          <td className="px-3 py-1.5 group-hover:bg-rowhover">
             {readOnly ? (
-              <span className="text-slate-800 group-hover:text-slate-900">{row.contractor_name || "—"}</span>
+              <span className="text-slate-800">{row.contractor_name || "—"}</span>
             ) : (
               <Combobox
-                className="group-hover:bg-slate-400 group-hover:border-slate-500"
+                className="group-hover:bg-rowhover group-hover:border-slate-400"
                 options={contractorOptions}
                 value={row.contractor_id}
                 onChange={(v) => handleContractorSelect(row._key, v)}
@@ -421,7 +421,7 @@ const TransactionRow = React.memo(
               ⚠ Not set
             </span>
           ) : (
-            <span className="text-slate-800 group-hover:text-slate-900">{row.unit_name || "—"}</span>
+            <span className="text-slate-800">{row.unit_name || "—"}</span>
           )}
         </td>
 
@@ -489,7 +489,7 @@ const TransactionRow = React.memo(
 
         {/* Tax Amt — invoice mode with showTaxColumns: combined tax per line (read-only), shown before Amount */}
         {isInvoiceMode && showTaxColumns && (
-          <td className="px-3 py-1.5 text-right text-slate-800 group-hover:text-slate-900 tabular-nums">
+          <td className="px-3 py-1.5 text-right text-slate-800 tabular-nums">
             {fmt2(
               (parseFloat(row.cgst_amount || "0") +
                parseFloat(row.sgst_amount || "0") +
@@ -499,7 +499,7 @@ const TransactionRow = React.memo(
         )}
 
         {/* Amount — tax-inclusive display; stored amount is pre-tax */}
-        <td className="px-3 py-1.5 text-right font-medium text-slate-800 group-hover:text-slate-900 tabular-nums">
+        <td className="px-3 py-1.5 text-right font-medium text-slate-800 tabular-nums">
           {fmt2(
             (parseFloat(row.amount || "0") +
              parseFloat(row.cgst_amount || "0") +

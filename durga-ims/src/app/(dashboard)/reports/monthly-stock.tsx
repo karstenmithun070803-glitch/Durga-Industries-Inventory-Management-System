@@ -313,7 +313,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                     ? r.closing_stock * effectiveRate
                     : null;
                   return (
-                    <tr key={r.material_id} className="border-t border-slate-200 hover:bg-slate-100">
+                    <tr key={r.material_id} className="border-t border-slate-200 hover:bg-rowhover">
                       <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">
                         <span className="font-mono text-slate-700 mr-1.5">
                           M-{String(r.material_no).padStart(4, "0")}

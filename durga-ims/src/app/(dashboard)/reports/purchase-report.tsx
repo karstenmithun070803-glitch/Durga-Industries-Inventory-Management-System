@@ -344,7 +344,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                     <tr><td colSpan={showTaxAmt ? 7 : 6} className="px-3 py-8 text-center text-slate-700">No received purchases in selected range.</td></tr>
                   ) : (
                     monthlyRows.map((r) => (
-                      <tr key={r.key} className="border-t border-slate-200 hover:bg-slate-100">
+                      <tr key={r.key} className="border-t border-slate-200 hover:bg-rowhover">
                         <td className="px-3 py-1.5 whitespace-nowrap font-medium text-slate-800">{r.monthLabel}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.supplier}</td>
                         <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.material}</td>
@@ -393,7 +393,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
                       <tr
                         key={r.item_id}
                         className={cn(
-                          "hover:bg-slate-100",
+                          "hover:bg-rowhover",
                           itemIdx === 0 ? "border-t-2 border-slate-200" : "border-t border-slate-200"
                         )}
                       >

@@ -207,7 +207,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                   {visible.map((v, i) => (
                     <tr
                       key={v.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !v.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !v.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(v)}
                     >
                       <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>

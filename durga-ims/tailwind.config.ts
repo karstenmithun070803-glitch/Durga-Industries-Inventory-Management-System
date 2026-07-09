@@ -22,6 +22,9 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        // System-B cursor/hover fill ("slate-250" — between slate-200 and slate-300).
+        // Single source of truth for every row/dropdown hover band; retune here.
+        rowhover: "#d6dee8",
       },
       borderRadius: {
         lg: "var(--radius)",

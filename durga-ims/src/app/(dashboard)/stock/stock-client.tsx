@@ -467,14 +467,14 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
           <table className="min-w-max text-sm w-full">
             <thead className="bg-slate-50 sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Code</th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Material Name</th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Unit</th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Current Stock</th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Last PO Rate (incl. GST)</th>
-                <th className="px-3 py-2.5 text-right font-medium text-slate-600 whitespace-nowrap">Stock Value (incl. GST)</th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Status</th>
-                <th className="px-3 py-2.5 text-left font-medium text-slate-600 whitespace-nowrap">Actions</th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Code</th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Material Name</th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Unit</th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Current Stock</th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Last PO Rate (incl. GST)</th>
+                <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Stock Value (incl. GST)</th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Status</th>
+                <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -502,25 +502,25 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                       key={row.id}
                       data-highlighted={isHighlighted || undefined}
                       className={cn(
-                        "border-t border-slate-100 hover:bg-slate-50/80 transition-colors cursor-pointer",
+                        "border-t border-slate-200 hover:bg-rowhover transition-colors cursor-pointer",
                         rowBg,
-                        isHighlighted && "ring-1 ring-inset ring-blue-400 bg-blue-50"
+                        isHighlighted && "ring-1 ring-inset ring-blue-500 bg-blue-50"
                       )}
                       onClick={() => openHistory(row)}
                     >
-                      <td className="px-3 py-2 whitespace-nowrap text-slate-600 font-mono text-xs">
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-800 font-mono text-xs">
                         {formatCode("M", row.material_no)}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-800">
                         {row.name}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-slate-600">
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-800">
                         {row.unit_name ?? "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right font-semibold text-slate-800">
                         {fmtQty(row.current_stock)}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-slate-800">
                         {rate !== null ? (
                           <span
                             className={cn("inline-flex items-center gap-1 justify-end", isStdRate && "italic text-slate-700")}
@@ -530,7 +530,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                           </span>
                         ) : "—"}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right text-slate-600">
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-slate-800">
                         {value !== null ? fmtAmt(value) : "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">

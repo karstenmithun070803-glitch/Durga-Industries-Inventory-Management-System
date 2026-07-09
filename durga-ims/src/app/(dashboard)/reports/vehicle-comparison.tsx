@@ -241,7 +241,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
               </thead>
               <tbody>
                 {displayRows.map((r, i) => (
-                  <tr key={`${r.code}-${r.stage_name}`} className="border-t border-slate-200 hover:bg-slate-100">
+                  <tr key={`${r.code}-${r.stage_name}`} className="border-t border-slate-200 hover:bg-rowhover">
                     <td className="px-3 py-1.5 text-slate-800">{i + 1}</td>
                     <td className="px-3 py-1.5 text-slate-800">{r.material_name}</td>
                     <td className="px-3 py-1.5 text-slate-800">{r.stage_name}</td>

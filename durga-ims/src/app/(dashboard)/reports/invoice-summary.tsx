@@ -248,7 +248,7 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
                   <tr
                     key={r.id}
                     className={cn(
-                      "border-t border-slate-200 hover:bg-slate-100",
+                      "border-t border-slate-200 hover:bg-rowhover",
                       r.status === "Cancelled" && "opacity-60 line-through-cells"
                     )}
                   >

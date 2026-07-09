@@ -144,9 +144,9 @@ export function Combobox({
         className={cn(
           buttonVariants({ variant: "outline" }),
           "w-full justify-between h-9 font-normal",
-          // System B (cursor location): a dropdown-with-data lights up in neutral slate-400
-          // when hovered or open — deliberately NOT blue (blue = option-selection only).
-          "hover:bg-slate-400 hover:text-slate-900 aria-expanded:bg-slate-400 aria-expanded:text-slate-900",
+          // System B (cursor location): a dropdown-with-data lights up in the neutral
+          // rowhover shade when hovered or open — deliberately NOT blue (blue = option-selection only).
+          "hover:bg-rowhover hover:text-slate-900 aria-expanded:bg-rowhover aria-expanded:text-slate-900",
           className
         )}
         onKeyDown={handleTriggerKeyDown}

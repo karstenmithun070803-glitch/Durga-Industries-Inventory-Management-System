@@ -471,7 +471,7 @@ export function NewVMIClient({
     setRecordStatus(null);
   }
 
-  function populateForm(record: MaterialIssueWithDetails) {
+  async function populateForm(record: MaterialIssueWithDetails) {
     setLoadedRecord(record);
     setHasExistingRecord(true);
     setRecordStatus("Issued");
@@ -506,7 +506,65 @@ export function NewVMIClient({
     }
     setIssueDate(toISODate(record.issue_date));
     setMarginPct(record.margin_percentage ?? "0");
-    setRows(miItemsToRows(record, record.margin_percentage ?? "0"));
+
+    const marginPctVal = record.margin_percentage ?? "0";
+    const factor = 1 + parseFloat(marginPctVal) / 100;
+    const dbRows = miItemsToRows(record, marginPctVal);
+
+    if ((record.saved_stage_ids ?? []).length > 0) {
+      const unsavedStages = stages.filter((s) => !record.saved_stage_ids.includes(s.id));
+      if (unsavedStages.length > 0) {
+        setLoadingStageIds((prev) => { const s = new Set(prev); unsavedStages.forEach((st) => s.add(st.id)); return s; });
+        try {
+          const grouped = await getAllStageMaterials();
+          const autoRows: LineItemDraft[] = unsavedStages.flatMap((stage) => {
+            const mats = grouped[stage.id] ?? [];
+            return mats.map((m) => {
+              const baseRate = m.last_po_rate ?? "0";
+              const displayRate = factor > 1 ? (parseFloat(baseRate) * factor).toFixed(4) : baseRate;
+              const taxPct = m.tax_percentage ?? "0";
+              return {
+                _key: crypto.randomUUID(),
+                stage_id: stage.id,
+                stage_name: stage.stage_name,
+                material_id: m.material_id,
+                material_name: m.material_name,
+                material_no: m.material_no,
+                hsn_code: m.hsn_code ?? "",
+                supplier_id: "",
+                supplier_name: "",
+                gst_type: gstType,
+                qty: m.default_qty,
+                unit_id: m.unit_id,
+                unit_name: m.unit_name,
+                rate: displayRate,
+                baseRate: baseRate,
+                tax_percentage: taxPct,
+                rateBlank: m.last_po_rate === null,
+                zeroRateConfirmed: false,
+                contractor_id: "",
+                contractor_name: "",
+                affects_inventory: true,
+                ...computeRowAmounts(m.default_qty, displayRate, taxPct, gstType),
+              };
+            });
+          });
+          setRows([...dbRows, ...autoRows]);
+        } catch {
+          toast.error("Failed to auto-load unsaved stage materials");
+          setRows(dbRows);
+        } finally {
+          setLoadingStageIds((prev) => { const s = new Set(prev); unsavedStages.forEach((st) => s.delete(st.id)); return s; });
+        }
+      } else {
+        // All master stages are issued — no unsaved stages to auto-load
+        setRows(dbRows);
+      }
+    } else {
+      // Old single-stage Issued record
+      setRows(dbRows);
+    }
+
     setIsDirty(false);
     setVehicleIssueDates((prev) => [
       ...prev.filter((d) => d.vehicleId !== record.vehicle_id),
@@ -603,7 +661,7 @@ export function NewVMIClient({
         if (record.status === "Draft") {
           await populateDraftForm(record);
         } else {
-          populateForm(record);
+          await populateForm(record);
         }
       } else {
         setVehicleId(vehId);
@@ -864,7 +922,9 @@ export function NewVMIClient({
   }
 
   function buildPayload() {
-    const filled = rows.filter((r) => r.material_id);
+    const filled = (recordStatus === "Issued" && savedStageIds.length > 0)
+      ? rows.filter((r) => r.material_id && r.stage_id && savedStageIds.includes(r.stage_id))
+      : rows.filter((r) => r.material_id);
     const { grand } = calcTotals(filled);
     return {
       vehicle_id: vehicleId,
@@ -1100,7 +1160,10 @@ export function NewVMIClient({
   // Ctrl+Shift+E — works on Mac and Windows without browser/extension interception
   useHotkeys("ctrl+shift+e", (e) => { e.preventDefault(); toggleF2Mode(); }, { enableOnFormTags: true });
 
-  const { subtotal, cgst, sgst, igst, grand } = calcTotals(rows);
+  const displayRows = (recordStatus === "Issued" && savedStageIds.length > 0)
+    ? rows.filter((r) => r.material_id && r.stage_id && savedStageIds.includes(r.stage_id))
+    : rows;
+  const { subtotal, cgst, sgst, igst, grand } = calcTotals(displayRows);
   const hasFormContent = !!vehicleId;
 
   const vehicleOptions = useMemo(() => {

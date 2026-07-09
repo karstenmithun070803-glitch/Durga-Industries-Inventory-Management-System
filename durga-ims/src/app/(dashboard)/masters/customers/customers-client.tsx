@@ -226,12 +226,12 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                     return (
                     <tr
                       key={c.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-slate-400 hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-slate-100" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(c)}
                     >
-                      <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
-                      <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("C", c.customer_no)}</td>
-                      <td className={`px-3 py-1.5 font-medium group-hover:bg-slate-400 group-hover:text-slate-900 sticky left-40 z-10 w-44 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.15)] ${stickyBg}`}>{c.customer_name}</td>
+                      <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-rowhover group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
+                      <td className={`px-3 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:bg-rowhover group-hover:text-slate-900 sticky left-12 z-10 w-28 ${stickyBg}`}>{formatCode("C", c.customer_no)}</td>
+                      <td className={`px-3 py-1.5 font-medium group-hover:bg-rowhover group-hover:text-slate-900 sticky left-40 z-10 w-44 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.15)] ${stickyBg}`}>{c.customer_name}</td>
                       <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900 whitespace-nowrap">{addr}</td>
                       <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{c.city ?? "—"}</td>
                       <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{c.state ?? "—"}</td>

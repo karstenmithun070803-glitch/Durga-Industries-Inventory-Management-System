@@ -303,7 +303,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                     <tr
                       key={r.code}
                       className={cn(
-                        "border-t border-slate-200 hover:bg-slate-100",
+                        "border-t border-slate-200 hover:bg-rowhover",
                         r.is_direct && "bg-amber-50/60 italic"
                       )}
                     >
@@ -333,7 +333,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                 </thead>
                 <tbody>
                   {displayMaterialRows.map((r, i) => (
-                    <tr key={r.code + i} className="border-t border-slate-200 hover:bg-slate-100">
+                    <tr key={r.code + i} className="border-t border-slate-200 hover:bg-rowhover">
                       <td className="px-3 py-1.5 text-slate-800">{i + 1}</td>
                       <td className="px-3 py-1.5 font-mono text-slate-800">{r.code}</td>
                       <td className="px-3 py-1.5 text-slate-700">{r.name}</td>

@@ -557,7 +557,7 @@ export function StagesClient({ stages, materials, units }: Props) {
                           ? "ring-1 ring-inset ring-blue-500 bg-blue-50"
                           : !s.is_active
                           ? "opacity-50 bg-slate-50 hover:bg-slate-100"
-                          : "hover:bg-slate-400 hover:text-slate-900"
+                          : "hover:bg-rowhover hover:text-slate-900"
                       }`}
                     >
                       <td className="px-3 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
