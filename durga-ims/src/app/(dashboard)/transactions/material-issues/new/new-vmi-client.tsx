@@ -758,6 +758,32 @@ export function NewVMIClient({
       setActiveStageId(orderedStageIds[next]);
   }
 
+  /**
+   * Plain ←/→ anywhere in the stage bar steps to the prev/next stage and KEEPS focus
+   * on the bar, so the user can keep browsing. (mod+←/→ additionally drops into row-1
+   * Material — see handleRootCapture.) Bubble phase is fine: arrow keydowns on a
+   * base-ui PopoverTrigger do reach this ancestor container.
+   */
+  function handleStageBarKeyDown(e: React.KeyboardEvent) {
+    // The dropdown owns its keys. It is portaled, but React still bubbles its events
+    // here; `stageDropOpen` can also lag the DOM by a render, so check both.
+    if (stageDropOpen || document.querySelector("[cmdk-root]")) return;
+    // mod+Arrow is handled (and stopped) by handleRootCapture in the capture phase.
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    // Nothing to navigate → return BEFORE preventDefault so the key isn't swallowed.
+    if (isPending || isAnyStageLoading) return;
+    if (!activeStageId || orderedStageIds.length < 2) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    navigateStage(e.key === "ArrowRight" ? 1 : -1); // clamps at both ends, no wrap
+
+    // Focus the trigger SYNCHRONOUSLY: at an end the ‹/› chevron you're standing on
+    // becomes disabled on the next render, which would drop focus to <body>.
+    stageSectionRef.current?.querySelector<HTMLElement>("[data-stage-trigger]")?.focus();
+  }
+
   function handleStageNavChange(val: string) {
     if (!val) return;
     if (selectedStageIds.includes(val)) {
@@ -1217,7 +1243,7 @@ export function NewVMIClient({
 
               {/* Stage navigator */}
               {vehicleId && (
-                <div className="flex items-center gap-2" ref={stageSectionRef}>
+                <div className="flex items-center gap-2" ref={stageSectionRef} onKeyDown={handleStageBarKeyDown}>
                   <span className="text-sm text-slate-600 w-28 shrink-0">Stage</span>
                   {f2Mode && (
                     <span className="text-xs font-semibold text-amber-700 bg-amber-100 rounded px-2 py-0.5">
