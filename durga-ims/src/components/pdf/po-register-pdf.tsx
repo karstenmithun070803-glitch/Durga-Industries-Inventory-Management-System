@@ -95,9 +95,9 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
             {/* ── Info block ── */}
             <View style={{ flexDirection: "row", marginBottom: 3 }}>
               <Text style={styles.infoLineLabel}>PURCHASE ORDER NO.</Text>
-              <Text style={{ fontSize: 10, fontFamily: "Times-Bold", flex: 1 }}>: {poLabel}</Text>
-              <Text style={[styles.infoLineLabel, { width: 50 }]}>DATE</Text>
-              <Text style={[styles.infoLineValue, { width: 80 }]}>: {fmtDate(first.po_date)}</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Times-Bold", flex: 1 }}>: {poLabel}</Text>
+              <Text style={{ fontSize: 11, color: "#000" }}>DATE</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Times-Bold", color: "#000", marginLeft: 4 }}>: {fmtDate(first.po_date)}</Text>
             </View>
             <View style={styles.infoLine}>
               <Text style={styles.infoLineLabel}>SUPPLIER NAME</Text>

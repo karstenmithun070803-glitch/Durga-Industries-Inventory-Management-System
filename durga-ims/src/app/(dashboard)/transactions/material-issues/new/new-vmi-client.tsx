@@ -1160,9 +1160,9 @@ export function NewVMIClient({
   // Ctrl+Shift+E — works on Mac and Windows without browser/extension interception
   useHotkeys("ctrl+shift+e", (e) => { if (overlayOpen()) return; e.preventDefault(); toggleF2Mode(); }, { enableOnFormTags: true });
 
-  const displayRows = (recordStatus === "Issued" && savedStageIds.length > 0)
-    ? rows.filter((r) => r.material_id && r.stage_id && savedStageIds.includes(r.stage_id))
-    : rows;
+  const displayRows = (recordStatus === "Issued" && savedStageIds.length === 0)
+    ? rows
+    : rows.filter((r) => r.material_id && r.stage_id && savedStageIds.includes(r.stage_id));
   const { subtotal, cgst, sgst, igst, grand } = calcTotals(displayRows);
   const hasFormContent = !!vehicleId;
 
