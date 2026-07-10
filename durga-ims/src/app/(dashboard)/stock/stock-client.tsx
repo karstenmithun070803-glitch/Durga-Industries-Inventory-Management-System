@@ -26,12 +26,14 @@ import {
   getStockMovementHistory,
   adjustStock,
   getStockForMaterial,
+  getPriceHistory,
 } from "@/lib/actions/stock.actions";
 import type {
   StockMaterialRow,
   StockSummary,
   StockLedgerEntry,
   DraftCommitmentsResult,
+  PriceHistoryEntry,
 } from "@/lib/actions/stock.actions";
 import { History, SlidersHorizontal, RefreshCw, ShoppingCart, AlertTriangle } from "lucide-react";
 import Link from "next/link";
@@ -58,6 +60,12 @@ function fmtLargeAmt(v: number): string {
   if (v >= 1_00_000)    return "₹" + Math.round(v).toLocaleString("en-IN");
   if (v >= 1_000)       return `₹${(v / 1_000).toFixed(1)} K`;
   return fmtAmt(v);
+}
+
+function fmtDate(d: Date): string {
+  return new Date(d).toLocaleDateString("en-IN", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
 }
 
 function fmtDateTime(d: Date): string {
@@ -139,6 +147,11 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
   const [historyMaterial, setHistoryMaterial] = useState<StockMaterialRow | null>(null);
   const [historyEntries, setHistoryEntries] = useState<StockLedgerEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyTab, setHistoryTab] = useState<"movement" | "prices">("movement");
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
+  const [priceHistoryFetched, setPriceHistoryFetched] = useState(false);
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
+  const priceHistoryRequestRef = useRef<string | null>(null);
 
   // Adjustment dialog
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -267,9 +280,29 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
     setHistoryOpen(true);
     setHistoryLoading(true);
     setHistoryEntries([]);
+    setHistoryTab("movement");
+    setPriceHistory([]);
+    setPriceHistoryFetched(false);
+    setPriceHistoryLoading(false);
+    priceHistoryRequestRef.current = null;
     const entries = await getStockMovementHistory(mat.id, 100);
     setHistoryEntries(entries);
     setHistoryLoading(false);
+  }
+
+  async function switchToTab(tab: "movement" | "prices") {
+    setHistoryTab(tab);
+    if (tab === "prices" && !priceHistoryFetched && historyMaterial) {
+      const fetchForId = historyMaterial.id;
+      priceHistoryRequestRef.current = fetchForId;
+      setPriceHistoryLoading(true);
+      const rows = await getPriceHistory(fetchForId);
+      if (priceHistoryRequestRef.current === fetchForId) {
+        setPriceHistory(rows);
+        setPriceHistoryFetched(true);
+        setPriceHistoryLoading(false);
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -582,8 +615,8 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
 
       {/* ── Stock History Drawer ── */}
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent data-testid="stock-ledger-drawer" className="w-[560px] sm:max-w-[560px] overflow-y-auto">
-          <SheetHeader>
+        <SheetContent data-testid="stock-ledger-drawer" className="w-[560px] sm:max-w-[560px] overflow-hidden flex flex-col">
+          <SheetHeader className="shrink-0">
             <SheetTitle className="text-base">
               Stock History — {historyMaterial?.name}
               <span className="ml-2 text-xs font-normal text-slate-700 font-mono">
@@ -591,73 +624,156 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               </span>
             </SheetTitle>
           </SheetHeader>
-          <div className="mt-4">
-            {historyLoading ? (
-              <p className="text-sm text-slate-700 py-8 text-center">Loading history…</p>
-            ) : historyEntries.length === 0 ? (
-              <p className="text-sm text-slate-700 py-8 text-center">No movement history for this material.</p>
+
+          {/* Segmented tab toggle — pinned, never scrolls */}
+          <div className="shrink-0 flex px-1 py-3 border-b border-slate-100">
+            <div className="flex bg-slate-100 rounded-lg p-0.5 gap-0.5">
+              {(["movement", "prices"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => switchToTab(t)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-md text-xs font-medium transition-all",
+                    historyTab === t
+                      ? "bg-slate-800 text-white shadow-sm"
+                      : "text-slate-600 hover:text-slate-800"
+                  )}
+                >
+                  {t === "movement" ? "Stock Movement" : "Price History"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="overflow-y-auto flex-1 mt-2">
+            {historyTab === "movement" ? (
+              <>
+                {historyLoading ? (
+                  <p className="text-sm text-slate-700 py-8 text-center">Loading history…</p>
+                ) : historyEntries.length === 0 ? (
+                  <p className="text-sm text-slate-700 py-8 text-center">No movement history for this material.</p>
+                ) : (
+                  <>
+                    <div className="overflow-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-50">
+                            <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Date & Time</th>
+                            <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Type</th>
+                            <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Reference</th>
+                            <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Change</th>
+                            <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Stock After</th>
+                            <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap" title="Value impact for manual adjustments (qty × base rate at time of adjustment, excl. GST)">Value Δ</th>
+                            <th className="px-2 py-2 text-left font-medium text-slate-600">Note</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historyEntries.map((e) => {
+                            const change = parseFloat(e.qty_change);
+                            const isPos = change >= 0;
+                            const isAdjustment = e.transaction_type === "ADJUSTMENT";
+                            const valueImpact = isAdjustment && e.rate_at_time
+                              ? change * parseFloat(e.rate_at_time)
+                              : null;
+                            return (
+                              <tr key={e.id} className="border-t border-slate-100">
+                                <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">{fmtDateTime(e.created_at)}</td>
+                                <td className="px-2 py-1.5 whitespace-nowrap">
+                                  <span className={cn("px-1.5 py-0.5 rounded text-xs font-medium", LEDGER_TYPE_COLOR[e.transaction_type] ?? "bg-slate-100 text-slate-600")}>
+                                    {LEDGER_TYPE_LABELS[e.transaction_type] ?? e.transaction_type.replace("_", " ")}
+                                  </span>
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">{e.reference_label}</td>
+                                <td className={cn("px-2 py-1.5 whitespace-nowrap text-right font-semibold", isPos ? "text-green-600" : "text-red-600")}>
+                                  {isPos ? "+" : ""}{fmtQty(e.qty_change)}
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-right text-slate-700">{fmtQty(e.stock_after)}</td>
+                                <td
+                                  className="px-2 py-1.5 whitespace-nowrap text-right"
+                                  title={isAdjustment && !e.rate_at_time ? "Rate data not available for this adjustment" : ""}
+                                >
+                                  {valueImpact !== null ? (
+                                    <span className={valueImpact >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                                      {valueImpact >= 0 ? "+" : ""}{"₹" + Math.abs(valueImpact).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300">—</span>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5 text-slate-700 max-w-[120px] truncate" title={e.reason ?? ""}>
+                                  {e.reason ? (e.reason.length > 80 ? e.reason.slice(0, 80) + "…" : e.reason) : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {historyEntries.length === 100 && (
+                      <p className="text-xs text-slate-700 text-center py-2">
+                        Showing last 100 movements. For older history use the Monthly Stock Report.
+                      </p>
+                    )}
+                  </>
+                )}
+              </>
             ) : (
               <>
-                <div className="overflow-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-slate-50">
-                        <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Date & Time</th>
-                        <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Type</th>
-                        <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">Reference</th>
-                        <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Change</th>
-                        <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Stock After</th>
-                        <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap" title="Value impact for manual adjustments (qty × base rate at time of adjustment, excl. GST)">Value Δ</th>
-                        <th className="px-2 py-2 text-left font-medium text-slate-600">Note</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historyEntries.map((e) => {
-                        const change = parseFloat(e.qty_change);
-                        const isPos = change >= 0;
-                        const isAdjustment = e.transaction_type === "ADJUSTMENT";
-                        const valueImpact = isAdjustment && e.rate_at_time
-                          ? change * parseFloat(e.rate_at_time)
-                          : null;
-                        return (
-                          <tr key={e.id} className="border-t border-slate-100">
-                            <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">{fmtDateTime(e.created_at)}</td>
-                            <td className="px-2 py-1.5 whitespace-nowrap">
-                              <span className={cn("px-1.5 py-0.5 rounded text-xs font-medium", LEDGER_TYPE_COLOR[e.transaction_type] ?? "bg-slate-100 text-slate-600")}>
-                                {LEDGER_TYPE_LABELS[e.transaction_type] ?? e.transaction_type.replace("_", " ")}
-                              </span>
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">{e.reference_label}</td>
-                            <td className={cn("px-2 py-1.5 whitespace-nowrap text-right font-semibold", isPos ? "text-green-600" : "text-red-600")}>
-                              {isPos ? "+" : ""}{fmtQty(e.qty_change)}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-right text-slate-700">{fmtQty(e.stock_after)}</td>
-                            <td
-                              className="px-2 py-1.5 whitespace-nowrap text-right"
-                              title={isAdjustment && !e.rate_at_time ? "Rate data not available for this adjustment" : ""}
-                            >
-                              {valueImpact !== null ? (
-                                <span className={valueImpact >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-                                  {valueImpact >= 0 ? "+" : ""}{"₹" + Math.abs(valueImpact).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300">—</span>
-                              )}
-                            </td>
-                            <td className="px-2 py-1.5 text-slate-700 max-w-[120px] truncate" title={e.reason ?? ""}>
-                              {e.reason ? (e.reason.length > 80 ? e.reason.slice(0, 80) + "…" : e.reason) : "—"}
-                            </td>
+                {priceHistoryLoading ? (
+                  <p className="text-sm text-slate-700 py-8 text-center">Loading prices…</p>
+                ) : priceHistoryFetched && priceHistory.length === 0 ? (
+                  <p className="text-sm text-slate-700 py-8 text-center">No price history yet. Prices appear once a PO for this material is received.</p>
+                ) : priceHistoryFetched ? (
+                  <>
+                    <div className="overflow-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-50">
+                            <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">PO Date</th>
+                            <th className="px-2 py-2 text-left font-medium text-slate-600 whitespace-nowrap">PO Ref</th>
+                            <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Rate incl. GST</th>
+                            <th className="px-2 py-2 text-right font-medium text-slate-600 whitespace-nowrap">Change</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {historyEntries.length === 100 && (
-                  <p className="text-xs text-slate-700 text-center py-2">
-                    Showing last 100 movements. For older history use the Monthly Stock Report.
-                  </p>
-                )}
+                        </thead>
+                        <tbody>
+                          {priceHistory.map((row, i) => {
+                            const currRate = parseFloat(row.base_rate);
+                            const prevRow = priceHistory[i + 1];
+                            const prevRate = prevRow ? parseFloat(prevRow.base_rate) : null;
+                            const pct = prevRate !== null && prevRate !== 0
+                              ? ((currRate - prevRate) / prevRate) * 100
+                              : null;
+                            return (
+                              <tr key={row.id} className="border-t border-slate-100">
+                                <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">{fmtDate(row.po_date)}</td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-slate-600 font-mono">{formatCode("D-", row.po_number)}</td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-right font-semibold text-slate-800">
+                                  {row.rate_incl_gst !== null ? fmtAmt(parseFloat(row.rate_incl_gst)) : "—"}
+                                </td>
+                                <td className="px-2 py-1.5 whitespace-nowrap text-right">
+                                  {pct === null || pct === 0 ? (
+                                    <span className="text-slate-300">—</span>
+                                  ) : pct > 0 ? (
+                                    <span className="text-red-600 font-medium">↑ {pct.toFixed(1)}%</span>
+                                  ) : (
+                                    <span className="text-green-600 font-medium">↓ {Math.abs(pct).toFixed(1)}%</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {priceHistory.length === 50 && (
+                      <p className="text-xs text-slate-700 text-center py-2">
+                        Showing last 50 price entries.
+                      </p>
+                    )}
+                  </>
+                ) : null}
               </>
             )}
           </div>

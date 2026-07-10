@@ -6,6 +6,7 @@ import {
   units,
   stockLedger,
   purchaseOrders,
+  purchaseOrderItems,
   materialIssues,
   materialIssueItems,
   contractors,
@@ -528,4 +529,49 @@ export async function getJobCostData(vehicleId: string): Promise<JobCostResult |
     rows,
     totals: { total_cost },
   };
+}
+
+// ---------------------------------------------------------------------------
+// getPriceHistory — purchase price trend for a material
+// ---------------------------------------------------------------------------
+
+export interface PriceHistoryEntry {
+  id: string;
+  po_date: Date;
+  po_number: number;
+  base_rate: string;            // excl. GST — used for Change % computation, not displayed
+  rate_incl_gst: string | null; // null only when qty = 0 (pathological edge case)
+}
+
+export async function getPriceHistory(
+  materialId: string,
+  limit = 50
+): Promise<PriceHistoryEntry[]> {
+  return db
+    .select({
+      id: purchaseOrderItems.id,
+      po_date: purchaseOrders.po_date,
+      po_number: purchaseOrders.po_number,
+      base_rate: purchaseOrderItems.rate,
+      rate_incl_gst: sql<string | null>`
+        ROUND(
+          (${purchaseOrderItems.amount}
+            + COALESCE(${purchaseOrderItems.cgst_amount}, 0)
+            + COALESCE(${purchaseOrderItems.sgst_amount}, 0)
+            + COALESCE(${purchaseOrderItems.igst_amount}, 0))
+          / NULLIF(${purchaseOrderItems.qty}, 0),
+          4
+        )
+      `,
+    })
+    .from(purchaseOrderItems)
+    .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
+    .where(
+      and(
+        eq(purchaseOrderItems.material_id, materialId),
+        eq(purchaseOrders.status, "Received"),
+      )
+    )
+    .orderBy(desc(purchaseOrders.po_date), desc(purchaseOrders.po_number))
+    .limit(limit);
 }

@@ -16,7 +16,7 @@ test.describe("stock reversal — revert received PO to Draft", () => {
   });
 
   test("revert to Draft: confirm dialog → status badge returns Draft", async ({ page }) => {
-    const poListItem = page.locator('text=PO-').first();
+    const poListItem = page.locator('button:has-text("D-")').first();
     if (!(await poListItem.isVisible({ timeout: 5_000 }).catch(() => false))) {
       test.skip();
       return;

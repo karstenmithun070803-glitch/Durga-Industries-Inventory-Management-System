@@ -147,7 +147,7 @@ test.describe("purchase orders — create → receive", () => {
     await filterDate.fill(TODAY_ISO);
     await page.waitForTimeout(300);
 
-    const listItem = page.locator('button:has-text("PO-")').first();
+    const listItem = page.locator('button:has-text("D-")').first();
     if (!(await listItem.isVisible({ timeout: 5_000 }).catch(() => false))) {
       test.skip();
       return;
@@ -160,7 +160,7 @@ test.describe("purchase orders — create → receive", () => {
   });
 
   test("receive PO: confirm dialog → status becomes Received", async ({ page }) => {
-    const poListItem = page.locator('text=PO-').first();
+    const poListItem = page.locator('button:has-text("D-")').first();
     if (!(await poListItem.isVisible({ timeout: 5_000 }).catch(() => false))) {
       test.skip();
       return;

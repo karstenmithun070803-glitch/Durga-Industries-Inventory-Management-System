@@ -34,7 +34,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { useFormSectionNav, focusGridRowZero } from "@/hooks/use-form-section-nav";
 import { toast } from "sonner";
 import { formatCode } from "@/lib/utils";
-import { AlertTriangle, ChevronLeft, ChevronRight, Search, FilePlus } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Search, FilePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PurchaseOrderWithDetails, LineItemDraft } from "@/types";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
@@ -426,6 +426,10 @@ export function PurchaseOrdersClient({
 
   function handleSelect(id: string) {
     if (!id) { clearForm(); return; }
+    // Re-picking the PO that is already loaded is a no-op: never refetch, and never pop the
+    // discard-changes dialog for a PO the user did not intend to change. (The ↑/↓ highlight
+    // starts on the loaded PO, so a reflexive Enter/click lands here.)
+    if (loadedPO && id === loadedPO.id) { setIsListOpen(false); return; }
     if (isDirty) {
       setPendingAction(() => () => { setIsListOpen(false); void loadPO(id); });
       setDiscardDialogOpen(true);
@@ -768,7 +772,10 @@ export function PurchaseOrdersClient({
         ref: poListRef,
         isDisabled: () => !(isListOpen && filteredPOs.length > 0),
         onActivate: () => {
-          setPoListHighlight(0);
+          // Start ↑/↓ on the PO already loaded in the form (falls back to row 0).
+          // `sections` is rebuilt every render, so these values are never stale.
+          const i = filteredPOs.findIndex((p) => p.id === loadedPO?.id);
+          setPoListHighlight(i >= 0 ? i : 0);
           poListRef.current?.focus();
         },
       },
@@ -799,10 +806,32 @@ export function PurchaseOrdersClient({
   useEffect(() => {
     if (pendingFocusList && isListOpen && filteredPOs.length > 0) {
       setPendingFocusList(false);
-      setPoListHighlight(0);
+      const i = filteredPOs.findIndex((p) => p.id === loadedPO?.id);
+      setPoListHighlight(i >= 0 ? i : 0);
       goToSection(SEC_POLIST);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingFocusList, isListOpen, filteredPOs.length, goToSection]);
+
+  // Filters shrink `filteredPOs` while `poListHighlight` persists — a stale index leaves NO
+  // row highlighted and makes Enter a silent no-op. Re-anchor on the loaded PO, else clamp.
+  useEffect(() => {
+    if (!isListOpen) return;
+    setPoListHighlight((prev) => {
+      const i = filteredPOs.findIndex((p) => p.id === loadedPO?.id);
+      if (i >= 0) return i;
+      return Math.min(prev, Math.max(filteredPOs.length - 1, 0));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListOpen, filterSupplier, filterDate, filteredPOs.length, loadedPO?.id]);
+
+  // Keep the ↑/↓ row visible: the list is `max-h-52 overflow-y-auto`. `block: "nearest"` is
+  // the least aggressive option (scrolls the list, not the page).
+  useEffect(() => {
+    if (!isListOpen) return;
+    const row = poListRef.current?.children[poListHighlight] as HTMLElement | undefined;
+    row?.scrollIntoView({ block: "nearest" });
+  }, [poListHighlight, isListOpen]);
 
   // Deferred focus into the grid (Material row 1) after a PO finishes loading.
   useEffect(() => {
@@ -831,6 +860,7 @@ export function PurchaseOrdersClient({
     } else if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
+      // handleSelect no-ops (just closes) when this PO is already loaded.
       const po = filteredPOs[poListHighlight];
       if (po) handleSelect(po.id);
     } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
@@ -907,20 +937,45 @@ export function PurchaseOrdersClient({
                   onKeyDown={handlePoListKeyDown}
                   className="mt-2 max-h-52 overflow-y-auto border border-slate-200 rounded-md divide-y divide-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
-                  {filteredPOs.map((po, idx) => (
+                  {filteredPOs.map((po, idx) => {
+                    // Two independent facts, two distinct visuals:
+                    //   blue  = this PO is loaded in the form
+                    //   grey  = this is the row ↑/↓ is sitting on
+                    //   deeper blue = both (↑/↓ is on the loaded PO)
+                    const isLoaded = po.id === loadedPO?.id;
+                    const isCursor = idx === poListHighlight;
+                    return (
                     <button
                       key={po.id}
                       tabIndex={-1}
+                      aria-current={isLoaded ? "true" : undefined}
                       onClick={() => handleSelect(po.id)}
-                      onMouseEnter={() => setPoListHighlight(idx)}
-                      className={`w-full flex items-center gap-4 px-3 py-2 text-sm text-left transition-colors ${
-                        idx === poListHighlight
-                          ? "bg-blue-100"
-                          : po.id === loadedPO?.id
-                          ? "bg-blue-100"
-                          : "hover:bg-blue-100"
-                      }`}
+                      // onPointerMove (not onMouseEnter): a row scrolling under a stationary
+                      // pointer must not steal the highlight from the keyboard.
+                      onPointerMove={() => setPoListHighlight(idx)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors",
+                        // blue-200 (not -100) for "loaded": measured against the neutral
+                        // rowhover grey, blue-100 separated only by ~22 in the blue channel,
+                        // which is what made two tinted rows read as "both selected".
+                        isLoaded && isCursor
+                          ? "bg-blue-300"
+                          : isLoaded
+                          ? "bg-blue-200"
+                          : isCursor
+                          ? "bg-rowhover"
+                          : "hover:bg-rowhover"
+                      )}
                     >
+                      {/* Colour-independent marker for the loaded PO. opacity-0 keeps the
+                          slot reserved so loaded and non-loaded rows stay aligned. */}
+                      <Check
+                        aria-hidden="true"
+                        className={cn(
+                          "w-3.5 h-3.5 shrink-0 text-blue-700",
+                          isLoaded ? "opacity-100" : "opacity-0"
+                        )}
+                      />
                       <span className="font-mono font-medium text-slate-800 w-16 shrink-0">
                         {formatCode("D-",po.poNumber, 4)}
                       </span>
@@ -936,7 +991,8 @@ export function PurchaseOrdersClient({
                         {po.status}
                       </span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
