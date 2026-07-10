@@ -3,14 +3,19 @@ import { FYProvider } from "@/lib/financial-year";
 import { FYBanner } from "@/components/fy-banner";
 import { AuthSessionGuard } from "@/components/auth-session-guard";
 import { KeepAliveHeartbeat } from "@/components/keep-alive-heartbeat";
+import { isAdmin } from "@/lib/auth";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Hides the Admin nav group. Cosmetic only — the real boundary is requireAdmin()
+  // inside the server actions, plus the notFound() guard in the /admin layout.
+  const admin = await isAdmin();
+
   return (
     <FYProvider>
       <AuthSessionGuard />
       <KeepAliveHeartbeat />
       <div className="flex h-screen overflow-hidden bg-gray-50">
-        <Sidebar />
+        <Sidebar isAdmin={admin} />
         <div className="flex flex-col flex-1 overflow-hidden">
           <FYBanner />
           <main className="flex-1 overflow-y-auto">

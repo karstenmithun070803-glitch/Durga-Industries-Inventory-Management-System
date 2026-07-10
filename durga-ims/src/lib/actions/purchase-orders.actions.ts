@@ -7,6 +7,8 @@ import { purchaseOrders, purchaseOrderItems, materials, stockLedger, materialIss
 import { suppliers, units } from "@/lib/db/schema";
 import { eq, and, max, desc, inArray, sql, gte, lte, or, ilike } from "drizzle-orm";
 import type { PurchaseOrderWithDetails, PurchaseOrderItemWithDetails } from "@/types";
+import { exceedsCeiling } from "@/lib/utils/max-rate";
+import { isUniqueViolation } from "@/lib/utils/pg-errors";
 
 // ---------------------------------------------------------------------------
 // READ — lightweight dropdown list (one row per PO, for identifier combobox)
@@ -312,6 +314,9 @@ export const getActiveMaterials = unstable_cache(
           tax_rate_id: materials.tax_rate_id,
           purchase_unit_id: materials.purchase_unit_id,
           current_stock: materials.current_stock,
+          // Sent to the browser so the PO grid can warn as you type. Advisory only —
+          // validateItems() is the authoritative check. NULL means "no ceiling set".
+          max_rate: materials.max_rate,
         })
         .from(materials)
         .where(eq(materials.is_active, true))
@@ -397,7 +402,52 @@ interface LineItemInput {
   gst_type: string | null;
 }
 
-function validateItems(items: LineItemInput[]) {
+// Rupee formatting for user-facing ceiling messages.
+function inr(value: string | number): string {
+  return `₹${Number(value).toFixed(2)}`;
+}
+
+/**
+ * Enforces the admin's purchase ceiling. This is the ONLY hard block — the PO grid's
+ * red hint is advisory, because the browser holds a page-load snapshot of max_rate and
+ * would wrongly refuse a rate the admin has since raised.
+ *
+ * Called by createPurchaseOrder, updatePurchaseOrder and updateReceivedPurchaseOrder,
+ * so one check covers create, edit and received-edit.
+ */
+async function validateMaxRates(items: LineItemInput[]) {
+  const ids = Array.from(new Set(items.map((i) => i.material_id)));
+  if (ids.length === 0) return;
+
+  const rows = await db
+    .select({ id: materials.id, name: materials.name, max_rate: materials.max_rate })
+    .from(materials)
+    .where(inArray(materials.id, ids));
+
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  for (const item of items) {
+    const mat = byId.get(item.material_id);
+    // Never `continue` past the ceiling check — that fails open.
+    if (!mat) throw new Error("A selected material no longer exists. Refresh and try again.");
+
+    if (mat.max_rate === null) {
+      throw new Error(
+        `${mat.name} has no admin ceiling rate. It cannot be purchased until the admin sets one in Material Rate Master.`
+      );
+    }
+
+    // exceedsCeiling() coerces both sides with Number(). See src/lib/utils/max-rate.ts —
+    // comparing these as strings is lexicographic and silently inverts the check.
+    if (exceedsCeiling(item.rate || "0", mat.max_rate)) {
+      throw new Error(
+        `Rate for ${mat.name} is ${inr(item.rate || "0")} — above the admin ceiling rate of ${inr(mat.max_rate)}.`
+      );
+    }
+  }
+}
+
+async function validateItems(items: LineItemInput[]) {
   if (items.length === 0) throw new Error("Add at least one material.");
   for (const item of items) {
     if (!item.supplier_id) throw new Error("All items must have a supplier selected.");
@@ -420,6 +470,7 @@ function validateItems(items: LineItemInput[]) {
     if (item.rate === "0" && !item.rate_blank && !item.zero_rate_confirmed)
       throw new Error("One or more items have a zero rate without confirmation. Check 'Zero cost — confirm?' for each.");
   }
+  await validateMaxRates(items);
 }
 
 function deriveHeaderSupplierId(items: LineItemInput[]): string | null {
@@ -480,23 +531,36 @@ async function batchUpdateMaterials(
 // ---------------------------------------------------------------------------
 
 export async function createPurchaseOrder(data: POHeaderInput): Promise<string> {
-  validateItems(data.items);
+  await validateItems(data.items);
   const poNumber = await getNextPONumber(data.financial_year);
 
-  const [po] = await db
-    .insert(purchaseOrders)
-    .values({
-      po_number: poNumber,
-      po_date: new Date(data.po_date),
-      supplier_id: deriveHeaderSupplierId(data.items),
-      total_amount: data.total_amount,
-      status: "Draft",
-      financial_year: data.financial_year,
-      affects_stock: data.affects_stock,
-      supplier_bill_no: data.supplier_bill_no || null,
-      supplier_bill_date: data.supplier_bill_date || null,
-    })
-    .returning({ id: purchaseOrders.id });
+  let po: { id: string };
+  try {
+    // getNextPONumber is max(po_number)+1 outside a transaction, so two simultaneous
+    // creates compute the same number. The DB's UNIQUE (po_number, financial_year)
+    // rejects the loser; turn that into a retryable message instead of a raw PG error.
+    [po] = await db
+      .insert(purchaseOrders)
+      .values({
+        po_number: poNumber,
+        po_date: new Date(data.po_date),
+        supplier_id: deriveHeaderSupplierId(data.items),
+        total_amount: data.total_amount,
+        status: "Draft",
+        financial_year: data.financial_year,
+        affects_stock: data.affects_stock,
+        supplier_bill_no: data.supplier_bill_no || null,
+        supplier_bill_date: data.supplier_bill_date || null,
+      })
+      .returning({ id: purchaseOrders.id });
+  } catch (e) {
+    // isUniqueViolation walks the cause chain — drizzle wraps the PostgresError, so a
+    // top-level `"code" in e` check never matches and the user sees a raw SQL dump.
+    if (isUniqueViolation(e)) {
+      throw new Error("This PO number was just taken — please try again.");
+    }
+    throw e;
+  }
 
   if (data.items.length > 0) {
     await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(po.id, item)));
@@ -510,7 +574,7 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
 // ---------------------------------------------------------------------------
 
 export async function updatePurchaseOrder(id: string, data: Omit<POHeaderInput, "financial_year">): Promise<void> {
-  validateItems(data.items);
+  await validateItems(data.items);
   await db
     .update(purchaseOrders)
     .set({
@@ -592,7 +656,7 @@ export async function receivePurchaseOrder(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeaderInput, "financial_year">): Promise<void> {
-  validateItems(data.items);
+  await validateItems(data.items);
   await db.transaction(async (tx) => {
     const [po] = await tx
       .select()

@@ -22,6 +22,8 @@ import {
   LogOut,
   Warehouse,
   Layers,
+  ShieldCheck,
+  IndianRupee,
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth.actions";
 import { getFYOptions } from "@/lib/fy";
@@ -31,11 +33,33 @@ import { cn } from "@/lib/utils";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useRouter } from "next/navigation";
 
-const nav = [
+interface NavLeaf {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+}
+
+interface NavItem {
+  label: string;
+  href?: string;
+  icon: typeof LayoutDashboard;
+  children?: NavLeaf[];
+  adminOnly?: boolean;
+}
+
+const nav: NavItem[] = [
   {
     label: "Home",
     href: "/",
     icon: LayoutDashboard,
+  },
+  {
+    label: "Admin",
+    icon: ShieldCheck,
+    adminOnly: true,
+    children: [
+      { label: "Material Rate Master", href: "/admin/material-rates", icon: IndianRupee },
+    ],
   },
   {
     label: "Masters",
@@ -68,12 +92,14 @@ const nav = [
 
 const fyOptions = getFYOptions(5);
 
-export function Sidebar() {
+export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const { activeFY, setActiveFY, isCurrentFY } = useFY();
   const [openSections, setOpenSections] = useState<string[]>(["Masters"]);
   const [fyOpen, setFyOpen] = useState(false);
+
+  const visibleNav = nav.filter((item) => !item.adminOnly || isAdmin);
 
   const toggle = (label: string) =>
     setOpenSections((prev) =>
@@ -100,7 +126,7 @@ export function Sidebar() {
           font can only ever touch the tab and sub-tab label text. Icons are SVG, and the
           title block / Financial Year / Sign out are siblings outside this <nav>. */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {nav.map((item) => {
+        {visibleNav.map((item) => {
           if (item.children) {
             const isOpen = openSections.includes(item.label);
             const isActive = item.children.some((c) => pathname.startsWith(c.href));

@@ -11,6 +11,7 @@ import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useKeyboardGrid } from "@/hooks/use-keyboard-grid";
 import { newRow } from "@/lib/utils/row-calc";
+import { exceedsCeiling } from "@/lib/utils/max-rate";
 import type { RowAction } from "@/lib/utils/rows-reducer";
 
 // Re-export so parent components that haven't migrated yet still compile
@@ -36,6 +37,7 @@ interface MaterialOption {
   sales_unit_id?: string | null;
   current_stock?: string;
   lastRate?: string | null; // pre-fetched last purchase rate — avoids per-selection server round-trip
+  max_rate?: string | null; // admin purchase ceiling; null = not set. PO mode only.
 }
 
 interface TaxRateOption {
@@ -74,6 +76,10 @@ interface Props {
   // Margin factor (1 + margin%/100) applied to the last-PO rate when a material is
   // selected (VMI modes). Defaults to 1 (no margin) for PO / invoice modes.
   marginFactor?: number;
+  // Show the admin ceiling hints. Passed only by the PO client — VMI and invoice rates
+  // are cost × margin and are SUPPOSED to sit above the purchase ceiling. Defaults to
+  // false so a forgotten prop fails open, never closed.
+  enforceMaxRate?: boolean;
 }
 
 // Column indices per mode (interactive/focusable elements, including delete button)
@@ -117,6 +123,7 @@ interface RowProps {
   showTaxColumns: boolean;
   showStageColumn: boolean;
   marginFactor: number;
+  enforceMaxRate: boolean;
   // pre-computed column indices (stable)
   colMaterial: number;
   colSupplierOrContractor: number;
@@ -155,6 +162,7 @@ const TransactionRow = React.memo(
     showTaxColumns,
     showStageColumn,
     marginFactor,
+    enforceMaxRate,
     colMaterial,
     colSupplierOrContractor,
     colAffectsStock,
@@ -258,6 +266,22 @@ const TransactionRow = React.memo(
     }
 
     const showZeroWarning = !row.rateBlank && row.rate === "0" && !row.zeroRateConfirmed;
+
+    // Admin ceiling hints — ADVISORY ONLY. These never block Save. The browser holds a
+    // page-load snapshot of max_rate, so a blocking check would wrongly refuse a rate the
+    // admin has since raised. validateItems() on the server is the sole hard block, and
+    // it always reads a fresh ceiling. A stale hint is harmless; a stale block is not.
+    const ceilingMaterial =
+      enforceMaxRate && row.material_id ? materials.find((m) => m.id === row.material_id) : undefined;
+    const maxRate = ceilingMaterial?.max_rate ?? null;
+    // Warn on material-select, not on save — otherwise the employee fills the whole line
+    // before learning the material cannot be bought at all.
+    const showNoCeiling = Boolean(enforceMaxRate && row.material_id && maxRate === null);
+    // Shares exceedsCeiling() with the server block so the hint and the hard stop cannot
+    // drift apart. It coerces both sides — see src/lib/utils/max-rate.ts.
+    const showOverCeiling = Boolean(
+      enforceMaxRate && maxRate !== null && row.rate !== "" && exceedsCeiling(row.rate, maxRate)
+    );
 
     const fmt2 = (v: string) =>
       parseFloat(v || "0").toLocaleString("en-IN", {
@@ -433,6 +457,8 @@ const TransactionRow = React.memo(
                 inputMode="decimal"
                 className={`w-24 h-8 text-sm ${row.rateBlank ? "bg-yellow-50 border-yellow-300" : ""} ${
                   showZeroWarning ? "border-amber-400" : ""
+                } ${showOverCeiling ? "border-red-500 bg-red-50" : ""} ${
+                  showNoCeiling ? "border-amber-400 bg-amber-50" : ""
                 }`}
                 value={row.rate}
                 onChange={(e) =>
@@ -444,7 +470,17 @@ const TransactionRow = React.memo(
                 placeholder={row.rateBlank ? "No history" : ""}
                 title={row.rateBlank ? "No purchase history — enter rate manually" : ""}
               />
-              {row.rateBlank && (
+              {showNoCeiling && (
+                <p className="text-sm text-amber-700 whitespace-nowrap" data-testid="no-ceiling-hint">
+                  Admin ceiling rate needed — cannot be purchased until it is set.
+                </p>
+              )}
+              {showOverCeiling && (
+                <p className="text-sm text-red-600 whitespace-nowrap" data-testid="over-ceiling-hint">
+                  Above the admin ceiling rate of ₹{fmt2(maxRate!)}.
+                </p>
+              )}
+              {row.rateBlank && !showNoCeiling && (
                 <p className="text-sm text-amber-600 whitespace-nowrap">First purchase — enter rate</p>
               )}
               {showZeroWarning && (
@@ -566,6 +602,7 @@ export function TransactionGrid({
   showTaxColumns = false,
   showStageColumn = false,
   marginFactor = 1,
+  enforceMaxRate = false,
 }: Props) {
   const gridRef = useRef<HTMLTableElement>(null);
   const isIssueMode = mode === "material-issue";
@@ -752,6 +789,7 @@ export function TransactionGrid({
               showTaxColumns={showTaxColumns}
               showStageColumn={showStageColumn}
               marginFactor={marginFactor}
+              enforceMaxRate={enforceMaxRate}
               colMaterial={colMaterial}
               colSupplierOrContractor={colSupplierOrContractor}
               colAffectsStock={colAffectsStock}

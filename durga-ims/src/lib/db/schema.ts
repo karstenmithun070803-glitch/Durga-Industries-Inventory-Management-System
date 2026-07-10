@@ -11,6 +11,7 @@ import {
   check,
   unique,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
@@ -112,12 +113,19 @@ export const materials = pgTable(
     current_stock: numeric("current_stock", { precision: 12, scale: 4 }).notNull().default("0"),
     max_level: numeric("max_level", { precision: 12, scale: 4 }),
     standard_cost: numeric("standard_cost", { precision: 14, scale: 4 }),
+    // Admin-only purchase ceiling. NULL = not set = the material cannot be purchased.
+    // Distinct from standard_cost, which values stock and must not be repurposed.
+    max_rate: numeric("max_rate", { precision: 14, scale: 4 }),
     ...softDelete,
     ...timestamps,
   },
   (table) => [
     check("current_stock_non_negative", sql`${table.current_stock} >= 0`),
     index("idx_materials_is_active").on(table.is_active),
+    // The DB, not application code, arbitrates duplicate names: createMaterial is
+    // check-then-act and two logins can now race it. trim() because
+    // bulkImportMaterials does not trim, and "X " is a duplicate of "X" to a human.
+    uniqueIndex("uq_materials_name_lower").on(sql`lower(trim(${table.name}))`),
   ]
 );
 
@@ -135,14 +143,21 @@ export const vehicles = pgTable("vehicles", {
 ]);
 
 // Auth bridge: maps a username to a Supabase auth email
-export const appUsers = pgTable("app_users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  username: text("username").unique().notNull(),
-  // technical email used with Supabase Auth (e.g. "owner@durgaindustries.internal")
-  supabase_auth_id: uuid("supabase_auth_id").unique(),
-  display_name: text("display_name"),
-  ...timestamps,
-});
+export const appUsers = pgTable(
+  "app_users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    username: text("username").unique().notNull(),
+    // technical email used with Supabase Auth (e.g. "owner@durgaindustries.internal")
+    supabase_auth_id: uuid("supabase_auth_id").unique(),
+    display_name: text("display_name"),
+    // NOTE: username does NOT always match the auth email prefix. Resolve roles by
+    // supabase_auth_id, never by email.split("@")[0].
+    role: text("role").notNull().default("employee"),
+    ...timestamps,
+  },
+  (table) => [check("app_users_role_valid", sql`${table.role} IN ('admin', 'employee')`)]
+);
 
 // ---------------------------------------------------------------------------
 // TRANSACTION TABLES

@@ -111,12 +111,19 @@ export async function createTestMaterial(
   const [row] = await db
     .insert(schema.materials)
     .values({
-      name: "Test Material",
+      // Unique per call: materials has a UNIQUE index on lower(trim(name)), so a fixed
+      // default name makes any test that creates two materials fail with 23505.
+      // Tests that care about the name pass an override.
+      name: `Test Material ${nextSeq()}`,
       purchase_unit_id: unit,
       sales_unit_id: unit,
       tax_rate_id: taxRate,
       opening_stock: "0",
       current_stock: "0",
+      // A material with max_rate = NULL cannot be purchased — validateItems() blocks the
+      // PO. Default to an effectively unbounded ceiling so tests that are not about the
+      // ceiling can still create POs. Ceiling tests override this (including to null).
+      max_rate: "9999999.0000",
       ...overrides,
     })
     .returning();

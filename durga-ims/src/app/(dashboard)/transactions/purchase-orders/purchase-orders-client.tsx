@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition, useRef, useReducer, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useFY } from "@/lib/financial-year";
 import { isDateInFY } from "@/lib/fy";
 import {
@@ -67,6 +68,8 @@ interface MaterialOption {
   tax_rate_id: string | null;
   purchase_unit_id: string | null;
   current_stock: string;
+  lastRate?: string | null;
+  max_rate?: string | null; // admin purchase ceiling; null = not set
 }
 
 interface TaxRateOption {
@@ -217,7 +220,17 @@ export function PurchaseOrdersClient({
   companySetting,
 }: Props) {
   const { activeFY } = useFY();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // Re-read materials when the tab regains focus, so a ceiling the admin set while this
+  // page sat open stops showing a stale "Admin ceiling rate needed" hint. Line-item state
+  // lives in a local reducer and is untouched by this.
+  useEffect(() => {
+    const onFocus = () => router.refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [router]);
 
   // Dropdown state
   const [dropdownItems, setDropdownItems] = useState<DropdownItem[]>(initialDropdownItems);
@@ -1029,6 +1042,7 @@ export function PurchaseOrdersClient({
                   taxRates={taxRates}
                   units={units}
                   mode="purchase-order"
+                  enforceMaxRate
                 />
               </div>
             )}

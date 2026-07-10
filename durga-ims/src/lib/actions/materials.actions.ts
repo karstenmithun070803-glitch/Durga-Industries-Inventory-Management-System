@@ -4,7 +4,17 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { materials, materialIssueItems, materialIssues, purchaseOrderItems, purchaseOrders } from "@/lib/db/schema";
-import { eq, and, ilike, ne } from "drizzle-orm";
+import { eq, and, ilike, ne, sql } from "drizzle-orm";
+import { requireAdmin } from "@/lib/auth";
+import { parseCeilingInput } from "@/lib/utils/max-rate";
+import { isUniqueViolation } from "@/lib/utils/pg-errors";
+
+// The DB is the arbiter of duplicate material names (uq_materials_name_lower); the
+// ilike pre-checks below only exist to produce a friendlier message on the non-racing
+// path, and cannot see a row another session inserts between the SELECT and the INSERT.
+function duplicateNameError(name: string): Error {
+  return new Error(`A material named "${name.trim().toUpperCase()}" already exists.`);
+}
 
 // ─── Reads (cached) ──────────────────────────────────────────────────────────
 
@@ -35,16 +45,23 @@ export async function createMaterial(data: {
 
   const [dup] = await db.select({ id: materials.id }).from(materials)
     .where(ilike(materials.name, data.name.trim()));
-  if (dup) throw new Error(`A material named "${data.name.trim().toUpperCase()}" already exists.`);
+  if (dup) throw duplicateNameError(data.name);
 
-  await db.insert(materials).values({
-    name: data.name.trim().toUpperCase(),
-    hsn_code: data.hsn_code?.trim() || null,
-    tax_rate_id: data.tax_rate_id || null,
-    purchase_unit_id: data.purchase_unit_id || null,
-    opening_stock: data.opening_stock || "0",
-    current_stock: data.opening_stock || "0",
-  });
+  try {
+    await db.insert(materials).values({
+      name: data.name.trim().toUpperCase(),
+      hsn_code: data.hsn_code?.trim() || null,
+      tax_rate_id: data.tax_rate_id || null,
+      purchase_unit_id: data.purchase_unit_id || null,
+      opening_stock: data.opening_stock || "0",
+      current_stock: data.opening_stock || "0",
+    });
+  } catch (e) {
+    // Lost the race: another session inserted the same name between the check above
+    // and this insert. The unique index caught it.
+    if (isUniqueViolation(e)) throw duplicateNameError(data.name);
+    throw e;
+  }
   revalidateTag(CACHE_TAGS.materials);
 }
 
@@ -62,17 +79,74 @@ export async function updateMaterial(id: string, data: {
 
   const [dup] = await db.select({ id: materials.id }).from(materials)
     .where(and(ilike(materials.name, data.name.trim()), ne(materials.id, id)));
-  if (dup) throw new Error(`A material named "${data.name.trim().toUpperCase()}" already exists.`);
+  if (dup) throw duplicateNameError(data.name);
 
-  await db.update(materials).set({
-    name: data.name.trim().toUpperCase(),
-    hsn_code: data.hsn_code?.trim() || null,
-    tax_rate_id: data.tax_rate_id || null,
-    purchase_unit_id: data.purchase_unit_id || null,
-    standard_cost: parsedCost !== null ? String(parsedCost) : null,
-  }).where(eq(materials.id, id));
+  // NOTE: explicit column list, deliberately. max_rate is absent, so an employee
+  // editing a material's name can never clobber the admin's ceiling — Postgres
+  // row-locking serialises this against batchUpdateMaterialRates and both writes
+  // survive. Do NOT "simplify" this into a whole-row write.
+  try {
+    await db.update(materials).set({
+      name: data.name.trim().toUpperCase(),
+      hsn_code: data.hsn_code?.trim() || null,
+      tax_rate_id: data.tax_rate_id || null,
+      purchase_unit_id: data.purchase_unit_id || null,
+      standard_cost: parsedCost !== null ? String(parsedCost) : null,
+    }).where(eq(materials.id, id));
+  } catch (e) {
+    if (isUniqueViolation(e)) throw duplicateNameError(data.name);
+    throw e;
+  }
   revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.stages);
+}
+
+// ─── Admin-only: purchase ceiling ────────────────────────────────────────────
+
+/**
+ * Batch-writes max_rate for many materials in one statement.
+ *
+ * Blank => NULL ("not set", which blocks purchasing). Zero is rejected: a ceiling
+ * of 0 blocks every positive rate while looking identical to a configured value.
+ */
+export async function batchUpdateMaterialRates(
+  updates: Array<{ id: string; max_rate: string | null }>
+): Promise<void> {
+  await requireAdmin();
+
+  if (updates.length === 0) return; // UPDATE ... FROM (VALUES ) is invalid SQL
+
+  const rows = updates.map((u) => ({ id: u.id, max_rate: parseCeilingInput(u.max_rate) }));
+
+  // Both columns are cast. materials.id is uuid and max_rate is numeric; an untyped
+  // VALUES list infers text for both, so the join throws "operator does not exist:
+  // uuid = text" and the assignment throws 42804. This exact bug shipped once before
+  // in batchUpdateMaterials (current_stock::text against a numeric column).
+  // Inside a transaction so the row-count check can roll the write back. Throwing
+  // after a bare db.execute() would leave the partial update committed.
+  await db.transaction(async (tx) => {
+    // RETURNING, not a driver rowcount: `.count` is not guaranteed to survive drizzle's
+    // wrapper, and an undefined rowcount would silently disable the check below.
+    const updated = await tx.execute<{ id: string }>(sql`
+      UPDATE materials
+      SET max_rate   = v.rate,
+          updated_at = NOW()
+      FROM (VALUES ${sql.join(
+        rows.map((r) => sql`(${r.id}::uuid, ${r.max_rate}::numeric)`),
+        sql`, `
+      )}) AS v(id, rate)
+      WHERE materials.id = v.id
+      RETURNING materials.id
+    `);
+
+    // Fewer rows matched than we sent => a material was deleted while the admin typed.
+    // Fail loudly (and roll back) rather than persisting a partial save.
+    if (updated.length !== rows.length) {
+      throw new Error("Some materials no longer exist. Refresh and try again.");
+    }
+  });
+
+  revalidateTag(CACHE_TAGS.materials);
 }
 
 export async function deleteMaterial(id: string) {
@@ -130,15 +204,18 @@ export async function bulkImportMaterials(
   if (rows.length === 0) return { imported: 0, skipped: 0, skippedInactive: 0 };
 
   const existing = await db.select({ name: materials.name, is_active: materials.is_active }).from(materials);
-  const existingActiveNames = new Set(existing.filter(m => m.is_active).map((m) => m.name.toUpperCase()));
-  const existingInactiveNames = new Set(existing.filter(m => !m.is_active).map((m) => m.name.toUpperCase()));
+  const existingActiveNames = new Set(existing.filter(m => m.is_active).map((m) => m.name.trim().toUpperCase()));
+  const existingInactiveNames = new Set(existing.filter(m => !m.is_active).map((m) => m.name.trim().toUpperCase()));
 
   let skipped = 0;
   let skippedInactive = 0;
   const batchSeen = new Set<string>();
 
+  // trim() matters: this action is exported and does not control its callers. The
+  // import dialog happens to trim, but "MS SHEET " must collide with "MS SHEET"
+  // regardless — that is the whole point of uq_materials_name_lower on lower(trim(name)).
   const toInsert = rows.filter((r) => {
-    const key = r.name.toUpperCase();
+    const key = r.name.trim().toUpperCase();
     if (existingActiveNames.has(key) || batchSeen.has(key)) { skipped++; return false; }
     if (existingInactiveNames.has(key)) { skippedInactive++; return false; }
     batchSeen.add(key);
@@ -147,18 +224,30 @@ export async function bulkImportMaterials(
 
   if (toInsert.length === 0) return { imported: 0, skipped, skippedInactive };
 
-  await db.transaction(async (tx) => {
-    await tx.insert(materials).values(
-      toInsert.map((r) => ({
-        name: r.name.toUpperCase(),
-        hsn_code: r.hsn_code || null,
-        tax_rate_id: r.tax_rate_id || null,
-        purchase_unit_id: r.purchase_unit_id,
-        opening_stock: r.opening_stock || "0",
-        current_stock: r.opening_stock || "0",
-      }))
-    );
-  });
+  // A single multi-row INSERT inside a transaction: any 23505 aborts the whole
+  // statement, so a partial import is structurally impossible. Never commit the
+  // good rows and report the rest.
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(materials).values(
+        toInsert.map((r) => ({
+          name: r.name.trim().toUpperCase(),
+          hsn_code: r.hsn_code || null,
+          tax_rate_id: r.tax_rate_id || null,
+          purchase_unit_id: r.purchase_unit_id,
+          opening_stock: r.opening_stock || "0",
+          current_stock: r.opening_stock || "0",
+        }))
+      );
+    });
+  } catch (e) {
+    if (isUniqueViolation(e)) {
+      throw new Error(
+        "Import cancelled — one or more material names already exist. Nothing was imported."
+      );
+    }
+    throw e;
+  }
 
   revalidateTag(CACHE_TAGS.materials);
   return { imported: toInsert.length, skipped, skippedInactive };
