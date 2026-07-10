@@ -86,16 +86,18 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
             </View>
 
             {/* ── Document type ── */}
-            <View style={{ borderBottomWidth: 1, borderBottomStyle: "dashed", borderBottomColor: "#000", marginTop: 8, marginBottom: 10, paddingBottom: 3 }}>
-              <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>PURCHASE ORDER</Text>
+            <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 8, marginBottom: 10 }}>
+              <View style={{ borderBottomWidth: 1.5, borderBottomStyle: "dashed", borderBottomColor: "#000", paddingBottom: 3 }}>
+                <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>PURCHASE ORDER</Text>
+              </View>
             </View>
 
             {/* ── Info block ── */}
             <View style={{ flexDirection: "row", marginBottom: 3 }}>
               <Text style={styles.infoLineLabel}>PURCHASE ORDER NO.</Text>
-              <Text style={{ fontSize: 10, fontFamily: "Times-Bold", width: 80 }}>: {poLabel}</Text>
+              <Text style={{ fontSize: 10, fontFamily: "Times-Bold", flex: 1 }}>: {poLabel}</Text>
               <Text style={[styles.infoLineLabel, { width: 50 }]}>DATE</Text>
-              <Text style={styles.infoLineValue}>: {fmtDate(first.po_date)}</Text>
+              <Text style={[styles.infoLineValue, { width: 80 }]}>: {fmtDate(first.po_date)}</Text>
             </View>
             <View style={styles.infoLine}>
               <Text style={styles.infoLineLabel}>SUPPLIER NAME</Text>

@@ -239,7 +239,7 @@ async function generateStageCode(
 
   const next = (row?.maxNum ?? 0) + 1;
   const padded = next <= 999 ? String(next).padStart(3, "0") : String(next);
-  return `S${padded}`;
+  return `S-${padded}`;
 }
 
 // ---------------------------------------------------------------------------

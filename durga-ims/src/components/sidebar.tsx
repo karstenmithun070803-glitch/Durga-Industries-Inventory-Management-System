@@ -96,10 +96,10 @@ export function Sidebar() {
         <p className="text-white font-semibold text-sm mt-0.5">Inventory System</p>
       </div>
 
-      {/* Nav — `font-nav` (IBM Plex Sans) is scoped to this element, so it covers exactly
-          the tabs and sub-tabs. The title block and the footer below are siblings and
-          stay on the app font (Inter). */}
-      <nav className="font-nav flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+      {/* Nav. `font-nav` (Poppins) is applied to the label <span>s below — NOT here — so the
+          font can only ever touch the tab and sub-tab label text. Icons are SVG, and the
+          title block / Financial Year / Sign out are siblings outside this <nav>. */}
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
         {nav.map((item) => {
           if (item.children) {
             const isOpen = openSections.includes(item.label);
@@ -116,7 +116,7 @@ export function Sidebar() {
                   )}
                 >
                   <item.icon className="w-4 h-4 shrink-0" />
-                  <span className="flex-1 text-left whitespace-nowrap">{item.label}</span>
+                  <span className="font-nav flex-1 text-left whitespace-nowrap">{item.label}</span>
                   {isOpen ? (
                     <ChevronDown className="w-3.5 h-3.5" />
                   ) : (
@@ -139,7 +139,7 @@ export function Sidebar() {
                           )}
                         >
                           <child.icon className="w-3.5 h-3.5 shrink-0" />
-                          <span className="whitespace-nowrap">{child.label}</span>
+                          <span className="font-nav whitespace-nowrap">{child.label}</span>
                         </Link>
                       );
                     })}
@@ -162,7 +162,7 @@ export function Sidebar() {
               )}
             >
               <item.icon className="w-4 h-4 shrink-0" />
-              <span className="whitespace-nowrap">{item.label}</span>
+              <span className="font-nav whitespace-nowrap">{item.label}</span>
             </Link>
           );
         })}

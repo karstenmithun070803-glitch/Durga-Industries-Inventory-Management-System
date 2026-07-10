@@ -35,7 +35,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
       return (
         t.description.toLowerCase().includes(q) ||
         t.tax_percentage.toString().includes(q) ||
-        matchesCode(search, "T", t.vat_code, 2)
+        matchesCode(search, "T-", t.vat_code, 2)
       );
     }),
     [taxRates, search, showInactive]
@@ -139,7 +139,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
               <Input
                 ref={searchRef}
                 autoComplete="off"
-                placeholder="Search by description, T01 or just 1, tax %..."
+                placeholder="Search by description, T-01 or just 1, tax %..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
                 onKeyDown={(e) => {
@@ -176,7 +176,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
                       onClick={() => startEdit(t)}
                     >
                       <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
-                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">{formatCode("T", t.vat_code, 2)}</td>
+                      <td className="px-4 py-1.5 font-mono text-xs font-medium text-slate-700 group-hover:text-slate-900">{formatCode("T-", t.vat_code, 2)}</td>
                       <td className="px-4 py-1.5 font-medium group-hover:text-slate-900 tabular-nums">{parseFloat(t.tax_percentage)}%</td>
                     </tr>
                   ))}

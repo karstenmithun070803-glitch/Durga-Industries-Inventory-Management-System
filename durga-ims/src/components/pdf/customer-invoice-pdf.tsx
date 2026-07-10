@@ -49,8 +49,10 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
               <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
             </View>
 
-            <View style={{ borderBottomWidth: 1, borderBottomStyle: "dashed", borderBottomColor: "#000", marginTop: 8, marginBottom: 10, paddingBottom: 3 }}>
-              <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>INVOICE</Text>
+            <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 8, marginBottom: 10 }}>
+              <View style={{ borderBottomWidth: 1.5, borderBottomStyle: "dashed", borderBottomColor: "#000", paddingBottom: 3 }}>
+                <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>INVOICE</Text>
+              </View>
             </View>
 
             {/* ── Two-column header: vehicle/customer left, bill identifiers right ── */}

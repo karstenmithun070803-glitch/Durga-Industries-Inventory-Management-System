@@ -1295,9 +1295,11 @@ export async function saveVehicleStage(
       .insert(materialIssueItems)
       .values(items.map((item) => itemValues(id, item)));
 
-    // Recalculate total_amount across all items for this issue
+    // Recalculate total_amount across all items for this issue (base + all tax components)
     const [totals] = await tx
-      .select({ total: sql<string>`COALESCE(SUM(amount::numeric), 0)::text` })
+      .select({
+        total: sql<string>`COALESCE(SUM(amount::numeric + COALESCE(cgst_amount::numeric,0) + COALESCE(sgst_amount::numeric,0) + COALESCE(igst_amount::numeric,0)), 0)::text`,
+      })
       .from(materialIssueItems)
       .where(eq(materialIssueItems.issue_id, id));
 
@@ -1390,9 +1392,16 @@ export async function issueDraftRecord(
       );
     }
 
+    const [issueTotals] = await tx
+      .select({
+        total: sql<string>`COALESCE(SUM(amount::numeric + COALESCE(cgst_amount::numeric,0) + COALESCE(sgst_amount::numeric,0) + COALESCE(igst_amount::numeric,0)), 0)::text`,
+      })
+      .from(materialIssueItems)
+      .where(eq(materialIssueItems.issue_id, record.id));
+
     await tx
       .update(materialIssues)
-      .set({ status: "Issued", issue_date: date })
+      .set({ status: "Issued", issue_date: date, total_amount: issueTotals?.total ?? "0" })
       .where(eq(materialIssues.id, record.id));
   });
 
@@ -1543,6 +1552,9 @@ export async function cloneVehicleMaterialIssue(
         + parseFloat(i.igst_amount || "0"),
   0).toFixed(2);
 
+  // Multi-stage records stay as Draft — user reviews stages and clicks Issue All
+  const isMultiStage = (srcIssue.saved_stage_ids ?? []).length > 0;
+
   let newIssueId = "";
   await db.transaction(async (tx) => {
     const [issue] = await tx
@@ -1567,63 +1579,60 @@ export async function cloneVehicleMaterialIssue(
         .values(recalcItems.map((item) => ({ ...item, issue_id: issue.id })));
     }
 
-    // Stock check
-    const qtyByMaterial = new Map<string, number>();
-    for (const item of recalcItems) {
-      if (!item.affects_inventory) continue;
-      qtyByMaterial.set(
-        item.material_id,
-        (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
-      );
-    }
-    // Batch stock check — one SELECT for all materials at once
-    const inventoryMaterialIds = Array.from(qtyByMaterial.keys());
-    const stockCheckRows = await tx
-      .select({ id: materials.id, name: materials.name, current_stock: materials.current_stock })
-      .from(materials)
-      .where(inArray(materials.id, inventoryMaterialIds));
-    for (const mat of stockCheckRows) {
-      const requestedQty = qtyByMaterial.get(mat.id)!;
-      if (parseFloat(mat.current_stock) < requestedQty)
-        throw new Error(
-          `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
+    if (!isMultiStage) {
+      // Old single-stage path: issue stock immediately (existing behaviour)
+      const qtyByMaterial = new Map<string, number>();
+      for (const item of recalcItems) {
+        if (!item.affects_inventory) continue;
+        qtyByMaterial.set(
+          item.material_id,
+          (qtyByMaterial.get(item.material_id) ?? 0) + parseFloat(item.qty || "0")
         );
-    }
+      }
+      const inventoryMaterialIds = Array.from(qtyByMaterial.keys());
+      const stockCheckRows = await tx
+        .select({ id: materials.id, name: materials.name, current_stock: materials.current_stock })
+        .from(materials)
+        .where(inArray(materials.id, inventoryMaterialIds));
+      for (const mat of stockCheckRows) {
+        const requestedQty = qtyByMaterial.get(mat.id)!;
+        if (parseFloat(mat.current_stock) < requestedQty)
+          throw new Error(
+            `Insufficient stock for "${mat.name}": available ${parseFloat(mat.current_stock).toFixed(2)}, requested ${requestedQty.toFixed(2)}.`
+          );
+      }
 
-    await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, issue.id));
+      await tx.update(materialIssues).set({ status: "Issued" }).where(eq(materialIssues.id, issue.id));
 
-    const inventoryItems = recalcItems.filter(item => item.affects_inventory);
-    if (inventoryItems.length > 0) {
-      const currentStockMap = new Map(stockCheckRows.map(m => [m.id, parseFloat(m.current_stock)]));
-
-      // Batch UPDATE materials stock — one statement instead of N round-trips
-      await tx.execute(sql`
-        UPDATE materials
-        SET current_stock = v.stock::numeric
-        FROM (VALUES ${sql.join(
-          inventoryItems.map(item => sql`(${item.material_id}::uuid, ${(currentStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4)}::numeric)`),
-          sql`, `
-        )}) AS v(id, stock)
-        WHERE materials.id = v.id
-      `);
-
-      // Bulk INSERT stock ledger
-      await tx.insert(stockLedger).values(
-        inventoryItems.map(item => ({
-          material_id: item.material_id,
-          transaction_type: "ISSUE" as const,
-          reference_id: issue.id,
-          reference_type: "material_issue",
-          qty_change: (-parseFloat(item.qty)).toString(),
-          stock_after: (currentStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4),
-        }))
-      );
+      const inventoryItems = recalcItems.filter(item => item.affects_inventory);
+      if (inventoryItems.length > 0) {
+        const currentStockMap = new Map(stockCheckRows.map(m => [m.id, parseFloat(m.current_stock)]));
+        await tx.execute(sql`
+          UPDATE materials
+          SET current_stock = v.stock::numeric
+          FROM (VALUES ${sql.join(
+            inventoryItems.map(item => sql`(${item.material_id}::uuid, ${(currentStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4)}::numeric)`),
+            sql`, `
+          )}) AS v(id, stock)
+          WHERE materials.id = v.id
+        `);
+        await tx.insert(stockLedger).values(
+          inventoryItems.map(item => ({
+            material_id: item.material_id,
+            transaction_type: "ISSUE" as const,
+            reference_id: issue.id,
+            reference_type: "material_issue",
+            qty_change: (-parseFloat(item.qty)).toString(),
+            stock_after: (currentStockMap.get(item.material_id)! - parseFloat(item.qty)).toFixed(4),
+          }))
+        );
+      }
     }
 
     newIssueId = issue.id;
   });
 
-  revalidateTag(CACHE_TAGS.materials);
+  if (!isMultiStage) revalidateTag(CACHE_TAGS.materials);
   revalidateTag(CACHE_TAGS.dashboard);
   return { newIssueId };
 }

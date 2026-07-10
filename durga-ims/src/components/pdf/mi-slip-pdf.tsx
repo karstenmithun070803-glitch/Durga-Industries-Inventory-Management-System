@@ -50,29 +50,20 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
           <Text style={styles.companyDetailCentered}>GSTIN: {coGstin}</Text>
         </View>
 
-        <View style={{ borderBottomWidth: 1, borderBottomStyle: "dashed", borderBottomColor: "#000", marginTop: 8, marginBottom: 10, paddingBottom: 3 }}>
-          <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>ESTIMATION</Text>
+        <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 8, marginBottom: 10 }}>
+          <View style={{ borderBottomWidth: 1.5, borderBottomStyle: "dashed", borderBottomColor: "#000", paddingBottom: 3 }}>
+            <Text style={[styles.docTypeCentered, { marginTop: 0, marginBottom: 0 }]}>ESTIMATION</Text>
+          </View>
         </View>
 
         {/* Slip info */}
         <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
+          {/* Left column — Job / Customer / Address */}
           <View style={{ flex: 1 }}>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabelMI}>DATE</Text>
-              <Text style={styles.infoLineValue}>: {fmtDate(slip.issue_date)}</Text>
-            </View>
             <View style={styles.infoLine}>
               <Text style={styles.infoLineLabelMI}>JOB NO / REG NO</Text>
-              <Text style={styles.infoLineValue}>
-                : {slip.job_ref_no}
-              </Text>
+              <Text style={styles.infoLineValue}>: {slip.job_ref_no}</Text>
             </View>
-            <View style={styles.infoLine}>
-              <Text style={styles.infoLineLabelMI}>STATUS</Text>
-              <Text style={styles.infoLineValue}>: {slip.status}</Text>
-            </View>
-          </View>
-          <View style={{ flex: 1 }}>
             {slip.customer_name && (
               <View style={styles.infoLine}>
                 <Text style={styles.infoLineLabelMI}>CUSTOMER</Text>
@@ -97,6 +88,17 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
                 <Text style={styles.infoLineValue}>: {slip.customer_gstin}</Text>
               </View>
             )}
+          </View>
+          {/* Right column — Date / Status */}
+          <View style={{ flex: 1 }}>
+            <View style={styles.infoLine}>
+              <Text style={styles.infoLineLabelMI}>DATE</Text>
+              <Text style={styles.infoLineValue}>: {fmtDate(slip.issue_date)}</Text>
+            </View>
+            <View style={styles.infoLine}>
+              <Text style={styles.infoLineLabelMI}>STATUS</Text>
+              <Text style={styles.infoLineValue}>: {slip.status}</Text>
+            </View>
           </View>
         </View>
 

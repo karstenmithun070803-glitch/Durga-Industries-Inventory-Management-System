@@ -84,6 +84,12 @@ export function handleVerticalFormKeyDown(
   if (idx >= fields.length && (e.key === "ArrowLeft" || e.key === "ArrowRight")) return;
 
   e.preventDefault();
+  // This handler can be reached twice for one keypress: once delegated from a combobox
+  // trigger (Combobox.onGridKeyDown) and again as the event bubbles to the container.
+  // Without this, the second pass reads the ALREADY-moved focus and advances a second
+  // field. `use-keyboard-grid` stops propagation per arrow case for the same reason —
+  // the onGridKeyDown fallback always expects its consumer to stop the event.
+  e.stopPropagation();
 
   if (idx === -1) {
     // Focus sits outside the chain (e.g. the footer Cancel button). Only when the
