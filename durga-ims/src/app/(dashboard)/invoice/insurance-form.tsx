@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
-import { Trash2, ChevronLeft, SquarePen, List } from "lucide-react";
+import { Trash2, ChevronLeft, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
@@ -21,6 +21,7 @@ import {
   deleteInsuranceBill,
 } from "@/lib/actions/invoices.actions";
 import { insuranceBillToInvoiceRows } from "@/lib/utils/insurance-pdf-adapter";
+import { formatCode } from "@/lib/utils";
 import type { CompanySetting } from "@/lib/actions/settings.actions";
 
 // ---------------------------------------------------------------------------
@@ -612,6 +613,7 @@ export function InsuranceForm({
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-8">#</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-20">Mat. Code</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-600">Material</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-24">HSN</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-20">Qty</th>
@@ -631,6 +633,9 @@ export function InsuranceForm({
                   return (
                     <tr key={row._key} className="hover:bg-slate-50">
                       <td className="px-3 py-1.5 text-slate-700 text-xs">{idx + 1}</td>
+                      <td className="px-3 py-1.5 font-mono text-xs text-slate-500">
+                        {row.material_no ? formatCode("M-", row.material_no) : "—"}
+                      </td>
                       <td className="px-3 py-1.5">
                         {isFinalized ? (
                           <span className="text-slate-800">
@@ -658,30 +663,17 @@ export function InsuranceForm({
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1">
-                            <div className="min-w-[180px]">
-                              <Combobox
-                                options={materialOptions}
-                                value={row.material_id ?? ""}
-                                onChange={(v) => { handleMaterialSelect(row._key, v); requestAnimationFrame(() => advanceChain(idx, colMaterial)); }}
-                                placeholder="Select material…"
-                                searchPlaceholder="Search materials…"
-                                gridRow={idx}
-                                gridCol={colMaterial}
-                                onGridKeyDown={(e) => handleKeyDown(e, idx, colMaterial, false)}
-                                onOpenChange={(open) => setOpenComboboxCell(open ? { row: idx, col: colMaterial } : null)}
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => updateRow(row._key, { useCustomName: true, material_id: null })}
-                              className="p-1 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-                              title="Enter a custom name"
-                              tabIndex={-1}
-                            >
-                              <SquarePen className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          <Combobox
+                            options={materialOptions}
+                            value={row.material_id ?? ""}
+                            onChange={(v) => { handleMaterialSelect(row._key, v); requestAnimationFrame(() => advanceChain(idx, colMaterial)); }}
+                            placeholder="Select material…"
+                            searchPlaceholder="Search materials…"
+                            gridRow={idx}
+                            gridCol={colMaterial}
+                            onGridKeyDown={(e) => handleKeyDown(e, idx, colMaterial, false)}
+                            onOpenChange={(open) => setOpenComboboxCell(open ? { row: idx, col: colMaterial } : null)}
+                          />
                         )}
                       </td>
                       <td className="px-3 py-1.5">
