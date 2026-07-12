@@ -4,10 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
-import { Trash2, ChevronLeft } from "lucide-react";
+import { Trash2, ChevronLeft, SquarePen, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
+import { useKeyboardGrid } from "@/hooks/use-keyboard-grid";
+import { isOverlayOpen } from "@/lib/overlay";
+import type { LineItemDraft } from "@/types";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PrintButton } from "@/components/pdf/print-button";
 import type { InsuranceBillWithItems } from "@/types";
@@ -271,6 +274,49 @@ export function InsuranceForm({
     });
   }
 
+  // ── Grid keyboard nav (mirrors TransactionGrid) ─────────────────────────────
+  // Uniform column map. HSN is intentionally NOT a grid column, so custom vs
+  // lookup rows keep identical focusables and ↑/↓ stay column-aligned.
+  const colMaterial = 0;
+  const colQty = 1;
+  const colUnit = 2;
+  const colRate = 3;
+  const colTax = includeTax ? 4 : -1;
+  const columnCount = includeTax ? 6 : 5; // Material,Qty,Unit,Rate,[Tax],Delete
+  const lastDataColIndex = includeTax ? 4 : 3;
+  const colDelete = columnCount - 1;
+  const enterChainCols = [colMaterial, colQty, colUnit, colRate];
+
+  const gridRef = useRef<HTMLTableElement>(null);
+  const [openComboboxCell, setOpenComboboxCell] = useState<{ row: number; col: number } | null>(null);
+  const appendEmptyRow = useCallback(() => setRows((prev) => [...prev, blankRow(gstType)]), [gstType]);
+
+  const { handleKeyDown, focusCell, advanceChain } = useKeyboardGrid({
+    gridRef,
+    // Runtime-safe: the hook only reads material_id/qty/rate/.length. InsuranceRow
+    // has those; the cast avoids editing the shared hook for a single caller.
+    rows: rows as unknown as LineItemDraft[],
+    columnCount,
+    appendEmptyRow,
+    enterChainCols,
+    lastDataColIndex,
+  });
+
+  // Space/Delete deletes; keep the keyboard flow alive by refocusing the row above.
+  function handleRowDelete(key: string, idx: number) {
+    deleteRow(key);
+    requestAnimationFrame(() => focusCell(Math.max(0, idx - 1), colMaterial));
+  }
+
+  // Numeric-only guard for text inputs (needed so ←/→ caret-boundary works —
+  // type=number reports null selectionStart).
+  const numericChange = (key: string, field: "qty" | "rate" | "tax_percentage") => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const v = e.target.value;
+    if (v === "" || /^\d*\.?\d*$/.test(v)) updateRow(key, { [field]: v });
+  };
+
   // ── Build payload ─────────────────────────────────────────────────────────
   function buildPayload() {
     return {
@@ -381,7 +427,7 @@ export function InsuranceForm({
   }
 
   // ── Hotkeys ───────────────────────────────────────────────────────────────
-  useHotkeys("ctrl+s", (e) => { e.preventDefault(); if (!isFinalized) void handleSave(); }, { enableOnFormTags: true });
+  useHotkeys("mod+s", (e) => { if (isOverlayOpen()) return; e.preventDefault(); if (!isFinalized) void handleSave(); }, { enableOnFormTags: true });
   useHotkeys("escape", () => onBack(), { enableOnFormTags: true });
 
   // ── PDF rows ──────────────────────────────────────────────────────────────
@@ -562,7 +608,7 @@ export function InsuranceForm({
             <h2 className="text-sm font-medium text-slate-700">Insurance Bill Items</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table ref={gridRef} className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 w-8">#</th>
@@ -581,6 +627,7 @@ export function InsuranceForm({
                 {rows.map((row, idx) => {
                   const taxAmt = parseFloat(row.cgst_amount) + parseFloat(row.sgst_amount) + parseFloat(row.igst_amount);
                   const grossAmt = parseFloat(row.amount || "0") + taxAmt;
+                  const isOpen = (col: number) => openComboboxCell?.row === idx && openComboboxCell?.col === col;
                   return (
                     <tr key={row._key} className="hover:bg-slate-50">
                       <td className="px-3 py-1.5 text-slate-700 text-xs">{idx + 1}</td>
@@ -594,15 +641,20 @@ export function InsuranceForm({
                             <Input
                               value={row.material_name_override}
                               onChange={(e) => updateRow(row._key, { material_name_override: e.target.value })}
+                              onKeyDown={(e) => handleKeyDown(e, idx, colMaterial, false)}
+                              data-grid-row={idx}
+                              data-grid-col={colMaterial}
                               placeholder="Enter material name…"
                               className="h-8 text-sm"
                             />
                             <button
                               type="button"
                               onClick={() => updateRow(row._key, { useCustomName: false, material_name_override: "" })}
-                              className="text-xs text-slate-700 hover:text-slate-600 whitespace-nowrap"
+                              className="p-1 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                              title="Pick from list"
+                              tabIndex={-1}
                             >
-                              ← Lookup
+                              <List className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         ) : (
@@ -611,30 +663,38 @@ export function InsuranceForm({
                               <Combobox
                                 options={materialOptions}
                                 value={row.material_id ?? ""}
-                                onChange={(v) => handleMaterialSelect(row._key, v)}
+                                onChange={(v) => { handleMaterialSelect(row._key, v); requestAnimationFrame(() => advanceChain(idx, colMaterial)); }}
                                 placeholder="Select material…"
                                 searchPlaceholder="Search materials…"
+                                gridRow={idx}
+                                gridCol={colMaterial}
+                                onGridKeyDown={(e) => handleKeyDown(e, idx, colMaterial, false)}
+                                onOpenChange={(open) => setOpenComboboxCell(open ? { row: idx, col: colMaterial } : null)}
                               />
                             </div>
                             <button
                               type="button"
                               onClick={() => updateRow(row._key, { useCustomName: true, material_id: null })}
-                              className="text-xs text-slate-700 hover:text-slate-600 whitespace-nowrap"
+                              className="p-1 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                              title="Enter a custom name"
+                              tabIndex={-1}
                             >
-                              Custom
+                              <SquarePen className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         )}
                       </td>
                       <td className="px-3 py-1.5">
-                        {isFinalized ? (
-                          <span className="font-mono text-xs text-slate-600">{row.hsn_code || "—"}</span>
-                        ) : (
+                        {/* HSN is read-only (auto-filled from the material). Editable only on a
+                            custom row, which has no material to source it from. */}
+                        {!isFinalized && row.useCustomName ? (
                           <Input
                             value={row.hsn_code}
                             onChange={(e) => updateRow(row._key, { hsn_code: e.target.value })}
                             className="h-8 text-sm w-20 font-mono"
                           />
+                        ) : (
+                          <span className="font-mono text-xs text-slate-600">{row.hsn_code || "—"}</span>
                         )}
                       </td>
                       <td className="px-3 py-1.5">
@@ -642,12 +702,14 @@ export function InsuranceForm({
                           <span className="text-slate-800">{row.qty}</span>
                         ) : (
                           <Input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             value={row.qty}
-                            onChange={(e) => updateRow(row._key, { qty: e.target.value })}
+                            onChange={numericChange(row._key, "qty")}
+                            onKeyDown={(e) => handleKeyDown(e, idx, colQty, isOpen(colQty))}
+                            data-grid-row={idx}
+                            data-grid-col={colQty}
                             className="h-8 text-sm w-16"
-                            min="0"
-                            step="any"
                           />
                         )}
                       </td>
@@ -659,9 +721,13 @@ export function InsuranceForm({
                             <Combobox
                               options={unitOptions}
                               value={row.unit_id}
-                              onChange={(v) => handleUnitSelect(row._key, v)}
+                              onChange={(v) => { handleUnitSelect(row._key, v); requestAnimationFrame(() => advanceChain(idx, colUnit)); }}
                               placeholder="Unit…"
                               searchPlaceholder="Search units…"
+                              gridRow={idx}
+                              gridCol={colUnit}
+                              onGridKeyDown={(e) => handleKeyDown(e, idx, colUnit, false)}
+                              onOpenChange={(open) => setOpenComboboxCell(open ? { row: idx, col: colUnit } : null)}
                             />
                           </div>
                         )}
@@ -671,12 +737,14 @@ export function InsuranceForm({
                           <span className="text-slate-800">{row.rate}</span>
                         ) : (
                           <Input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             value={row.rate}
-                            onChange={(e) => updateRow(row._key, { rate: e.target.value })}
+                            onChange={numericChange(row._key, "rate")}
+                            onKeyDown={(e) => handleKeyDown(e, idx, colRate, isOpen(colRate))}
+                            data-grid-row={idx}
+                            data-grid-col={colRate}
                             className="h-8 text-sm w-20"
-                            min="0"
-                            step="any"
                           />
                         )}
                       </td>
@@ -686,13 +754,14 @@ export function InsuranceForm({
                             <span className="text-slate-800">{row.tax_percentage}</span>
                           ) : (
                             <Input
-                              type="number"
+                              type="text"
+                              inputMode="decimal"
                               value={row.tax_percentage}
-                              onChange={(e) => updateRow(row._key, { tax_percentage: e.target.value })}
+                              onChange={numericChange(row._key, "tax_percentage")}
+                              onKeyDown={(e) => handleKeyDown(e, idx, colTax, isOpen(colTax))}
+                              data-grid-row={idx}
+                              data-grid-col={colTax}
                               className="h-8 text-sm w-14"
-                              min="0"
-                              max="100"
-                              step="any"
                             />
                           )}
                         </td>
@@ -711,8 +780,19 @@ export function InsuranceForm({
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-slate-700 hover:text-red-500 hover:bg-red-50"
-                            onClick={() => deleteRow(row._key)}
+                            onClick={() => handleRowDelete(row._key, idx)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); return; }
+                              if (e.key === " " || e.key === "Delete") {
+                                e.preventDefault(); e.stopPropagation(); handleRowDelete(row._key, idx); return;
+                              }
+                              handleKeyDown(e, idx, colDelete, false);
+                            }}
+                            data-grid-row={idx}
+                            data-grid-col={colDelete}
                             type="button"
+                            tabIndex={-1}
+                            title="Delete row (Space / Delete)"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
