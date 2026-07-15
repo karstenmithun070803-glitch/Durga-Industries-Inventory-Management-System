@@ -184,6 +184,9 @@ export function Combobox({
         className={cn(
           buttonVariants({ variant: "outline" }),
           "w-full justify-between h-9 font-normal",
+          // Black field border (overrides the outline variant's border-border via twMerge),
+          // matching text inputs so the dropdown reads as a field box.
+          "border-field",
           // System B (cursor location): a dropdown-with-data lights up in the neutral
           // rowhover shade when hovered or open — deliberately NOT blue (blue = option-selection only).
           "hover:bg-rowhover hover:text-slate-900 aria-expanded:bg-rowhover aria-expanded:text-slate-900",

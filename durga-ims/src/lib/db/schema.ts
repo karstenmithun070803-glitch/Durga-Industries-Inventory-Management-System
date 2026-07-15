@@ -110,6 +110,7 @@ export const materials = pgTable(
     sales_unit_id: uuid("sales_unit_id").references(() => units.id),
     conversion_value: numeric("conversion_value", { precision: 10, scale: 4 }).default("1"),
     opening_stock: numeric("opening_stock", { precision: 12, scale: 4 }).notNull().default("0"),
+    opening_rate: numeric("opening_rate", { precision: 12, scale: 4 }),
     current_stock: numeric("current_stock", { precision: 12, scale: 4 }).notNull().default("0"),
     max_level: numeric("max_level", { precision: 12, scale: 4 }),
     standard_cost: numeric("standard_cost", { precision: 14, scale: 4 }),

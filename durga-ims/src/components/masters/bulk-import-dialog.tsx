@@ -32,9 +32,10 @@ interface Props {
   units: Unit[];
   taxRates: TaxRate[];
   existingMaterials: Material[];
+  isAdmin?: boolean;
 }
 
-export function BulkImportDialog({ open, onOpenChange, units, taxRates, existingMaterials }: Props) {
+export function BulkImportDialog({ open, onOpenChange, units, taxRates, existingMaterials, isAdmin = false }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fileName, setFileName] = useState<string>("");
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
@@ -70,18 +71,19 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
   async function handleDownloadTemplate() {
     const xlsx = await import("xlsx");
 
-    const mainData = [
-      [
-        "Material Name",
-        "HSN Code",
-        "Tax Rate %",
-        "Purchase Unit",
-        "Opening Stock",
-      ],
-      ["(Example) ENGINE OIL 20W40", "27101990", "18", "LTR", "50"],
-    ];
+    const mainData = isAdmin
+      ? [
+          ["Material Name", "HSN Code", "Tax Rate %", "Purchase Unit", "Opening Stock"],
+          ["(Example) ENGINE OIL 20W40", "27101990", "18", "LTR", "50"],
+        ]
+      : [
+          ["Material Name", "HSN Code", "Tax Rate %", "Purchase Unit"],
+          ["(Example) ENGINE OIL 20W40", "27101990", "18", "LTR"],
+        ];
     const ws = xlsx.utils.aoa_to_sheet(mainData);
-    ws["!cols"] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }];
+    ws["!cols"] = isAdmin
+      ? [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }]
+      : [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 16 }];
 
     const refData: (string | number)[][] = [
       ["REFERENCE — do not edit this sheet"],
@@ -170,9 +172,9 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
           else purchaseUnitId = unit.id;
         }
 
-        const openingStr = String(row["Opening Stock"] ?? "").trim() || "0";
+        const openingStr = isAdmin ? (String(row["Opening Stock"] ?? "").trim() || "0") : "0";
         const openingVal = parseFloat(openingStr);
-        if (isNaN(openingVal) || openingVal < 0) errors.push("Opening Stock must be ≥ 0");
+        if (isAdmin && (isNaN(openingVal) || openingVal < 0)) errors.push("Opening Stock must be ≥ 0");
 
         if (errors.length > 0) {
           return { rowNum, displayName: rawName || `Row ${rowNum}`, status: "error" as const, errors };

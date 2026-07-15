@@ -64,7 +64,7 @@ export const getDashboardStats = unstable_cache(
 
     // Active materials — id needed for rate map join
     db
-      .select({ id: materials.id, current_stock: materials.current_stock, standard_cost: materials.standard_cost })
+      .select({ id: materials.id, current_stock: materials.current_stock, standard_cost: materials.standard_cost, opening_rate: materials.opening_rate })
       .from(materials)
       .where(eq(materials.is_active, true)),
 
@@ -137,7 +137,8 @@ export const getDashboardStats = unstable_cache(
   let standardCostCount = 0;
   for (const r of stockRows) {
     const poRate = rateMap.get(r.id) ?? null;
-    const effectiveRate = poRate ?? r.standard_cost;
+    const openRate = r.opening_rate ?? null;
+    const effectiveRate = poRate ?? openRate ?? r.standard_cost;
     if (effectiveRate != null) {
       const rate = parseFloat(String(effectiveRate));
       const stock = parseFloat(String(r.current_stock));

@@ -15,11 +15,11 @@ import { RotateCcw, UserX, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { BulkImportDialog } from "@/components/masters/bulk-import-dialog";
 
-const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", opening_stock: "0", standard_cost: "" };
+const EMPTY = { name: "", hsn_code: "", tax_rate_id: "", purchase_unit_id: "", opening_stock: "0", opening_rate: "", standard_cost: "" };
 
-interface Props { materials: Material[]; taxRates: TaxRate[]; units: Unit[]; }
+interface Props { materials: Material[]; taxRates: TaxRate[]; units: Unit[]; isAdmin: boolean; }
 
-export function MaterialsClient({ materials, taxRates, units }: Props) {
+export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) {
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
   const [showInactive, setShowInactive] = useState(false);
@@ -60,7 +60,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
   function startEdit(m: Material) {
     setEditing(m);
     setFocusedIdx(-1);
-    const next = { name: m.name, hsn_code: m.hsn_code ?? "", tax_rate_id: m.tax_rate_id ?? "", purchase_unit_id: m.purchase_unit_id ?? "", opening_stock: m.opening_stock, standard_cost: m.standard_cost ?? "" };
+    const next = { name: m.name, hsn_code: m.hsn_code ?? "", tax_rate_id: m.tax_rate_id ?? "", purchase_unit_id: m.purchase_unit_id ?? "", opening_stock: m.opening_stock, opening_rate: "", standard_cost: m.standard_cost ?? "" };
     setForm(next);
     originalFormRef.current = next;
   }
@@ -148,11 +148,17 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
                 searchPlaceholder="Search units..."
               />
             </div>
-            {!editing && (
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-600">Opening Stock</label>
-                <Input type="number" min="0" step="any" value={form.opening_stock} onChange={(e) => set("opening_stock", e.target.value)} />
-              </div>
+            {isAdmin && !editing && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-slate-600">Opening Stock</label>
+                  <Input type="number" min="0" step="any" value={form.opening_stock} onChange={(e) => set("opening_stock", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-slate-600">Opening Rate (₹/unit, incl. GST)</label>
+                  <Input type="number" min="0" step="any" placeholder="e.g. 65.00" value={form.opening_rate} onChange={(e) => set("opening_rate", e.target.value)} />
+                </div>
+              </>
             )}
             {editing && (
               <div className="space-y-1.5">
@@ -262,6 +268,7 @@ export function MaterialsClient({ materials, taxRates, units }: Props) {
         units={units}
         taxRates={taxRates}
         existingMaterials={materials}
+        isAdmin={isAdmin}
       />
       <ConfirmDialog
         open={deactivatingId !== null}

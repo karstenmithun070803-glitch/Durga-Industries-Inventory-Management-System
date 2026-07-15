@@ -38,10 +38,12 @@ export async function createMaterial(data: {
   tax_rate_id?: string;
   purchase_unit_id?: string;
   opening_stock?: string;
+  opening_rate?: string;
 }) {
   if (!data.name.trim()) throw new Error("Material name is required");
   if (!data.purchase_unit_id) throw new Error("Purchase unit is required.");
   if (Number(data.opening_stock ?? 0) < 0) throw new Error("Opening stock cannot be negative");
+  if (data.opening_rate && parseFloat(data.opening_rate) < 0) throw new Error("Opening rate cannot be negative");
 
   const [dup] = await db.select({ id: materials.id }).from(materials)
     .where(ilike(materials.name, data.name.trim()));
@@ -54,6 +56,7 @@ export async function createMaterial(data: {
       tax_rate_id: data.tax_rate_id || null,
       purchase_unit_id: data.purchase_unit_id || null,
       opening_stock: data.opening_stock || "0",
+      opening_rate: data.opening_rate || null,
       current_stock: data.opening_stock || "0",
     });
   } catch (e) {

@@ -60,6 +60,9 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
 
   const hasMultipleUnits = new Set(rows.map((r) => r.unit_name ?? "—")).size > 1;
 
+  // Material column width: wider when Opening is hidden (Details OFF)
+  const matWidth = showDetails ? "28%" : "38%";
+
   return (
     <Document title={`Monthly Stock Report — ${periodLabel}`}>
       <Page size="A4" orientation="landscape" style={styles.page}>
@@ -86,9 +89,9 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
         {/* Table header */}
         <View style={[styles.plainTableHead, { marginTop: 4 }]}>
           <Text style={[styles.plainTableHeadCell, { width: "4%" }]}>S.No</Text>
-          <Text style={[styles.plainTableHeadCell, { width: "28%" }]}>Material</Text>
+          <Text style={[styles.plainTableHeadCell, { width: matWidth }]}>Material</Text>
           <Text style={[styles.plainTableHeadCell, { width: "5%" }]}>Unit</Text>
-          <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>Opening</Text>
+          {showDetails && <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>Opening</Text>}
           <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>PO Inward</Text>
           <Text style={[styles.plainTableHeadCell, { width: "9%", textAlign: "right" }]}>Issues</Text>
           {showDetails && <Text style={[styles.plainTableHeadCell, { width: "9%", textAlign: "right" }]}>Reversals</Text>}
@@ -101,16 +104,16 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
 
         {/* Rows */}
         {rows.map((r, i) => {
-          const effectiveRate = r.last_po_rate ?? r.standard_cost;
+          const effectiveRate = r.last_po_rate ?? r.opening_rate ?? r.standard_cost;
           const closingValue = effectiveRate !== null ? r.closing_stock * effectiveRate : null;
           return (
             <View key={r.material_id} style={styles.plainTableRow}>
               <Text style={[styles.plainTableCell, { width: "4%" }]}>{i + 1}</Text>
-              <Text style={[styles.plainTableCell, { width: "28%" }]}>
+              <Text style={[styles.plainTableCell, { width: matWidth }]}>
                 M-{String(r.material_no).padStart(3, "0")} {r.material_name}
               </Text>
               <Text style={[styles.plainTableCell, { width: "5%" }]}>{r.unit_name ?? "—"}</Text>
-              <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQ(r.opening_stock)}</Text>
+              {showDetails && <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQ(r.opening_stock)}</Text>}
               <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right", color: r.po_inward > 0 ? "#15803D" : undefined }]}>
                 {r.po_inward > 0 ? `+${fmtQ(r.po_inward)}` : "—"}
               </Text>
@@ -147,11 +150,11 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
         {/* Totals row */}
         <View style={[styles.plainTableRow, { backgroundColor: "#F8FAFC" }]}>
           <Text style={[styles.plainTableCellBold, { width: "4%" }]} />
-          <Text style={[styles.plainTableCellBold, { width: "28%", textAlign: "right" }]}>
+          <Text style={[styles.plainTableCellBold, { width: matWidth, textAlign: "right" }]}>
             {hasMultipleUnits ? "TOTAL (mixed units)" : "TOTAL"}
           </Text>
           <Text style={[styles.plainTableCellBold, { width: "5%" }]} />
-          <Text style={[styles.plainTableCellBold, { width: "10%", textAlign: "right" }]}>{fmtQ(totals.opening)}</Text>
+          {showDetails && <Text style={[styles.plainTableCellBold, { width: "10%", textAlign: "right" }]}>{fmtQ(totals.opening)}</Text>}
           <Text style={[styles.plainTableCellBold, { width: "10%", textAlign: "right" }]}>{totals.inward > 0 ? `+${fmtQ(totals.inward)}` : "—"}</Text>
           <Text style={[styles.plainTableCellBold, { width: "9%", textAlign: "right" }]}>{totals.issues > 0 ? `-${fmtQ(totals.issues)}` : "—"}</Text>
           {showDetails && <Text style={[styles.plainTableCellBold, { width: "9%", textAlign: "right" }]}>{totals.reversals !== 0 ? fmtSigned(totals.reversals) : "—"}</Text>}
@@ -160,6 +163,13 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
           {showPrices && <Text style={[styles.plainTableCellBold, { width: "8%" }]} />}
           {showPrices && <Text style={[styles.plainTableCellBold, { width: "8%" }]} />}
         </View>
+
+        {/* Footer note when Details OFF */}
+        {!showDetails && (
+          <Text style={{ fontSize: 8, color: "#6B7280", textAlign: "center", marginTop: 4 }}>
+            Opening balance, reversals & adjustments not shown. Enable Show Details for full reconciliation.
+          </Text>
+        )}
 
         {/* Footer */}
         <View style={styles.pageFooter} fixed>

@@ -30,6 +30,7 @@ export interface StockMaterialRow {
   current_stock: string;
   max_level: string | null;
   last_po_rate: string | null;
+  opening_rate: string | null;
   standard_cost: string | null;
   is_active: boolean;
 }
@@ -113,6 +114,7 @@ export const getStockDashboardMaterials = unstable_cache(
       is_active: materials.is_active,
       unit_id: materials.purchase_unit_id,
       standard_cost: materials.standard_cost,
+      opening_rate: materials.opening_rate,
     })
     .from(materials)
     .where(eq(materials.is_active, true))
@@ -158,6 +160,7 @@ export const getStockDashboardMaterials = unstable_cache(
     current_stock: m.current_stock,
     max_level: m.max_level,
     last_po_rate: rateMap.get(m.id) ?? null,
+    opening_rate: m.opening_rate,
     standard_cost: m.standard_cost,
     is_active: m.is_active,
   }));
@@ -172,7 +175,7 @@ export const getStockDashboardMaterials = unstable_cache(
   let materialsExcludedFromValue = 0;
   let standardCostCount = 0;
   for (const r of activeMats) {
-    const effectiveRate = r.last_po_rate ?? r.standard_cost;
+    const effectiveRate = r.last_po_rate ?? r.opening_rate ?? r.standard_cost;
     if (effectiveRate !== null) {
       totalStockValue += parseFloat(r.current_stock) * parseFloat(effectiveRate);
       if (!r.last_po_rate) standardCostCount++;

@@ -35,6 +35,7 @@ interface MaterialOption {
   hsn_code: string | null;
   tax_rate_id: string | null;
   tax_percentage?: string | null;
+  purchase_unit_id: string | null;
 }
 
 interface UnitOption {
@@ -246,6 +247,9 @@ export function InsuranceForm({
     const mat = materials.find((m) => m.id === materialId);
     if (!mat) return;
     const taxPct = mat.tax_percentage ?? "18";
+    const unit = mat.purchase_unit_id
+      ? units.find((u) => u.id === mat.purchase_unit_id)
+      : undefined;
     setRows((prev) =>
       prev.map((r) => {
         if (r._key !== key) return r;
@@ -257,6 +261,8 @@ export function InsuranceForm({
           material_no: mat.material_no,
           hsn_code: mat.hsn_code ?? "",
           tax_percentage: taxPct,
+          unit_id: unit?.id ?? "",
+          unit_name: unit?.unit_name ?? "",
           ...calcs,
         };
       })
@@ -286,7 +292,7 @@ export function InsuranceForm({
   const columnCount = includeTax ? 6 : 5; // Material,Qty,Unit,Rate,[Tax],Delete
   const lastDataColIndex = includeTax ? 4 : 3;
   const colDelete = columnCount - 1;
-  const enterChainCols = [colMaterial, colQty, colUnit, colRate];
+  const enterChainCols = [colMaterial, colQty, colRate];
 
   const gridRef = useRef<HTMLTableElement>(null);
   const [openComboboxCell, setOpenComboboxCell] = useState<{ row: number; col: number } | null>(null);
@@ -706,23 +712,7 @@ export function InsuranceForm({
                         )}
                       </td>
                       <td className="px-3 py-1.5">
-                        {isFinalized ? (
-                          <span className="text-slate-600">{row.unit_name || "—"}</span>
-                        ) : (
-                          <div className="min-w-[100px]">
-                            <Combobox
-                              options={unitOptions}
-                              value={row.unit_id}
-                              onChange={(v) => { handleUnitSelect(row._key, v); requestAnimationFrame(() => advanceChain(idx, colUnit)); }}
-                              placeholder="Unit…"
-                              searchPlaceholder="Search units…"
-                              gridRow={idx}
-                              gridCol={colUnit}
-                              onGridKeyDown={(e) => handleKeyDown(e, idx, colUnit, false)}
-                              onOpenChange={(open) => setOpenComboboxCell(open ? { row: idx, col: colUnit } : null)}
-                            />
-                          </div>
-                        )}
+                        <span className="text-slate-600">{row.unit_name || "—"}</span>
                       </td>
                       <td className="px-3 py-1.5">
                         {isFinalized ? (

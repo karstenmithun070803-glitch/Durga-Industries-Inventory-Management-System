@@ -1295,7 +1295,7 @@ export function NewVMIClient({
                           });
                         }
                       }}
-                      className="w-52 flex items-center justify-between rounded-md border border-input bg-background px-3 h-9 text-sm hover:bg-rowhover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="w-52 flex items-center justify-between rounded-md border border-field bg-background px-3 h-9 text-sm hover:bg-rowhover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       <span className="truncate text-left text-muted-foreground">
                         {activeStageId

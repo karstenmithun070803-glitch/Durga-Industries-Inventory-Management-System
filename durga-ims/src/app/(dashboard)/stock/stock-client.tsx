@@ -202,7 +202,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
     && draftCommitments !== null
     && draftCommitments.totalCommitted > adjustedQty;
 
-  const effectiveRateStr = adjustMaterial?.last_po_rate ?? adjustMaterial?.standard_cost ?? null;
+  const effectiveRateStr = adjustMaterial?.last_po_rate ?? adjustMaterial?.opening_rate ?? adjustMaterial?.standard_cost ?? null;
   const effectiveRate = effectiveRateStr !== null ? parseFloat(effectiveRateStr) : null;
   const writeOff = (isReduction && effectiveRate !== null && !isNaN(effectiveRate))
     ? Math.abs(delta) * effectiveRate
@@ -340,7 +340,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       toast.error("Reason must be at least 10 characters.");
       return;
     }
-    const showCostField = adjustMaterial.last_po_rate === null;
+    const showCostField = adjustMaterial.last_po_rate === null && adjustMaterial.opening_rate === null;
     let parsedCost: number | undefined;
     if (showCostField && adjustStandardCost.trim() !== "") {
       parsedCost = parseFloat(adjustStandardCost);
@@ -411,7 +411,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
           label="Stock Value"
           value={fmtLargeAmt(summary.totalStockValue)}
           sub={[
-            summary.standardCostCount > 0 ? `${summary.standardCostCount} use standard cost` : null,
+            summary.standardCostCount > 0 ? `${summary.standardCostCount} use non-PO rate` : null,
             summary.materialsExcludedFromValue > 0 ? `${summary.materialsExcludedFromValue} excl. (no cost set)` : null,
           ].filter(Boolean).join(" · ") || "based on last PO rate (incl. GST)"}
         />
@@ -467,9 +467,10 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               const statusLabel: Record<string, string> = { ok: "OK", out: "Out of Stock" };
               const csvRows = filtered.map((r) => {
                 const stock = parseFloat(r.current_stock);
-                const poRate = r.last_po_rate !== null ? parseFloat(r.last_po_rate) : null;
-                const stdRate = r.standard_cost !== null ? parseFloat(r.standard_cost) : null;
-                const rate = poRate ?? stdRate;
+                const poRate   = r.last_po_rate !== null ? parseFloat(r.last_po_rate) : null;
+                const openRate = r.opening_rate !== null ? parseFloat(r.opening_rate) : null;
+                const stdRate  = r.standard_cost !== null ? parseFloat(r.standard_cost) : null;
+                const rate = poRate ?? openRate ?? stdRate;
                 return [
                   formatCode("M-",r.material_no),
                   r.name,
@@ -522,10 +523,11 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                 filtered.map((row, filteredIdx) => {
                   const status = getStatus(row);
                   const stock = parseFloat(row.current_stock);
-                  const poRate = row.last_po_rate !== null ? parseFloat(row.last_po_rate) : null;
-                  const stdRate = row.standard_cost !== null ? parseFloat(row.standard_cost) : null;
-                  const rate = poRate ?? stdRate;
-                  const isStdRate = poRate === null && stdRate !== null;
+                  const poRate   = row.last_po_rate !== null ? parseFloat(row.last_po_rate) : null;
+                  const openRate = row.opening_rate !== null ? parseFloat(row.opening_rate) : null;
+                  const stdRate  = row.standard_cost !== null ? parseFloat(row.standard_cost) : null;
+                  const rate = poRate ?? openRate ?? stdRate;
+                  const isStdRate = poRate === null && openRate === null && stdRate !== null;
                   const value = rate !== null ? stock * rate : null;
 
                   // Out-of-stock rows keep their red status tint on hover (darken it)
@@ -562,7 +564,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                         {rate !== null ? (
                           <span
                             className={cn("inline-flex items-center gap-1 justify-end", isStdRate && "italic text-slate-700")}
-                            title={isStdRate ? "Standard cost — no purchase order received yet" : undefined}
+                            title={isStdRate ? "Standard cost — no purchase order or opening rate set" : undefined}
                           >
                             {fmtAmt(rate)}
                           </span>
@@ -816,7 +818,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               <select
                 value={adjustType}
                 onChange={(e) => setAdjustType(e.target.value)}
-                className="w-full h-9 text-sm border border-input rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full h-9 text-sm border border-field rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 {ADJUSTMENT_TYPES.map((t) => (
                   <option key={t} value={t}>{t}</option>
@@ -902,8 +904,8 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
               </div>
             )}
 
-            {/* Unit Cost field (when no PO rate) */}
-            {adjustMaterial?.last_po_rate === null && (
+            {/* Unit Cost field (when no PO rate and no opening rate) */}
+            {adjustMaterial?.last_po_rate === null && adjustMaterial?.opening_rate === null && (
               <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
                 <label className="text-sm font-medium text-slate-700">
                   Unit Cost (₹) <span className="text-slate-700 font-normal">— for stock valuation</span>

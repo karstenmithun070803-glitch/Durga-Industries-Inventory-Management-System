@@ -252,6 +252,7 @@ export interface MonthlyStockRow {
   adjustments: number;
   closing_stock: number;
   last_po_rate: number | null;
+  opening_rate: number | null;
   standard_cost: number | null;
 }
 
@@ -273,6 +274,7 @@ export async function getMonthlyStockReport(params: {
       material_no: materials.material_no,
       name: materials.name,
       opening_stock: materials.opening_stock,
+      opening_rate: materials.opening_rate,
       unit_id: materials.purchase_unit_id,
       standard_cost: materials.standard_cost,
     })
@@ -295,8 +297,16 @@ export async function getMonthlyStockReport(params: {
   const poRates = await db
     .select({
       material_id: purchaseOrderItems.material_id,
-      rate: purchaseOrderItems.rate,
-      po_date: purchaseOrders.po_date,
+      rate: sql<string>`
+        ROUND(
+          (${purchaseOrderItems.amount}
+            + COALESCE(${purchaseOrderItems.cgst_amount}, 0)
+            + COALESCE(${purchaseOrderItems.sgst_amount}, 0)
+            + COALESCE(${purchaseOrderItems.igst_amount}, 0))
+          / NULLIF(${purchaseOrderItems.qty}, 0),
+          4
+        )
+      `,
     })
     .from(purchaseOrderItems)
     .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
@@ -389,6 +399,7 @@ export async function getMonthlyStockReport(params: {
       adjustments: mov.adjustments,
       closing_stock: closing,
       last_po_rate: rateMap.get(mat.id) ?? null,
+      opening_rate: mat.opening_rate !== null ? parseFloat(mat.opening_rate) : null,
       standard_cost: mat.standard_cost !== null ? parseFloat(mat.standard_cost) : null,
     };
   });

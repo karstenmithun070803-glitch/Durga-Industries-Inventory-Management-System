@@ -128,14 +128,14 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
   function downloadCsv() {
     const baseHeaders = showDetails
       ? ["Material", "Unit", "Opening", "PO Inward", "Issues", "Reversals", "Adjustments", "Closing"]
-      : ["Material", "Unit", "Opening", "PO Inward", "Issues", "Closing"];
+      : ["Material", "Unit", "PO Inward", "Issues", "Closing"];
     const headers = showPrices ? [...baseHeaders, "Last Rate", "Closing Value"] : baseHeaders;
 
     const csvRows = rows.map((r) => {
       const base = [
         `M-${String(r.material_no).padStart(3, "0")} ${r.material_name}`,
         r.unit_name ?? "",
-        r.opening_stock.toFixed(3),
+        ...(showDetails ? [r.opening_stock.toFixed(3)] : []),
         r.po_inward.toFixed(3),
         r.issues.toFixed(3),
         ...(showDetails ? [
@@ -145,7 +145,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
         r.closing_stock.toFixed(3),
       ];
       if (showPrices) {
-        const rate = r.last_po_rate ?? r.standard_cost;
+        const rate = r.last_po_rate ?? r.opening_rate ?? r.standard_cost;
         base.push(rate !== null ? rate.toFixed(2) : "");
         base.push(rate !== null ? (r.closing_stock * rate).toFixed(2) : "");
       }
@@ -180,7 +180,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             type="month"
             value={fromMonth}
             onChange={(e) => setFromMonth(e.target.value)}
-            className="h-9 text-sm w-36 border border-input rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 text-sm w-36 border border-field rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <div className="space-y-1">
@@ -189,7 +189,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             type="month"
             value={toMonth}
             onChange={(e) => setToMonth(e.target.value)}
-            className="h-9 text-sm w-36 border border-input rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 text-sm w-36 border border-field rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
         <div className="space-y-1 w-64">
@@ -287,7 +287,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                 <tr>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Material</th>
                   <th className="px-3 py-2.5 text-left font-medium text-slate-800 whitespace-nowrap">Unit</th>
-                  <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Opening</th>
+                  {showDetails && <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Opening</th>}
                   <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">PO Inward</th>
                   <th className="px-3 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">Issues</th>
                   {showDetails && (
@@ -307,8 +307,8 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const effectiveRate = r.last_po_rate ?? r.standard_cost;
-                  const isStdRate = r.last_po_rate === null && r.standard_cost !== null;
+                  const effectiveRate = r.last_po_rate ?? r.opening_rate ?? r.standard_cost;
+                  const isStdRate = r.last_po_rate === null && r.opening_rate === null && r.standard_cost !== null;
                   const closingValue = showPrices && effectiveRate !== null
                     ? r.closing_stock * effectiveRate
                     : null;
@@ -321,7 +321,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                         {r.material_name}
                       </td>
                       <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">{r.unit_name ?? "—"}</td>
-                      <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums text-slate-800">{fmtQty(r.opening_stock)}</td>
+                      {showDetails && <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums text-slate-800">{fmtQty(r.opening_stock)}</td>}
                       <td className="px-3 py-1.5 whitespace-nowrap text-right tabular-nums text-blue-700">
                         {r.po_inward > 0 ? `+${fmtQty(r.po_inward)}` : "—"}
                       </td>
@@ -372,14 +372,14 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
               <tfoot className="bg-slate-100 sticky bottom-0">
                 {hasMultipleUnits ? (
                   <tr className="border-t-2 border-slate-300">
-                    <td colSpan={6 + (showDetails ? 2 : 0) + (showPrices ? 2 : 0)} className="px-3 py-2 text-center text-xs text-slate-600 italic">
+                    <td colSpan={5 + (showDetails ? 3 : 0) + (showPrices ? 2 : 0)} className="px-3 py-2 text-center text-xs text-slate-600 italic">
                       Unit-wise total not shown — multiple units in this report. Filter by a single material or unit for a meaningful total.
                     </td>
                   </tr>
                 ) : (
                   <tr className="font-semibold text-slate-800 border-t-2 border-slate-300">
                     <td colSpan={2} className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-slate-800 font-medium">TOTAL</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtQty(totals.opening)}</td>
+                    {showDetails && <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{fmtQty(totals.opening)}</td>}
                     <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums text-blue-700">
                       {totals.inward > 0 ? `+${fmtQty(totals.inward)}` : "—"}
                     </td>
@@ -398,8 +398,8 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
                 )}
                 {!showDetails && (
                   <tr>
-                    <td colSpan={6 + (showPrices ? 2 : 0)} className="px-3 py-1 text-center text-[10px] text-slate-700 italic border-t border-slate-200">
-                      Reversals and Adjustments columns hidden — toggle Show Details to view.
+                    <td colSpan={5 + (showPrices ? 2 : 0)} className="px-3 py-1 text-center text-[10px] text-slate-700 italic border-t border-slate-200">
+                      Opening balance, reversals and adjustments hidden — toggle Show Details to view.
                     </td>
                   </tr>
                 )}

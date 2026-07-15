@@ -1,0 +1,1 @@
+ALTER TABLE "materials" ADD COLUMN "opening_rate" numeric(12, 4);

@@ -872,6 +872,9 @@ export function InvoiceClient({
           <div className="flex-1 overflow-y-auto px-6 pb-32">
             {/* Header card */}
             <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4 space-y-4">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-semibold text-slate-700">Customer Bill</h2>
+              </div>
               {/* Row 1: Bill No / Bill Date / FY */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
@@ -946,8 +949,8 @@ export function InvoiceClient({
                       "bg-amber-50 text-amber-700 border-amber-200"
                     }`}>
                       {!hasInsurance ? "No Insurance Bill" :
-                       insuranceBillStatus === "Finalized" ? "Insurance ✓ Finalized" :
-                       "Insurance (Draft)"}
+                       insuranceBillStatus === "Finalized" ? "Insurance Bill ✓ Finalized" :
+                       "Insurance Bill (Draft)"}
                     </span>
                   )}
                 </div>

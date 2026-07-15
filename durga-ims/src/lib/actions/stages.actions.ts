@@ -233,7 +233,7 @@ async function generateStageCode(
   // MUST use numeric cast — text MAX breaks after S999 ('9' > '1' lexicographically)
   const [row] = await tx
     .select({
-      maxNum: sql<number>`MAX(CAST(SUBSTRING(${stages.stage_code}, 2) AS INTEGER))`,
+      maxNum: sql<number>`MAX(CAST(SUBSTRING(${stages.stage_code}, 3) AS INTEGER))`,
     })
     .from(stages);
 

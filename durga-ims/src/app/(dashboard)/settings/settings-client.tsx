@@ -75,7 +75,7 @@ export function SettingsClient({ initialSettings }: Props) {
             onChange={(e) => setAddress(e.target.value)}
             placeholder="Full business address"
             rows={3}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+            className="w-full rounded-md border border-field bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
           />
         </Field>
         <div className="grid grid-cols-3 gap-4">
@@ -126,7 +126,7 @@ export function SettingsClient({ initialSettings }: Props) {
           onChange={(e) => setInvoiceTerms(e.target.value)}
           placeholder="e.g. Payment due within 30 days. Goods once sold will not be taken back."
           rows={3}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+          className="w-full rounded-md border border-field bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
         />
       </div>
 
