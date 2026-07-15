@@ -346,6 +346,7 @@ export function PurchaseOrdersClient({
       setPrintToId("");
       setBatchPOs([]);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFY, loadedFY]);
 
   // ---------------------------------------------------------------------------

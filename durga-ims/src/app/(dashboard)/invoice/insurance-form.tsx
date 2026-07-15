@@ -269,11 +269,6 @@ export function InsuranceForm({
     );
   }
 
-  function handleUnitSelect(key: string, unitId: string) {
-    const unit = units.find((u) => u.id === unitId);
-    updateRow(key, { unit_id: unitId, unit_name: unit?.unit_name ?? "" });
-  }
-
   function deleteRow(key: string) {
     setRows((prev) => {
       const next = prev.filter((r) => r._key !== key);
@@ -286,7 +281,6 @@ export function InsuranceForm({
   // lookup rows keep identical focusables and ↑/↓ stay column-aligned.
   const colMaterial = 0;
   const colQty = 1;
-  const colUnit = 2;
   const colRate = 3;
   const colTax = includeTax ? 4 : -1;
   const columnCount = includeTax ? 6 : 5; // Material,Qty,Unit,Rate,[Tax],Delete
@@ -485,7 +479,6 @@ export function InsuranceForm({
 
   // ── Combobox options ──────────────────────────────────────────────────────
   const materialOptions = materials.map((m) => ({ value: m.id, label: m.name }));
-  const unitOptions = units.map((u) => ({ value: u.id, label: u.unit_name }));
 
   // ---------------------------------------------------------------------------
   // Render
