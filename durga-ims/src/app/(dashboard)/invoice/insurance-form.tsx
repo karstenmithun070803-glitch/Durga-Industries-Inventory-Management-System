@@ -405,7 +405,6 @@ export function InsuranceForm({
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
-      setShowRevertDialog(false);
     }
   }
 
