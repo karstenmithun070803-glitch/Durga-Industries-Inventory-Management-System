@@ -25,6 +25,9 @@
     /* Unified accent: all focus rings (inputs + buttons) share one blue (blue-500). */
     --ring: 217 91% 60%;
     --radius: 0.5rem;
+    /* Consumed by button.tsx / select.tsx via rounded-[min(var(--radius-md),12px)].
+       Was undefined → border-radius invalidated → square corners on all small buttons. */
+    --radius-md: calc(var(--radius) - 2px); /* 6px */
   }
   .dark {
     --background: 222.2 84% 4.9%;
@@ -63,4 +66,36 @@
     text-decoration: line-through;
   }
 
+  /* Safe-area insets (notch / Dynamic Island / home bar). Enabled by viewportFit=cover.
+     Used by the mobile top bar and any bottom-fixed mobile actions. Inert on devices
+     with no insets (env() resolves to 0). */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .min-h-safe-top {
+    min-height: env(safe-area-inset-top);
+  }
+}
+
+/* Mobile-only (<1024px): normalize native date/month inputs. iOS Safari renders
+   these controls wider than their CSS box (extra internal chrome), bleeding past
+   the filter card. appearance:none + max-width:100% clamp them to their container
+   on every engine; the native picker still opens on tap. Gated below lg so desktop
+   date inputs keep their native calendar/spinner UI byte-for-byte. */
+@media (max-width: 1023px) {
+  input[type="date"],
+  input[type="month"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+  }
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="month"]::-webkit-date-and-time-value {
+    margin: 0;
+    text-align: left;
+  }
 }

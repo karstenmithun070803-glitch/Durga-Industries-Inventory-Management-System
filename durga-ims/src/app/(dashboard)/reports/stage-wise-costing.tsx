@@ -176,7 +176,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
   const hasData = activeRows.length > 0;
 
   return (
-    <div className="p-6 flex flex-col gap-5 h-full">
+    <div className="p-4 lg:p-6 flex flex-col gap-5 lg:h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Stage Wise Costing</h2>
         <p className="text-sm text-slate-600 mt-0.5">Material cost breakdown by stage or material for a vehicle</p>
@@ -184,12 +184,12 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap gap-4 items-end">
-        <div className="space-y-1 w-44">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
+        <div className="space-y-1 w-full lg:w-44">
           <label className="text-xs font-medium text-slate-600">Financial Year</label>
           <Combobox options={FY_OPTIONS} value={fy} onChange={setFy} placeholder="Select FY" />
         </div>
-        <div className="space-y-1 w-56">
+        <div className="space-y-1 w-full lg:w-56">
           <label className="text-xs font-medium text-slate-600">Vehicle <span className="text-rose-500">*</span></label>
           <Combobox
             options={vehicleOptions}
@@ -200,7 +200,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
           />
         </div>
 
-        <div className="space-y-1 w-36">
+        <div className="space-y-1 w-full lg:w-36">
           <label className="text-xs font-medium text-slate-600">As Of Date</label>
           <Input
             type="date"
@@ -211,7 +211,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
         </div>
 
         {/* Report Type toggle */}
-        <div className="space-y-1">
+        <div className="space-y-1 w-full lg:w-auto">
           <label className="text-xs font-medium text-slate-600">Report Type</label>
           <div className="flex rounded-md border border-slate-200 overflow-hidden h-9">
             {(["stage", "material"] as RptType[]).map((t) => (
@@ -219,7 +219,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
                 key={t}
                 onClick={() => setRptType(t)}
                 className={cn(
-                  "px-3 text-xs font-medium transition-colors",
+                  "flex-1 lg:flex-none px-3 text-xs font-medium transition-colors",
                   rptType === t
                     ? "bg-slate-800 text-white"
                     : "bg-white text-slate-600 hover:bg-slate-50"
@@ -231,7 +231,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
           </div>
         </div>
 
-        <div className="space-y-1 w-28">
+        <div className="space-y-1 w-full lg:w-28">
           <label className="text-xs font-medium text-slate-600">Margin %</label>
           <Input
             type="text"
@@ -244,7 +244,7 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
           />
         </div>
 
-        <Button onClick={runReport} disabled={!canRun || isLoading} className="h-9">
+        <Button onClick={runReport} disabled={!canRun || isLoading} className="h-9 w-full lg:w-auto">
           {isLoading ? "Loading…" : "Refresh"}
         </Button>
       </div>

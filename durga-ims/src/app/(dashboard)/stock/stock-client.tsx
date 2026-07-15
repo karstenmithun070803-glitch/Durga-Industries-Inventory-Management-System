@@ -36,6 +36,7 @@ import type {
   PriceHistoryEntry,
 } from "@/lib/actions/stock.actions";
 import { History, SlidersHorizontal, RefreshCw, ShoppingCart, AlertTriangle } from "lucide-react";
+import { RecordCard, RecordField } from "@/components/ui/record-card";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -378,10 +379,10 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="p-6 flex flex-col gap-5 h-full">
+    <div className="p-4 lg:p-6 flex flex-col gap-5 h-full">
 
       {/* ── Page header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-semibold text-slate-800">Stock Dashboard</h1>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-700">
@@ -401,7 +402,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       </div>
 
       {/* ── Summary cards ── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <SummaryCard
           label="Total Materials"
           value={String(summary.totalMaterials)}
@@ -497,8 +498,8 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
           </Button>
         </div>
 
-        {/* Table */}
-        <div className="overflow-auto flex-1 outline-none" {...tableProps}>
+        {/* Table (desktop) */}
+        <div className="hidden lg:block overflow-auto flex-1 outline-none" {...tableProps}>
           <table className="min-w-max text-sm w-full">
             <thead className="bg-slate-50 sticky top-0 z-10">
               <tr>
@@ -613,11 +614,45 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             </tbody>
           </table>
         </div>
+
+        {/* Card list (mobile) — tap a card to open the read-only stock history drawer */}
+        <div className="lg:hidden overflow-auto flex-1 p-3 flex flex-col gap-2">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-12 text-center text-slate-700 text-sm">No materials found.</p>
+          ) : (
+            filtered.map((row) => {
+              const status = getStatus(row);
+              const stock = parseFloat(row.current_stock);
+              const poRate   = row.last_po_rate !== null ? parseFloat(row.last_po_rate) : null;
+              const openRate = row.opening_rate !== null ? parseFloat(row.opening_rate) : null;
+              const stdRate  = row.standard_cost !== null ? parseFloat(row.standard_cost) : null;
+              const rate = poRate ?? openRate ?? stdRate;
+              const value = rate !== null ? stock * rate : null;
+              return (
+                <RecordCard
+                  key={row.id}
+                  onCardClick={() => openHistory(row)}
+                  title={row.name}
+                  subtitle={formatCode("M-", row.material_no)}
+                  trailing={<StatusBadge status={status} />}
+                >
+                  <RecordField
+                    label="Current Stock"
+                    value={`${fmtQty(row.current_stock)}${row.unit_name ? " " + row.unit_name : ""}`}
+                    strong
+                  />
+                  <RecordField label="Last PO Rate (incl. GST)" value={rate !== null ? fmtAmt(rate) : "—"} />
+                  <RecordField label="Stock Value (incl. GST)" value={value !== null ? fmtAmt(value) : "—"} />
+                </RecordCard>
+              );
+            })
+          )}
+        </div>
       </div>
 
       {/* ── Stock History Drawer ── */}
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent data-testid="stock-ledger-drawer" className="w-[560px] sm:max-w-[560px] overflow-hidden flex flex-col">
+        <SheetContent data-testid="stock-ledger-drawer" className="w-[560px] sm:max-w-[560px] max-lg:!w-full max-lg:!max-w-full overflow-hidden flex flex-col">
           <SheetHeader className="shrink-0">
             <SheetTitle className="text-base">
               Stock History — {historyMaterial?.name}

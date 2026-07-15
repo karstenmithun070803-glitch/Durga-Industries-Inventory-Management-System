@@ -166,33 +166,33 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
   }
 
   return (
-    <div className="p-6 flex flex-col gap-5 h-full">
+    <div className="p-4 lg:p-6 flex flex-col gap-5 lg:h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Monthly Stock Report</h2>
         <p className="text-sm text-slate-600 mt-0.5">Warehouse stock movement by period — what came in, what was used, and what remains</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap gap-4 items-end">
-        <div className="space-y-1">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
+        <div className="space-y-1 w-full lg:w-auto">
           <label className="text-xs font-medium text-slate-600">From Month</label>
           <input
             type="month"
             value={fromMonth}
             onChange={(e) => setFromMonth(e.target.value)}
-            className="h-9 text-sm w-36 border border-field rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 text-sm w-full lg:w-36 border border-field rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 w-full lg:w-auto">
           <label className="text-xs font-medium text-slate-600">To Month</label>
           <input
             type="month"
             value={toMonth}
             onChange={(e) => setToMonth(e.target.value)}
-            className="h-9 text-sm w-36 border border-field rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 text-sm w-full lg:w-36 border border-field rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
-        <div className="space-y-1 w-64">
+        <div className="space-y-1 w-full lg:w-64">
           <label className="text-xs font-medium text-slate-600">Material (optional)</label>
           <Combobox
             options={[{ value: "", label: "All Materials" }, ...materialOptions]}
@@ -201,13 +201,13 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             placeholder="All Materials"
           />
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 w-full lg:w-auto">
           <label className="text-xs font-medium text-slate-600 block">Show Prices</label>
           <button
             type="button"
             onClick={() => setShowPrices((p) => !p)}
             className={cn(
-              "h-9 px-4 rounded-md text-sm font-medium border transition-colors",
+              "h-9 px-4 rounded-md text-sm font-medium border transition-colors w-full lg:w-auto",
               showPrices
                 ? "bg-slate-800 text-white border-slate-800"
                 : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
@@ -216,13 +216,13 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             {showPrices ? "Prices On" : "Prices Off"}
           </button>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 w-full lg:w-auto">
           <label className="text-xs font-medium text-slate-600 block">Details</label>
           <button
             type="button"
             onClick={() => setShowDetails((d) => !d)}
             className={cn(
-              "h-9 px-4 rounded-md text-sm font-medium border transition-colors",
+              "h-9 px-4 rounded-md text-sm font-medium border transition-colors w-full lg:w-auto",
               showDetails
                 ? "bg-slate-800 text-white border-slate-800"
                 : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
@@ -231,7 +231,7 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             {showDetails ? "Details On" : "Show Details"}
           </button>
         </div>
-        <div className="flex gap-2 items-end">
+        <div className="flex gap-2 items-end w-full lg:w-auto">
           <Button onClick={runReport} disabled={isLoading} className="h-9">
             {isLoading ? "Loading…" : "Run Report"}
           </Button>

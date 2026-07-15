@@ -16,6 +16,7 @@ import type { CompanySetting } from "@/lib/actions/settings.actions";
 import { Trash2, Plus, Loader2 } from "lucide-react";
 import { INVOICE_STATUS } from "@/lib/constants";
 import { useDebounce } from "@/hooks/use-debounce";
+import { RecordCard, RecordField } from "@/components/ui/record-card";
 
 interface Props {
   initialRows: InvoiceRow[];
@@ -138,7 +139,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
   }
 
   return (
-    <div className="p-6 flex flex-col gap-4 h-full">
+    <div className="p-4 lg:p-6 flex flex-col gap-4 h-full">
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-lg font-semibold text-slate-800 mr-2">Invoices</h1>
@@ -235,7 +236,7 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
 
       {/* ── Table ────────────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-lg flex flex-col">
-        <div className={`overflow-auto flex-1 transition-opacity duration-150 ${isLoading ? "opacity-50" : ""}`}>
+        <div className={`hidden lg:block overflow-auto flex-1 transition-opacity duration-150 ${isLoading ? "opacity-50" : ""}`}>
           <table className="min-w-max text-sm w-full">
             <thead className="bg-slate-50 sticky top-0 z-10">
               <tr>
@@ -352,6 +353,42 @@ export function InvoiceListClient({ initialRows, fy, companySetting }: Props) {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Card list (mobile) — tap opens the invoice */}
+        <div className={`lg:hidden flex-1 overflow-auto p-3 flex flex-col gap-2 transition-opacity duration-150 ${isLoading ? "opacity-50" : ""}`}>
+          {invoiceRows.length === 0 && !isLoading ? (
+            <p className="px-3 py-12 text-center text-slate-700 text-sm">No invoices found.</p>
+          ) : isLoading && invoiceRows.length === 0 ? (
+            <p className="px-3 py-12 text-center text-slate-700 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+              Loading…
+            </p>
+          ) : (
+            invoiceRows.map((r) => (
+              <RecordCard
+                key={r.item_id}
+                onCardClick={() => router.push(`/invoice/${r.id}/edit`)}
+                title={r.bill_number}
+                subtitle={r.job_ref_no ?? undefined}
+                trailing={
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      r.status === INVOICE_STATUS.FINALIZED
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-slate-100 text-slate-600 border border-slate-200"
+                    }`}
+                  >
+                    {r.status}
+                  </span>
+                }
+              >
+                <RecordField label="Date" value={fmtDate(r.bill_date)} />
+                <RecordField label="Customer" value={r.customer_name ?? "—"} />
+                <RecordField label="Net Amount" value={`₹${fmt2(r.net_amount)}`} strong />
+              </RecordCard>
+            ))
+          )}
         </div>
 
         {invoiceRows.length > 0 && (

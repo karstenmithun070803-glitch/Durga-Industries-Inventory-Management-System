@@ -201,7 +201,6 @@ export function InsuranceForm({
 
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showRevertDialog, setShowRevertDialog] = useState(false);
 
   const isFinalized = status === "Finalized";
 
@@ -406,7 +405,6 @@ export function InsuranceForm({
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
-      setShowRevertDialog(false);
     }
   }
 
@@ -848,7 +846,7 @@ export function InsuranceForm({
           )}
 
           {isFinalized && (
-            <Button variant="outline" size="sm" onClick={() => setShowRevertDialog(true)} disabled={isSaving}>
+            <Button variant="outline" size="sm" onClick={handleRevert} disabled={isSaving}>
               Revert to Draft
             </Button>
           )}
@@ -879,14 +877,6 @@ export function InsuranceForm({
         onConfirm={handleDelete}
       />
 
-      <ConfirmDialog
-        open={showRevertDialog}
-        onOpenChange={setShowRevertDialog}
-        title="Revert to Draft?"
-        description="Revert this finalized insurance bill to Draft to make further edits."
-        confirmLabel="Revert to Draft"
-        onConfirm={handleRevert}
-      />
     </div>
   );
 }

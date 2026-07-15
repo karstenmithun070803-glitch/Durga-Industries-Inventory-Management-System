@@ -809,9 +809,9 @@ export function InvoiceClient({
   return (
     <div className="flex flex-col h-full" {...containerProps}>
       {/* Page header + identifier */}
-      <div className="px-6 pt-5 pb-3 flex items-center gap-3">
+      <div className="px-4 lg:px-6 pt-5 pb-3 flex flex-col lg:flex-row lg:items-center gap-3">
         <h1 className="text-lg font-semibold text-slate-800 shrink-0">Invoices</h1>
-        <div className="flex-1 min-w-[220px] max-w-72">
+        <div className="w-full lg:flex-1 lg:min-w-[220px] lg:max-w-72">
           <Combobox
             options={identifierOptions}
             value={currentInvoiceId ?? ""}
@@ -821,7 +821,7 @@ export function InvoiceClient({
             openOnArrowDown
           />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:shrink-0">
           <Input
             type="date"
             value={dateFrom}

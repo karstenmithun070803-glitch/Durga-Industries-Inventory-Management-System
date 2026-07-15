@@ -106,32 +106,32 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
   const hasData = displayRows.length > 0;
 
   return (
-    <div className="p-6 flex flex-col gap-5 h-full">
+    <div className="p-4 lg:p-6 flex flex-col gap-5 lg:h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Vehicle Comparison</h2>
         <p className="text-sm text-slate-600 mt-0.5">Compare material usage between two vehicles side by side</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap gap-4 items-end">
-        <div className="space-y-1 w-44">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
+        <div className="space-y-1 w-full lg:w-44">
           <label className="text-xs font-medium text-slate-600">Financial Year</label>
           <Combobox options={FY_OPTIONS} value={fy} onChange={setFy} placeholder="Select FY" />
         </div>
-        <div className="space-y-1 w-56">
+        <div className="space-y-1 w-full lg:w-56">
           <label className="text-xs font-medium text-slate-600">Source Vehicle <span className="text-rose-500">*</span></label>
           <Combobox options={vehicleOptions} value={v1Id} onChange={setV1Id} placeholder="Select vehicle 1" openOnArrowDown />
         </div>
-        <div className="space-y-1 w-56">
+        <div className="space-y-1 w-full lg:w-56">
           <label className="text-xs font-medium text-slate-600">Compare Vehicle <span className="text-rose-500">*</span></label>
           <Combobox options={vehicleOptions} value={v2Id} onChange={setV2Id} placeholder="Select vehicle 2" openOnArrowDown />
         </div>
-        <div className="space-y-1 w-52">
+        <div className="space-y-1 w-full lg:w-52">
           <label className="text-xs font-medium text-slate-600">Stage Filter</label>
           <Combobox options={stageOptions} value={stageId} onChange={setStageId} placeholder="All Stages" openOnArrowDown />
         </div>
 
-        <Button onClick={runCompare} disabled={!canCompare || isLoading} className="h-9 gap-1.5">
+        <Button onClick={runCompare} disabled={!canCompare || isLoading} className="h-9 gap-1.5 w-full lg:w-auto">
           {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {isLoading ? "Comparing…" : "Compare"}
         </Button>
@@ -139,7 +139,7 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
 
       {/* Toggles — only show after a run */}
       {hasRun && (
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           {/* All / Diff.Material radio */}
           <div className="flex items-center gap-4 text-sm">
             <label className="text-xs font-medium text-slate-600">Show:</label>

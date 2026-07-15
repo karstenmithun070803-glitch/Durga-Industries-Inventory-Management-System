@@ -210,23 +210,23 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
   }
 
   return (
-    <div className="p-6 flex flex-col gap-5 h-full">
+    <div className="p-4 lg:p-6 flex flex-col gap-5 lg:h-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Purchase Report</h2>
         <p className="text-sm text-slate-600 mt-0.5">Input tax credit tracking and supplier spend analysis</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap gap-4 items-end">
-        <div className="space-y-1 w-44">
+      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
+        <div className="space-y-1 w-full lg:w-44">
           <label className="text-xs font-medium text-slate-600">Financial Year</label>
           <Combobox options={FY_OPTIONS} value={fy} onChange={setFy} placeholder="Select FY" />
         </div>
-        <div className="space-y-1 w-44">
+        <div className="space-y-1 w-full lg:w-44">
           <label className="text-xs font-medium text-slate-600">Status</label>
           <Combobox options={STATUS_OPTIONS} value={status} onChange={setStatus} placeholder="Status" />
         </div>
-        <div className="space-y-1 w-52">
+        <div className="space-y-1 w-full lg:w-52">
           <label className="text-xs font-medium text-slate-600">Supplier (optional)</label>
           <Combobox
             options={[{ value: "", label: "All Suppliers" }, ...supplierOptions]}
@@ -235,7 +235,7 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
             placeholder="All Suppliers"
           />
         </div>
-        <div className="space-y-1 w-52">
+        <div className="space-y-1 w-full lg:w-52">
           <label className="text-xs font-medium text-slate-600">Material (optional)</label>
           <Combobox
             options={[{ value: "", label: "All Materials" }, ...materialOptions]}
@@ -246,13 +246,13 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Date From</label>
-          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 text-sm w-36" />
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 text-sm w-full lg:w-36" />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Date To</label>
-          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9 text-sm w-36" />
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9 text-sm w-full lg:w-36" />
         </div>
-        <div className="flex gap-2 items-end">
+        <div className="flex gap-2 items-end w-full lg:w-auto">
           <Button onClick={runReport} disabled={isLoading} className="h-9">
             {isLoading ? "Loading…" : "Run Report"}
           </Button>

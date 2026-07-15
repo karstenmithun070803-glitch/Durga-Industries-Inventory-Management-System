@@ -81,11 +81,35 @@ export function ReportsClient({ vehicles, stageVehicles, suppliers, materials, c
   }
 
   return (
-    <div className="flex h-full">
-      {/* Left sub-nav */}
+    <div className="flex flex-col lg:flex-row h-full">
+      {/* Mobile: horizontal scrollable tab bar (desktop sub-nav hidden below lg) */}
+      <div className="lg:hidden shrink-0 border-b border-slate-200 bg-slate-50 overflow-x-auto">
+        <div className="flex gap-1.5 p-2 min-w-max">
+          {NAV_ITEMS.map((item) => {
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2 rounded-md text-sm whitespace-nowrap shrink-0 transition-colors",
+                  active
+                    ? "bg-slate-800 text-white font-medium"
+                    : "text-slate-600 bg-white border border-slate-200"
+                )}
+              >
+                <item.icon className="w-4 h-4 shrink-0" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Left sub-nav (desktop) */}
       <aside
         ref={asideRef}
-        className="w-52 shrink-0 border-r border-slate-200 bg-slate-50 flex flex-col py-4 px-2 gap-0.5"
+        className="hidden lg:flex w-52 shrink-0 border-r border-slate-200 bg-slate-50 flex-col py-4 px-2 gap-0.5"
         onKeyDown={handleAsideKeyDown}
       >
         <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider px-3 mb-2">Reports</p>
