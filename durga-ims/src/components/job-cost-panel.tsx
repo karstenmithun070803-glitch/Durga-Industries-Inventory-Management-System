@@ -60,7 +60,7 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
     <div className="bg-white border border-slate-200 rounded-lg p-4">
       <p className="text-sm font-medium text-slate-700 mb-3">Job Cost Search</p>
 
-      <div className="w-96">
+      <div className="w-full lg:w-96">
         <Combobox
           options={vehicleOptions}
           value={selectedVehicleId ?? ""}
