@@ -9,8 +9,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "DVN Inventory Management System",
-    short_name: "DVN IMS",
+    name: "DVN Inventory System",
+    short_name: "DVN Inventory System",
     description: "Inventory management for Durga Industries — stock, transactions, invoices, and reports.",
     lang: "en",
     categories: ["business", "productivity"],

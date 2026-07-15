@@ -29,16 +29,16 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "Durga Industries IMS",
   description: "Inventory Management System",
-  applicationName: "DVN IMS",
+  applicationName: "DVN Inventory System",
   manifest: "/manifest.webmanifest",
   // iOS reads the home-screen label from here (apple-mobile-web-app-title), NOT the manifest.
-  // `title` MUST match manifest `short_name` ("DVN IMS") or Android and iOS disagree.
+  // `title` MUST match manifest `short_name` or Android and iOS disagree.
   // `statusBarStyle: "default"` (not "black-translucent") so content isn't pushed under the
   // notch given viewportFit: "cover".
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "DVN IMS",
+    title: "DVN Inventory System",
   },
 };
 
