@@ -25,6 +25,9 @@
     /* Unified accent: all focus rings (inputs + buttons) share one blue (blue-500). */
     --ring: 217 91% 60%;
     --radius: 0.5rem;
+    /* Consumed by button.tsx / select.tsx via rounded-[min(var(--radius-md),12px)].
+       Was undefined → border-radius invalidated → square corners on all small buttons. */
+    --radius-md: calc(var(--radius) - 2px); /* 6px */
   }
   .dark {
     --background: 222.2 84% 4.9%;

@@ -131,7 +131,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                 className="max-w-xs"
               />
               {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
+                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
                   {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
                 </Button>
               )}
