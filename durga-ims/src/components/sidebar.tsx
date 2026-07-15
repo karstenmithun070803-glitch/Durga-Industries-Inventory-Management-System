@@ -2,29 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Users,
-  Truck,
-  Package,
-  Ruler,
-  Percent,
-  HardHat,
-  ShoppingCart,
-  ClipboardList,
-  ClipboardCheck,
-  FileText,
-  BarChart2,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  Building2,
-  LogOut,
-  Warehouse,
-  Layers,
-  ShieldCheck,
-  IndianRupee,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut } from "lucide-react";
 import { logout } from "@/lib/actions/auth.actions";
 import { getFYOptions } from "@/lib/fy";
 import { useFY } from "@/lib/financial-year";
@@ -32,63 +10,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useRouter } from "next/navigation";
-
-interface NavLeaf {
-  label: string;
-  href: string;
-  icon: typeof LayoutDashboard;
-}
-
-interface NavItem {
-  label: string;
-  href?: string;
-  icon: typeof LayoutDashboard;
-  children?: NavLeaf[];
-  adminOnly?: boolean;
-}
-
-const nav: NavItem[] = [
-  {
-    label: "Home",
-    href: "/",
-    icon: LayoutDashboard,
-  },
-  {
-    label: "Admin",
-    icon: ShieldCheck,
-    adminOnly: true,
-    children: [
-      { label: "Material Rate Master", href: "/admin/material-rates", icon: IndianRupee },
-    ],
-  },
-  {
-    label: "Masters",
-    icon: Package,
-    children: [
-      { label: "Customers", href: "/masters/customers", icon: Users },
-      { label: "Vehicle", href: "/masters/vehicles", icon: Truck },
-      { label: "Suppliers", href: "/masters/suppliers", icon: Building2 },
-      { label: "Materials", href: "/masters/materials", icon: Package },
-      { label: "Units", href: "/masters/units", icon: Ruler },
-      { label: "Tax Rates", href: "/masters/tax", icon: Percent },
-      { label: "Stages", href: "/masters/stages", icon: Layers },
-      { label: "Contractors", href: "/masters/contractors", icon: HardHat },
-    ],
-  },
-  {
-    label: "Transactions",
-    icon: ShoppingCart,
-    children: [
-      { label: "Purchase Orders", href: "/transactions/purchase-orders", icon: ShoppingCart },
-      { label: "Veh. Issue (Old)", href: "/transactions/material-issues", icon: ClipboardList },
-      { label: "Veh. Issue (New)", href: "/transactions/material-issues/new", icon: ClipboardCheck },
-    ],
-  },
-  { label: "Invoice", href: "/invoice", icon: FileText },
-  { label: "Stock", href: "/stock", icon: Warehouse },
-  { label: "Reports", href: "/reports", icon: BarChart2 },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
+import { nav } from "@/lib/nav";
 
 const fyOptions = getFYOptions(5);
 
@@ -115,7 +37,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   useHotkeys("alt+g", (e) => { e.preventDefault(); router.push("/settings"); }, { enableOnFormTags: true });
 
   return (
-    <aside className="w-56 shrink-0 bg-slate-900 flex flex-col h-screen sticky top-0">
+    <aside className="w-56 shrink-0 bg-slate-900 hidden lg:flex flex-col h-screen sticky top-0">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-slate-700">
         <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Durga Industries</p>

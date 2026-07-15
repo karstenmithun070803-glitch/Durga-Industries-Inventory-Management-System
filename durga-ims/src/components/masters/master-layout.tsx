@@ -17,11 +17,11 @@ export function MasterLayout({ title, formPanel, tablePanel }: Props) {
   }, []);
 
   return (
-    <div className="p-6 h-full flex flex-col gap-4">
+    <div className="p-4 lg:p-6 h-full flex flex-col gap-4">
       <h1 className="text-xl font-semibold text-slate-800">{title}</h1>
-      <div className="flex gap-5 flex-1 min-h-0">
-        {/* Left: form */}
-        <div className="w-80 shrink-0 bg-white rounded-lg border border-slate-200 shadow-sm p-5 h-fit">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-5 flex-1 min-h-0">
+        {/* Left (desktop) / top (mobile): form */}
+        <div className="w-full lg:w-80 shrink-0 bg-white rounded-lg border border-slate-200 shadow-sm p-5 h-fit">
           <form autoComplete="off" onSubmit={(e) => e.preventDefault()} onKeyDown={handleFormKeyDown}>
             {formPanel}
           </form>

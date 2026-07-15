@@ -63,4 +63,16 @@
     text-decoration: line-through;
   }
 
+  /* Safe-area insets (notch / Dynamic Island / home bar). Enabled by viewportFit=cover.
+     Used by the mobile top bar and any bottom-fixed mobile actions. Inert on devices
+     with no insets (env() resolves to 0). */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .min-h-safe-top {
+    min-height: env(safe-area-inset-top);
+  }
 }

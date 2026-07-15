@@ -12,6 +12,7 @@ import type { Material, Unit } from "@/types";
 import { AlertTriangle, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { ImportRatesDialog } from "./import-rates-dialog";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 // "150.0000" -> "150". Keeps the grid readable without losing precision on save.
 function displayRate(raw: string | null): string {
@@ -86,10 +87,67 @@ const RateRow = React.memo(function RateRow({
   );
 });
 
+// ─── Mobile card row ─────────────────────────────────────────────────────────
+// Single-column card equivalent of RateRow for phones. Memoized for the same reason:
+// 150-200 controlled inputs must not all re-render on every keystroke. Rendered instead
+// of (never alongside) RateRow, so there is only ever one input per material — no
+// duplicate ids / data attrs and no double-mounted state.
+
+interface CardProps {
+  id: string;
+  code: string;
+  name: string;
+  unitName: string;
+  value: string;
+  isDirty: boolean;
+  onChange: (id: string, value: string) => void;
+}
+
+const RateCard = React.memo(function RateCard({
+  id,
+  code,
+  name,
+  unitName,
+  value,
+  isDirty,
+  onChange,
+}: CardProps) {
+  const unset = value.trim() === "";
+  return (
+    <div className={`rounded-lg border p-3 ${isDirty ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white"}`}>
+      <div className="min-w-0">
+        <div className="font-medium text-slate-800">{name}</div>
+        <div className="text-xs text-slate-500 font-mono mt-0.5">{code} · {unitName}</div>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <label className="text-xs text-slate-600 shrink-0" htmlFor={`rate-m-${id}`}>Max Rate (₹)</label>
+        <Input
+          id={`rate-m-${id}`}
+          type="text"
+          inputMode="decimal"
+          aria-label={`Max rate for ${name}`}
+          data-testid={`rate-input-m-${id}`}
+          className={`ml-auto w-32 tabular-nums ${unset ? "border-amber-400 bg-amber-50" : ""}`}
+          value={value}
+          placeholder="Not set"
+          onChange={(e) => onChange(id, e.target.value)}
+        />
+      </div>
+      {unset && (
+        <p className="mt-1.5 flex items-center gap-1 text-xs text-amber-700">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          Not set — cannot be purchased
+        </p>
+      )}
+    </div>
+  );
+});
+
 // ─── Grid ────────────────────────────────────────────────────────────────────
 
 export function MaterialRatesClient({ materials, units }: Props) {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
@@ -232,8 +290,8 @@ export function MaterialRatesClient({ materials, units }: Props) {
   }, [dirty.size]);
 
   return (
-    <div className="p-6 h-full flex flex-col gap-4">
-      <div className="flex items-baseline gap-3">
+    <div className="p-4 lg:p-6 h-full flex flex-col gap-4">
+      <div className="flex items-baseline gap-3 flex-wrap">
         <h1 className="text-xl font-semibold text-slate-800">Material Rate Master</h1>
         <span className="text-xs text-slate-500">
           Only an admin can set the purchase ceiling. A material with no ceiling cannot be purchased.
@@ -241,7 +299,7 @@ export function MaterialRatesClient({ materials, units }: Props) {
       </div>
 
       <div className="flex-1 min-h-0 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-        <div className="p-3 border-b border-slate-100 flex items-center gap-2">
+        <div className="p-3 border-b border-slate-100 flex items-center gap-2 flex-wrap">
           <Input
             autoComplete="off"
             placeholder="Search by name or M001..."
@@ -267,40 +325,62 @@ export function MaterialRatesClient({ materials, units }: Props) {
         </div>
 
         <div className="overflow-auto flex-1">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-700 text-white sticky top-0 z-10">
-              <tr>
-                {["S.No", "Material Code", "Material Name", "Unit", "Max Rate (₹)"].map((h) => (
-                  <th key={h} className="px-3 py-1.5 text-left font-medium whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-700">
-                    No materials found
-                  </td>
-                </tr>
+          {isMobile ? (
+            // Mobile: single-column editable cards (the allowed admin entry path on phones)
+            <div className="p-3 flex flex-col gap-2">
+              {visible.length === 0 ? (
+                <p className="px-4 py-8 text-center text-slate-700">No materials found</p>
+              ) : (
+                visible.map((m) => (
+                  <RateCard
+                    key={m.id}
+                    id={m.id}
+                    code={formatCode("M-", m.material_no)}
+                    name={m.name}
+                    unitName={unitName(m)}
+                    value={rates[m.id] ?? ""}
+                    isDirty={dirty.has(m.id)}
+                    onChange={handleChange}
+                  />
+                ))
               )}
-              {visible.map((m, i) => (
-                <RateRow
-                  key={m.id}
-                  id={m.id}
-                  code={formatCode("M-", m.material_no)}
-                  name={m.name}
-                  unitName={unitName(m)}
-                  value={rates[m.id] ?? ""}
-                  isDirty={dirty.has(m.id)}
-                  rowIndex={i}
-                  onChange={handleChange}
-                  onKeyDown={handleKeyDown}
-                />
-              ))}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-700 text-white sticky top-0 z-10">
+                <tr>
+                  {["S.No", "Material Code", "Material Name", "Unit", "Max Rate (₹)"].map((h) => (
+                    <th key={h} className="px-3 py-1.5 text-left font-medium whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-slate-700">
+                      No materials found
+                    </td>
+                  </tr>
+                )}
+                {visible.map((m, i) => (
+                  <RateRow
+                    key={m.id}
+                    id={m.id}
+                    code={formatCode("M-", m.material_no)}
+                    name={m.name}
+                    unitName={unitName(m)}
+                    value={rates[m.id] ?? ""}
+                    isDirty={dirty.has(m.id)}
+                    rowIndex={i}
+                    onChange={handleChange}
+                    onKeyDown={handleKeyDown}
+                  />
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <div className="border-t border-slate-200 px-3 py-2 flex items-center gap-3 bg-slate-50">

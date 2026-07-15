@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Poppins } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { WebVitals } from "./web-vitals";
@@ -21,6 +21,14 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "Durga Industries IMS",
   description: "Inventory Management System",
+};
+
+// Enables device-width scaling and safe-area insets (notch / Dynamic Island / home bar)
+// on phones via `viewportFit=cover`. No effect on desktop.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

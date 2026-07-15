@@ -7,6 +7,7 @@ import { getCompanySettings } from "@/lib/actions/settings.actions";
 import { JobCostPanel } from "@/components/job-cost-panel";
 import { getCurrentFY } from "@/lib/fy";
 import { cn } from "@/lib/utils";
+import { RecordCard, RecordCardList, RecordField } from "@/components/ui/record-card";
 
 function fmtAmt(v: number) {
   return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -56,32 +57,50 @@ function RecentTable({
   rows: React.ReactNode[][];
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead className="bg-slate-50">
-          <tr>
-            {headers.map((h) => (
-              <th key={h} className="px-3 py-2 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
+    <>
+      {/* Desktop: unchanged table */}
+      <div className="hidden lg:block bg-white border border-slate-200 rounded-lg overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50">
             <tr>
-              <td colSpan={headers.length} className="px-3 py-4 text-center text-slate-700">None yet</td>
+              {headers.map((h) => (
+                <th key={h} className="px-3 py-2 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>
+              ))}
             </tr>
-          ) : (
-            rows.map((row, i) => (
-              <tr key={i} className="border-t border-slate-100 hover:bg-slate-50">
-                {row.map((cell, j) => (
-                  <td key={j} className="px-3 py-2 whitespace-nowrap text-slate-700">{cell}</td>
-                ))}
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={headers.length} className="px-3 py-4 text-center text-slate-700">None yet</td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+            ) : (
+              rows.map((row, i) => (
+                <tr key={i} className="border-t border-slate-100 hover:bg-slate-50">
+                  {row.map((cell, j) => (
+                    <td key={j} className="px-3 py-2 whitespace-nowrap text-slate-700">{cell}</td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile: card list (first column becomes the card title, rest become fields) */}
+      <RecordCardList className="lg:hidden">
+        {rows.length === 0 ? (
+          <p className="text-center text-sm text-slate-500 py-4 border border-slate-200 rounded-lg bg-white">None yet</p>
+        ) : (
+          rows.map((row, i) => (
+            <RecordCard key={i} title={row[0]}>
+              {row.slice(1).map((cell, j) => (
+                <RecordField key={j} label={headers[j + 1]} value={cell} />
+              ))}
+            </RecordCard>
+          ))
+        )}
+      </RecordCardList>
+    </>
   );
 }
 
@@ -94,14 +113,14 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-4 lg:p-6 max-w-6xl">
       <div className="flex items-baseline gap-3 mb-6">
         <h1 className="text-xl font-semibold text-slate-800">Home</h1>
         <span className="text-sm text-slate-700">FY {fy}</span>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Total Stock Value"
           value={fmtAmt(stats.totalStockValue)}
@@ -123,7 +142,7 @@ export default async function HomePage() {
       </div>
 
       {/* Recent activity */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
         <div>
           <SectionTitle>Recent Purchase Orders</SectionTitle>
           <RecentTable
