@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { login } from "@/lib/actions/auth.actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,10 +23,15 @@ export default async function LoginPage({
       <div className="w-full max-w-sm">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            DURGA INDUSTRIES
-          </h1>
-          <p className="text-sm text-slate-600 mt-1">Inventory Management System</p>
+          <Image
+            src="/brand/dvn-logo.png"
+            alt="DVN Coach — V. Moorthy's"
+            width={671}
+            height={376}
+            priority
+            className="mx-auto h-16 w-auto"
+          />
+          <p className="text-sm text-slate-600 mt-3">Inventory Management System</p>
         </div>
 
         {/* Card */}

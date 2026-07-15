@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -32,6 +33,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useRouter } from "next/navigation";
+import { PwaInstall } from "@/components/pwa-install";
 
 interface NavLeaf {
   label: string;
@@ -116,10 +118,18 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <aside className="w-56 shrink-0 bg-slate-900 flex flex-col h-screen sticky top-0">
-      {/* Logo */}
-      <div className="px-4 py-5 border-b border-slate-700">
-        <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Durga Industries</p>
-        <p className="text-white font-semibold text-sm mt-0.5">Inventory System</p>
+      {/* Logo — the wordmark has dark navy text, so it sits on a white panel to stay legible
+          against the dark sidebar. */}
+      <div className="px-4 py-4 border-b border-slate-700">
+        <div className="bg-white rounded-md p-2">
+          <Image
+            src="/brand/dvn-logo.png"
+            alt="DVN Coach — V. Moorthy's"
+            width={671}
+            height={376}
+            className="w-full h-auto"
+          />
+        </div>
       </div>
 
       {/* Nav. `font-nav` (Poppins) is applied to the label <span>s below — NOT here — so the
@@ -233,6 +243,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
             )}
           </div>
         </div>
+        <PwaInstall />
         <form action={logout}>
           <button
             type="submit"

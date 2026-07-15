@@ -1,7 +1,22 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Public PWA assets must never be auth-gated: browsers fetch the manifest/icons without
+// credentials, and a redirect to /login would make the app non-installable. This is a
+// belt-and-braces guard alongside the matcher exemption below — if a future refactor drops
+// the matcher entry, this early-return still keeps these paths public.
+const PUBLIC_PWA_ASSETS = [
+  "/manifest.webmanifest",
+  "/icon.png",
+  "/apple-icon.png",
+];
+
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  if (PUBLIC_PWA_ASSETS.includes(pathname) || pathname.startsWith("/icons/")) {
+    return NextResponse.next();
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -53,6 +68,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Skip Next.js internals, static files, image routes, and internal admin API
-    "/((?!_next/static|_next/image|favicon.ico|api/admin|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|api/admin|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
