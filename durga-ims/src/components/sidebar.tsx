@@ -135,7 +135,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
                 <button
                   onClick={() => toggle(item.label)}
                   className={cn(
-                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-semibold transition-colors",
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[15px] [font-weight:450] transition-colors",
                     isActive
                       ? "text-white bg-slate-700"
                       : "text-white hover:bg-slate-800"
@@ -158,7 +158,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
                           key={child.href}
                           href={child.href}
                           className={cn(
-                            "flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-semibold transition-colors",
+                            "flex items-center gap-2 px-2 py-1.5 rounded-md text-[15px] [font-weight:450] transition-colors",
                             active
                               ? "text-white bg-slate-700"
                               : "text-white hover:bg-slate-800"
@@ -181,7 +181,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
               key={item.href}
               href={item.href!}
               className={cn(
-                "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-semibold transition-colors",
+                "flex items-center gap-2.5 px-3 py-2 rounded-md text-[15px] [font-weight:450] transition-colors",
                 active
                   ? "text-white bg-slate-700"
                   : "text-white hover:bg-slate-800"

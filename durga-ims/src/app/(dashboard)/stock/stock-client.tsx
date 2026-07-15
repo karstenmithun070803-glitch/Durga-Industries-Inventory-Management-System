@@ -461,7 +461,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
           <Button
             variant="outline"
             size="sm"
-            className="h-8 text-xs ml-auto"
+            className="h-8 text-xs ml-auto border-field"
             onClick={() => {
               const headers = ["Code", "Material Name", "Unit", "Current Stock", "Max Level", "Valuation Rate (incl. GST)", "Stock Value (incl. GST)", "Status"];
               const statusLabel: Record<string, string> = { ok: "OK", out: "Out of Stock" };

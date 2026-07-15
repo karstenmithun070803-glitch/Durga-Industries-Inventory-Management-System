@@ -203,11 +203,11 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
                 className="max-w-sm"
               />
               {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs">
+                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
                   {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs ml-auto">
+              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs border-field ml-auto">
                 <Upload className="w-3.5 h-3.5 mr-1.5" />Import
               </Button>
             </div>

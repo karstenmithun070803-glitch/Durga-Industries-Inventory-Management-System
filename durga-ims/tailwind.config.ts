@@ -25,10 +25,11 @@ const config: Config = {
         // System-B cursor/hover fill ("slate-250" — between slate-200 and slate-300).
         // Single source of truth for every row/dropdown hover band; retune here.
         rowhover: "#d6dee8",
-        // Resting border for editable field boxes (inputs, dropdowns, Qty/Rate cells, etc.).
-        // Pure black for visibility on low-contrast monitors. Retune here. NOTE: distinct from
-        // `--input`/`--border` on purpose — those also paint backgrounds/cards/dividers.
-        field: "#000000",
+        // Resting border for editable field boxes (inputs, dropdowns, Qty/Rate cells) AND the
+        // black-outlined toolbar buttons (Import / Inactive Only / Export CSV). Slate-900 — a
+        // softened near-black: clearly visible on low-contrast monitors, gentler than pure #000.
+        // Retune here. NOTE: distinct from `--input`/`--border` — those paint bg/cards/dividers.
+        field: "#0F172A",
       },
       borderRadius: {
         lg: "var(--radius)",
