@@ -73,7 +73,10 @@ async function main() {
       WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
       ORDER BY table_name
     `;
-    const known = new Set([...WIPE, ...KEEP]);
+    // Keep KNOWN as an array and derive the Set from it: tsconfig sets no target,
+    // so this file compiles at ES5, where iterating a Set is a build error.
+    const KNOWN = [...WIPE, ...KEEP];
+    const known = new Set(KNOWN);
     const unknown = live.map((r) => r.table_name).filter((t) => !known.has(t));
 
     if (unknown.length > 0) {
@@ -84,9 +87,7 @@ async function main() {
       process.exit(1);
     }
 
-    const missing = [...known].filter(
-      (t) => !live.some((r) => r.table_name === t)
-    );
+    const missing = KNOWN.filter((t) => !live.some((r) => r.table_name === t));
     if (missing.length > 0) {
       console.error(`✗ Expected tables absent from ${host}: ${missing.join(", ")}`);
       console.error("  Nothing was changed. Is DIRECT_URL pointing at the right database?");
