@@ -30,11 +30,13 @@ export interface CurrentUser {
  * caller that treats "employee" as proof of a real session would otherwise be
  * wrong for anonymous requests.
  *
- * The join is on supabase_auth_id, NEVER on the email prefix. app_users.username
- * does not track the auth email: the sole existing account is username "mithun"
- * with email "dvncoach@durgaindustries.internal". Deriving the username from the
- * email (as stock.actions.ts does for audit stamping) would silently resolve no
- * row here, and the admin would be demoted to employee.
+ * The join is on supabase_auth_id, NEVER on the email prefix. app_users.username is
+ * not guaranteed to track the auth email — the admin was username "mithun" against
+ * email "dvncoach@durgaindustries.internal" until change-admin-login.ts aligned both
+ * on "dvnvijay". They agree today by coincidence of that rename, not by any
+ * constraint, and nothing keeps them in step. Deriving the username from the email
+ * (as stock.actions.ts does for audit stamping) would silently resolve no row here,
+ * and the admin would be demoted to employee.
  *
  * Deduped to one query per request where the React server runtime provides cache().
  */

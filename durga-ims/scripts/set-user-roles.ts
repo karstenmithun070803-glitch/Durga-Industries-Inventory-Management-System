@@ -21,7 +21,9 @@ config({ path: ".env.local" });
 import postgres from "postgres";
 import { createInterface } from "node:readline/promises";
 
-const ADMIN_EMAIL = "dvncoach@durgaindustries.internal";
+// Renamed from dvncoach@ by change-admin-login.ts. Resolved by email below, so this
+// constant must track auth.users or the admin promotion silently finds nothing.
+const ADMIN_EMAIL = "dvnvijay@durgaindustries.internal";
 const EMPLOYEE_USERNAME = "maruthudvn";
 const EMPLOYEE_EMAIL = `${EMPLOYEE_USERNAME}@durgaindustries.internal`;
 const EMPLOYEE_DISPLAY_NAME = "Maruthu Dvn";
