@@ -7,18 +7,17 @@ import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { createUnit, updateUnit, deleteUnit, reactivateUnit } from "@/lib/actions/units.actions";
+import { createUnit, updateUnit, deleteUnit } from "@/lib/actions/units.actions";
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Unit } from "@/types";
-import { RotateCcw, UserX } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export function UnitsClient({ units }: { units: Unit[] }) {
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
-  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Unit | null>(null);
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [isPending, startTransition] = useTransition();
   const [escapeDiscardOpen, setEscapeDiscardOpen] = useState(false);
@@ -28,13 +27,12 @@ export function UnitsClient({ units }: { units: Unit[] }) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalNameRef = useRef("");
 
-  const inactive = units.filter((u) => !u.is_active);
   const visible = useMemo(() =>
-    units.filter((u) => showInactive ? !u.is_active : u.is_active).filter((u) =>
+    units.filter((u) =>
       u.unit_name.toLowerCase().includes(search.toLowerCase()) ||
       matchesCode(search, "U-", u.unit_code, 2)
     ),
-    [units, search, showInactive]
+    [units, search]
   );
 
   function startEdit(unit: Unit) { setEditing(unit); setFocusedIdx(-1); setName(unit.unit_name); originalNameRef.current = unit.unit_name; }
@@ -70,19 +68,6 @@ export function UnitsClient({ units }: { units: Unit[] }) {
     });
   }
 
-  function handleReactivate(id: string) {
-    startTransition(async () => {
-      try {
-        await reactivateUnit(id);
-        toast.success("Unit reactivated");
-        setShowInactive(false);
-        resetForm();
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Could not reactivate");
-      }
-    });
-  }
-
   return (
     <>
       <MasterLayout
@@ -100,15 +85,9 @@ export function UnitsClient({ units }: { units: Unit[] }) {
             </div>
             {editing && (
               <div className="pt-3 border-t border-slate-200 mt-1">
-                {editing.is_active ? (
-                  <Button type="button" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
-                    <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
-                  </Button>
-                ) : (
-                  <Button type="button" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
-                  </Button>
-                )}
+                <Button type="button" variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs" onClick={() => setDeletingId(editing.id)} disabled={isPending}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
               </div>
             )}
           </div>
@@ -130,11 +109,6 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                 }}
                 className="max-w-xs"
               />
-              {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
-                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
-                </Button>
-              )}
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
@@ -152,7 +126,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                   {visible.map((unit, i) => (
                     <tr
                       key={unit.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !unit.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(unit)}
                     >
                       <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
@@ -176,22 +150,22 @@ export function UnitsClient({ units }: { units: Unit[] }) {
         isPending={false}
       />
       <ConfirmDialog
-        open={deactivatingId !== null}
-        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
-        title="Deactivate unit?"
-        description="This will deactivate the unit. Materials using this unit will retain their existing assignments. You can reactivate at any time."
-        confirmLabel="Deactivate"
+        open={deletingId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        title="Delete unit?"
+        description="This permanently deletes the unit. If it is used by any material or transaction, its history is preserved and it is simply removed from all lists. This cannot be undone."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (!deactivatingId) return;
+          if (!deletingId) return;
           startTransition(async () => {
             try {
-              await deleteUnit(deactivatingId);
-              toast.success("Unit deactivated");
+              await deleteUnit(deletingId);
+              toast.success("Unit deleted");
               resetForm();
             } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+              toast.error(e instanceof Error ? e.message : "Could not delete");
             } finally {
-              setDeactivatingId(null);
+              setDeletingId(null);
             }
           });
         }}

@@ -10,10 +10,10 @@ interface Props {
 }
 
 export function MasterLayout({ title, formPanel, tablePanel }: Props) {
-  // Masters keep the original semantics: Tab trapped, no extra stops,
-  // Enter on a combobox trigger fires natively (opens the dropdown).
+  // Masters: Tab trapped, Enter on a combobox opens it (fires natively). ←/→ are left
+  // to the browser so they move the text caret within a field (Enter/↑/↓ change fields).
   const handleFormKeyDown = useCallback((e: React.KeyboardEvent<HTMLFormElement>) => {
-    handleVerticalFormKeyDown(e, { trapTab: true });
+    handleVerticalFormKeyDown(e, { trapTab: true, horizontalArrows: false });
   }, []);
 
   return (

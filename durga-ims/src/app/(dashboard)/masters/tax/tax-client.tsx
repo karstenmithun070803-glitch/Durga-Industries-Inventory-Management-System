@@ -10,15 +10,16 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createTaxRate, updateTaxRate, deleteTaxRate, reactivateTaxRate } from "@/lib/actions/tax.actions";
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { TaxRate } from "@/types";
-import { RotateCcw, UserX } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
-  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<TaxRate | null>(null);
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Set when a new inv_prefix collides with a hidden ("deleted") tax rate: prompt to restore it (R5).
+  const [hiddenCollision, setHiddenCollision] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState({ tax_percentage: "" });
   const [isPending, startTransition] = useTransition();
   const [escapeDiscardOpen, setEscapeDiscardOpen] = useState(false);
@@ -28,9 +29,8 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef({ tax_percentage: "" });
 
-  const inactive = taxRates.filter((t) => !t.is_active);
   const visible = useMemo(() =>
-    taxRates.filter((t) => showInactive ? !t.is_active : t.is_active).filter((t) => {
+    taxRates.filter((t) => {
       const q = search.toLowerCase();
       return (
         t.description.toLowerCase().includes(q) ||
@@ -38,7 +38,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
         matchesCode(search, "T-", t.vat_code, 2)
       );
     }),
-    [taxRates, search, showInactive]
+    [taxRates, search]
   );
 
   function startEdit(t: TaxRate) {
@@ -71,24 +71,37 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
   function handleSubmit() {
     startTransition(async () => {
       try {
-        if (editing) { await updateTaxRate(editing.id, form); } else { await createTaxRate(form); }
-        toast.success(editing ? "Tax rate updated" : "Tax rate added");
-        resetForm();
+        if (editing) {
+          await updateTaxRate(editing.id, form);
+          toast.success("Tax rate updated");
+          resetForm();
+        } else {
+          const res = await createTaxRate(form);
+          if ("hiddenCollision" in res) {
+            // Prefix matches a previously-deleted (hidden) tax rate — offer to restore it.
+            setHiddenCollision(res.hiddenCollision);
+            return;
+          }
+          toast.success("Tax rate added");
+          resetForm();
+        }
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Something went wrong");
       }
     });
   }
 
-  function handleReactivate(id: string) {
+  function handleRestore() {
+    if (!hiddenCollision) return;
     startTransition(async () => {
       try {
-        await reactivateTaxRate(id);
-        toast.success("Tax rate reactivated");
-        setShowInactive(false);
+        await reactivateTaxRate(hiddenCollision.id);
+        toast.success("Tax rate restored");
         resetForm();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+        toast.error(e instanceof Error ? e.message : "Could not restore");
+      } finally {
+        setHiddenCollision(null);
       }
     });
   }
@@ -120,15 +133,9 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
             </div>
             {editing && (
               <div className="pt-3 border-t border-slate-200 mt-1">
-                {editing.is_active ? (
-                  <Button type="button" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
-                    <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
-                  </Button>
-                ) : (
-                  <Button type="button" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
-                  </Button>
-                )}
+                <Button type="button" variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs" onClick={() => setDeletingId(editing.id)} disabled={isPending}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
               </div>
             )}
           </div>
@@ -150,11 +157,6 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
                 }}
                 className="max-w-xs"
               />
-              {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
-                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
-                </Button>
-              )}
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
@@ -172,7 +174,7 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
                   {visible.map((t, i) => (
                     <tr
                       key={t.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !t.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(t)}
                     >
                       <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
@@ -196,25 +198,34 @@ export function TaxClient({ taxRates }: { taxRates: TaxRate[] }) {
         isPending={false}
       />
       <ConfirmDialog
-        open={deactivatingId !== null}
-        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
-        title="Deactivate tax rate?"
-        description="This will deactivate the tax rate. Materials and transactions using this rate will be unaffected. You can reactivate at any time."
-        confirmLabel="Deactivate"
+        open={deletingId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        title="Delete tax rate?"
+        description="This permanently deletes the tax rate. If it is used by any material or invoice, its history is preserved and it is simply removed from all lists. This cannot be undone."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (!deactivatingId) return;
+          if (!deletingId) return;
           startTransition(async () => {
             try {
-              await deleteTaxRate(deactivatingId);
-              toast.success("Tax rate deactivated");
+              await deleteTaxRate(deletingId);
+              toast.success("Tax rate deleted");
               resetForm();
             } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+              toast.error(e instanceof Error ? e.message : "Could not delete");
             } finally {
-              setDeactivatingId(null);
+              setDeletingId(null);
             }
           });
         }}
+        isPending={isPending}
+      />
+      <ConfirmDialog
+        open={hiddenCollision !== null}
+        onOpenChange={(open) => { if (!open) setHiddenCollision(null); }}
+        title="Restore deleted tax rate?"
+        description={`A previously-deleted tax rate "${hiddenCollision?.name ?? ""}" still exists in your history. Restore that record (its history reattaches), or cancel and use a different invoice prefix.`}
+        confirmLabel="Restore"
+        onConfirm={handleRestore}
         isPending={isPending}
       />
     </>

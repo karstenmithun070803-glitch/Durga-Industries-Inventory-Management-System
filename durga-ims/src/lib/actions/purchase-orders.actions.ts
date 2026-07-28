@@ -7,7 +7,7 @@ import { purchaseOrders, purchaseOrderItems, materials, stockLedger, materialIss
 import { suppliers, units } from "@/lib/db/schema";
 import { eq, and, max, desc, inArray, sql, gte, lte, or, ilike } from "drizzle-orm";
 import type { PurchaseOrderWithDetails, PurchaseOrderItemWithDetails } from "@/types";
-import { exceedsCeiling } from "@/lib/utils/max-rate";
+import { exceedsCeiling, belowFloor, rateBand } from "@/lib/utils/max-rate";
 import { isUniqueViolation } from "@/lib/utils/pg-errors";
 
 // ---------------------------------------------------------------------------
@@ -315,8 +315,9 @@ export const getActiveMaterials = unstable_cache(
           purchase_unit_id: materials.purchase_unit_id,
           current_stock: materials.current_stock,
           // Sent to the browser so the PO grid can warn as you type. Advisory only —
-          // validateItems() is the authoritative check. NULL means "no ceiling set".
-          max_rate: materials.max_rate,
+          // validateItems() is the authoritative check. NULL base or buffer = not configured.
+          base_rate: materials.base_rate,
+          buffer: materials.buffer,
         })
         .from(materials)
         .where(eq(materials.is_active, true))
@@ -402,25 +403,30 @@ interface LineItemInput {
   gst_type: string | null;
 }
 
-// Rupee formatting for user-facing ceiling messages.
+// Rupee formatting for user-facing band messages.
 function inr(value: string | number): string {
   return `₹${Number(value).toFixed(2)}`;
 }
 
 /**
- * Enforces the admin's purchase ceiling. This is the ONLY hard block — the PO grid's
- * red hint is advisory, because the browser holds a page-load snapshot of max_rate and
- * would wrongly refuse a rate the admin has since raised.
+ * Enforces the admin's purchase price band (base_rate ± buffer). This is the ONLY hard
+ * block — the PO grid's hint is advisory, because the browser holds a page-load snapshot
+ * of base/buffer and would wrongly refuse a rate the admin has since widened.
  *
- * Called by createPurchaseOrder, updatePurchaseOrder and updateReceivedPurchaseOrder,
- * so one check covers create, edit and received-edit.
+ * Returns a Map<material_id, base_rate> — the base each item was validated against — so
+ * the caller can FREEZE it onto the PO item (base_rate_snapshot) at save time. Freezing
+ * the validated value (rather than re-reading it later) makes the deviation log truthful
+ * and TOCTOU-safe: a concurrent base edit cannot desync the snapshot from the check.
+ *
+ * Called via validateItems by create, edit and received-edit — one check covers all.
  */
-async function validateMaxRates(items: LineItemInput[]) {
+async function validateRateBand(items: LineItemInput[]): Promise<Map<string, string>> {
+  const baseMap = new Map<string, string>();
   const ids = Array.from(new Set(items.map((i) => i.material_id)));
-  if (ids.length === 0) return;
+  if (ids.length === 0) return baseMap;
 
   const rows = await db
-    .select({ id: materials.id, name: materials.name, max_rate: materials.max_rate })
+    .select({ id: materials.id, name: materials.name, base_rate: materials.base_rate, buffer: materials.buffer })
     .from(materials)
     .where(inArray(materials.id, ids));
 
@@ -428,26 +434,45 @@ async function validateMaxRates(items: LineItemInput[]) {
 
   for (const item of items) {
     const mat = byId.get(item.material_id);
-    // Never `continue` past the ceiling check — that fails open.
+    // Never `continue` past the band check — that fails open.
     if (!mat) throw new Error("A selected material no longer exists. Refresh and try again.");
 
-    if (mat.max_rate === null) {
+    if (mat.base_rate === null) {
       throw new Error(
-        `${mat.name} has no admin ceiling rate. It cannot be purchased until the admin sets one in Material Rate Master.`
+        `${mat.name} has no base rate. It cannot be purchased until the admin sets one in Material Rate Master.`
+      );
+    }
+    if (mat.buffer === null) {
+      throw new Error(
+        `${mat.name} has no buffer set. It cannot be purchased until the admin sets one in Material Rate Master.`
       );
     }
 
-    // exceedsCeiling() coerces both sides with Number(). See src/lib/utils/max-rate.ts —
-    // comparing these as strings is lexicographic and silently inverts the check.
-    if (exceedsCeiling(item.rate || "0", mat.max_rate)) {
+    const band = rateBand(mat.base_rate, mat.buffer)!; // both non-null here; floor clamped ≥ 0
+    // exceedsCeiling/belowFloor coerce with Number() — string compare is lexicographic
+    // and silently inverts the check. See src/lib/utils/max-rate.ts.
+    if (exceedsCeiling(item.rate || "0", band.max)) {
       throw new Error(
-        `Rate for ${mat.name} is ${inr(item.rate || "0")} — above the admin ceiling rate of ${inr(mat.max_rate)}.`
+        `Rate for ${mat.name} is ${inr(item.rate || "0")} — above the maximum of ${inr(band.max)} (base ${inr(mat.base_rate)} + buffer ${inr(mat.buffer)}).`
       );
     }
+    if (belowFloor(item.rate || "0", band.min)) {
+      throw new Error(
+        `Rate for ${mat.name} is ${inr(item.rate || "0")} — below the minimum of ${inr(band.min)} (base ${inr(mat.base_rate)} − buffer ${inr(mat.buffer)}).`
+      );
+    }
+
+    baseMap.set(item.material_id, mat.base_rate);
   }
+
+  return baseMap;
 }
 
-async function validateItems(items: LineItemInput[]) {
+/**
+ * Full line-item validation. Returns the base-rate map from validateRateBand so callers
+ * can freeze base_rate_snapshot onto the items at save time.
+ */
+async function validateItems(items: LineItemInput[]): Promise<Map<string, string>> {
   if (items.length === 0) throw new Error("Add at least one material.");
   for (const item of items) {
     if (!item.supplier_id) throw new Error("All items must have a supplier selected.");
@@ -470,7 +495,7 @@ async function validateItems(items: LineItemInput[]) {
     if (item.rate === "0" && !item.rate_blank && !item.zero_rate_confirmed)
       throw new Error("One or more items have a zero rate without confirmation. Check 'Zero cost — confirm?' for each.");
   }
-  await validateMaxRates(items);
+  return validateRateBand(items);
 }
 
 function deriveHeaderSupplierId(items: LineItemInput[]): string | null {
@@ -488,7 +513,11 @@ interface POHeaderInput {
   items: LineItemInput[];
 }
 
-function itemValues(poId: string, item: LineItemInput) {
+// baseMap comes from validateItems/validateRateBand — the base each item was checked
+// against. Frozen here as base_rate_snapshot so the deviation history is immune to later
+// base edits. Null only for a draft whose material has no base yet (received POs always
+// have one, since validateRateBand blocks a null base).
+function itemValues(poId: string, item: LineItemInput, baseMap: Map<string, string>) {
   return {
     po_id: poId,
     material_id: item.material_id,
@@ -502,6 +531,7 @@ function itemValues(poId: string, item: LineItemInput) {
     igst_amount: item.igst_amount,
     amount: item.amount,
     gst_type: item.gst_type || null,
+    base_rate_snapshot: baseMap.get(item.material_id) ?? null,
   };
 }
 
@@ -531,28 +561,38 @@ async function batchUpdateMaterials(
 // ---------------------------------------------------------------------------
 
 export async function createPurchaseOrder(data: POHeaderInput): Promise<string> {
-  await validateItems(data.items);
+  // validateItems returns the base-rate map used to freeze base_rate_snapshot below.
+  const baseMap = await validateItems(data.items);
   const poNumber = await getNextPONumber(data.financial_year);
 
-  let po: { id: string };
+  // Header + items in ONE transaction (C14): a failure between them must not leave a PO
+  // with no line items. Matches the received-path functions.
+  let poId: string;
   try {
-    // getNextPONumber is max(po_number)+1 outside a transaction, so two simultaneous
-    // creates compute the same number. The DB's UNIQUE (po_number, financial_year)
-    // rejects the loser; turn that into a retryable message instead of a raw PG error.
-    [po] = await db
-      .insert(purchaseOrders)
-      .values({
-        po_number: poNumber,
-        po_date: new Date(data.po_date),
-        supplier_id: deriveHeaderSupplierId(data.items),
-        total_amount: data.total_amount,
-        status: "Draft",
-        financial_year: data.financial_year,
-        affects_stock: data.affects_stock,
-        supplier_bill_no: data.supplier_bill_no || null,
-        supplier_bill_date: data.supplier_bill_date || null,
-      })
-      .returning({ id: purchaseOrders.id });
+    poId = await db.transaction(async (tx) => {
+      // getNextPONumber is max(po_number)+1 outside a transaction, so two simultaneous
+      // creates compute the same number. The DB's UNIQUE (po_number, financial_year)
+      // rejects the loser; turn that into a retryable message instead of a raw PG error.
+      const [po] = await tx
+        .insert(purchaseOrders)
+        .values({
+          po_number: poNumber,
+          po_date: new Date(data.po_date),
+          supplier_id: deriveHeaderSupplierId(data.items),
+          total_amount: data.total_amount,
+          status: "Draft",
+          financial_year: data.financial_year,
+          affects_stock: data.affects_stock,
+          supplier_bill_no: data.supplier_bill_no || null,
+          supplier_bill_date: data.supplier_bill_date || null,
+        })
+        .returning({ id: purchaseOrders.id });
+
+      if (data.items.length > 0) {
+        await tx.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(po.id, item, baseMap)));
+      }
+      return po.id;
+    });
   } catch (e) {
     // isUniqueViolation walks the cause chain — drizzle wraps the PostgresError, so a
     // top-level `"code" in e` check never matches and the user sees a raw SQL dump.
@@ -562,11 +602,7 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
     throw e;
   }
 
-  if (data.items.length > 0) {
-    await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(po.id, item)));
-  }
-
-  return po.id;
+  return poId;
 }
 
 // ---------------------------------------------------------------------------
@@ -574,26 +610,29 @@ export async function createPurchaseOrder(data: POHeaderInput): Promise<string> 
 // ---------------------------------------------------------------------------
 
 export async function updatePurchaseOrder(id: string, data: Omit<POHeaderInput, "financial_year">): Promise<void> {
-  await validateItems(data.items);
-  await db
-    .update(purchaseOrders)
-    .set({
-      po_date: new Date(data.po_date),
-      supplier_id: deriveHeaderSupplierId(data.items),
-      total_amount: data.total_amount,
-      affects_stock: data.affects_stock,
-      supplier_bill_no: data.supplier_bill_no || null,
-      supplier_bill_date: data.supplier_bill_date || null,
-      updated_at: new Date(),
-    })
-    .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.status, "Draft")));
+  const baseMap = await validateItems(data.items);
+  // header update + item replace in ONE transaction (C14): delete-then-failed-insert must
+  // not leave the PO with no items. Re-inserting via itemValues re-freezes base_rate_snapshot.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(purchaseOrders)
+      .set({
+        po_date: new Date(data.po_date),
+        supplier_id: deriveHeaderSupplierId(data.items),
+        total_amount: data.total_amount,
+        affects_stock: data.affects_stock,
+        supplier_bill_no: data.supplier_bill_no || null,
+        supplier_bill_date: data.supplier_bill_date || null,
+        updated_at: new Date(),
+      })
+      .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.status, "Draft")));
 
-  await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.po_id, id));
+    await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.po_id, id));
 
-  if (data.items.length > 0) {
-    await db.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item)));
-  }
-
+    if (data.items.length > 0) {
+      await tx.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item, baseMap)));
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -656,7 +695,7 @@ export async function receivePurchaseOrder(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeaderInput, "financial_year">): Promise<void> {
-  await validateItems(data.items);
+  const baseMap = await validateItems(data.items);
   await db.transaction(async (tx) => {
     const [po] = await tx
       .select()
@@ -711,7 +750,7 @@ export async function updateReceivedPurchaseOrder(id: string, data: Omit<POHeade
     await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.po_id, id));
 
     if (data.items.length > 0) {
-      await tx.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item)));
+      await tx.insert(purchaseOrderItems).values(data.items.map((item) => itemValues(id, item, baseMap)));
     }
 
     // Apply new stock (only if new affects_stock is true)

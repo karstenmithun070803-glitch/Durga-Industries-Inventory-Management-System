@@ -5,6 +5,18 @@ import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { suppliers, purchaseOrderItems, purchaseOrders } from "@/lib/db/schema";
 import { eq, and, ilike, ne, sql } from "drizzle-orm";
+import { isForeignKeyViolation } from "@/lib/utils/pg-errors";
+
+// True when any row anywhere still references this supplier — i.e. it has history and
+// must be HIDDEN rather than physically deleted. Covers every child table (any status).
+async function supplierIsReferenced(id: string): Promise<boolean> {
+  const checks = [
+    db.select({ x: sql`1` }).from(purchaseOrders).where(eq(purchaseOrders.supplier_id, id)).limit(1),
+    db.select({ x: sql`1` }).from(purchaseOrderItems).where(eq(purchaseOrderItems.supplier_id, id)).limit(1),
+  ];
+  const results = await Promise.all(checks);
+  return results.some((r) => r.length > 0);
+}
 
 // ─── Reads (cached) ──────────────────────────────────────────────────────────
 
@@ -22,6 +34,9 @@ export const getAllSuppliers = unstable_cache(
 
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
+/** Signals the client that a new supplier matched a hidden ("deleted") row it may restore (R5). */
+export type CreateResult = { ok: true } | { hiddenCollision: { id: string; name: string } };
+
 export async function createSupplier(data: {
   name: string;
   tin_no?: string;
@@ -29,15 +44,21 @@ export async function createSupplier(data: {
   gstin?: string;
   address?: string;
   state?: string;
-}) {
+}): Promise<CreateResult> {
   if (!data.name.trim()) throw new Error("Supplier name is required");
-  const [dup] = await db.select({ id: suppliers.id }).from(suppliers)
+  // A hidden ("deleted") row still occupies the composite name+address+gstin space. Distinguish
+  // an active duplicate (a real error) from a hidden one (offer to restore, R5): return a signal
+  // so the client can ask the user instead of showing a raw "already exists" wall.
+  const [dup] = await db.select({ id: suppliers.id, is_active: suppliers.is_active, name: suppliers.name }).from(suppliers)
     .where(and(
       ilike(suppliers.name, data.name.trim()),
       sql`LOWER(TRIM(COALESCE(${suppliers.address}, ''))) = LOWER(${data.address?.trim() ?? ''})`,
       sql`LOWER(TRIM(COALESCE(${suppliers.gstin}, ''))) = LOWER(${data.gstin?.trim() ?? ''})`
     ));
-  if (dup) throw new Error(`A supplier named "${data.name.trim()}" with the same address and GSTIN already exists. Change the address or GSTIN to save a different record.`);
+  if (dup?.is_active) throw new Error(`A supplier named "${data.name.trim()}" with the same address and GSTIN already exists. Change the address or GSTIN to save a different record.`);
+  if (dup) {
+    return { hiddenCollision: { id: dup.id, name: dup.name } };
+  }
 
   await db.insert(suppliers).values({
     name: data.name.trim(),
@@ -48,6 +69,7 @@ export async function createSupplier(data: {
     state: data.state || null,
   });
   revalidateTag(CACHE_TAGS.suppliers);
+  return { ok: true as const };
 }
 
 export async function updateSupplier(id: string, data: {
@@ -79,19 +101,28 @@ export async function updateSupplier(id: string, data: {
   revalidateTag(CACHE_TAGS.suppliers);
 }
 
+/**
+ * Smart delete: physically remove the supplier when nothing references it, otherwise
+ * HIDE it (is_active=false) so it leaves all lists/pickers while its transaction history
+ * keeps displaying correctly. To the user both outcomes look identical — the row vanishes.
+ */
 export async function deleteSupplier(id: string) {
-  const draftPO = await db
-    .select({ po_number: purchaseOrders.po_number })
-    .from(purchaseOrderItems)
-    .innerJoin(purchaseOrders, eq(purchaseOrderItems.po_id, purchaseOrders.id))
-    .where(and(eq(purchaseOrderItems.supplier_id, id), eq(purchaseOrders.status, "Draft")))
-    .limit(1);
+  const [sup] = await db.select({ id: suppliers.id }).from(suppliers).where(eq(suppliers.id, id));
+  if (!sup) return;
 
-  if (draftPO.length > 0) {
-    const [sup] = await db.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, id));
-    throw new Error(
-      `Cannot deactivate "${sup?.name}": they are referenced in Draft D-${String(draftPO[0].po_number).padStart(4, "0")}. Complete or delete that PO first.`
-    );
+  // Unreferenced → physically delete. The reference check is the primary guard; the 23503 catch
+  // is a backstop for a concurrent insert racing between the check and the delete. Run the
+  // delete as a standalone statement (no explicit tx), so a failed delete never poisons the
+  // fresh update below.
+  if (!(await supplierIsReferenced(id))) {
+    try {
+      await db.delete(suppliers).where(eq(suppliers.id, id));
+      revalidateTag(CACHE_TAGS.suppliers);
+      return;
+    } catch (e) {
+      if (!isForeignKeyViolation(e)) throw e;
+      // fall through: a reference appeared → hide instead
+    }
   }
 
   await db.update(suppliers).set({ is_active: false }).where(eq(suppliers.id, id));

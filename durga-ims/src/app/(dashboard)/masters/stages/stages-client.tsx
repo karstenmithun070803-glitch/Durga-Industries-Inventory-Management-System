@@ -14,7 +14,7 @@ import {
   type StageWithMaterials,
 } from "@/lib/actions/stages.actions";
 import { formatCode } from "@/lib/utils";
-import { Trash2, RotateCcw, Layers } from "lucide-react";
+import { Trash2, Layers } from "lucide-react";
 import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
@@ -74,7 +74,6 @@ export function StagesClient({ stages, materials, units }: Props) {
   // ── List state ────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
-  const [showInactive, setShowInactive] = useState(false);
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [editing, setEditing] = useState<StageWithMaterials | null>(null);
@@ -87,7 +86,9 @@ export function StagesClient({ stages, materials, units }: Props) {
 
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [escapeDiscardOpen, setEscapeDiscardOpen] = useState(false);
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Set when a new name collides with a hidden ("deleted") stage: prompt to restore it (R5).
+  const [hiddenCollision, setHiddenCollision] = useState<{ id: string; name: string } | null>(null);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const firstFieldRef = useRef<HTMLInputElement>(null);
@@ -100,15 +101,13 @@ export function StagesClient({ stages, materials, units }: Props) {
   });
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const inactive = stages.filter((s) => !s.is_active);
+  // `stages` arrives ACTIVE-only from the server (smart delete hides referenced stages).
   const visible = useMemo(() =>
-    stages
-      .filter((s) => (showInactive ? !s.is_active : s.is_active))
-      .filter((s) => {
-        const q = search.toLowerCase();
-        return s.stage_name.toLowerCase().includes(q) || s.stage_code.toLowerCase().includes(q);
-      }),
-    [stages, search, showInactive]
+    stages.filter((s) => {
+      const q = search.toLowerCase();
+      return s.stage_name.toLowerCase().includes(q) || s.stage_code.toLowerCase().includes(q);
+    }),
+    [stages, search]
   );
 
   const materialOptions = materials.map((m) => ({
@@ -270,7 +269,7 @@ export function StagesClient({ stages, materials, units }: Props) {
 
     startTransition(async () => {
       try {
-        await saveStage({
+        const res = await saveStage({
           id: editing?.id ?? null,
           stage_name: stageName.trim(),
           materials: filledRows.map((r) => ({
@@ -279,6 +278,11 @@ export function StagesClient({ stages, materials, units }: Props) {
             unit_id: r.unit_id,
           })),
         });
+        if ("hiddenCollision" in res) {
+          // Name matches a previously-deleted (hidden) stage — offer to restore it.
+          setHiddenCollision(res.hiddenCollision);
+          return;
+        }
         toast.success(editing ? "Stage updated" : "Stage created");
         resetForm();
       } catch (e: unknown) {
@@ -308,16 +312,18 @@ export function StagesClient({ stages, materials, units }: Props) {
     onNew: () => { resetForm(); setTimeout(() => firstFieldRef.current?.focus(), 50); },
   });
 
-  // ── Reactivate ────────────────────────────────────────────────────────────
-  function handleReactivate(id: string) {
+  // ── Restore (hidden-collision path) ───────────────────────────────────────
+  function handleRestore() {
+    if (!hiddenCollision) return;
     startTransition(async () => {
       try {
-        await reactivateStage(id);
-        toast.success("Stage reactivated");
-        setShowInactive(false);
+        await reactivateStage(hiddenCollision.id);
+        toast.success("Stage restored");
         resetForm();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+        toast.error(e instanceof Error ? e.message : "Could not restore");
+      } finally {
+        setHiddenCollision(null);
       }
     });
   }
@@ -461,31 +467,17 @@ export function StagesClient({ stages, materials, units }: Props) {
 
             {editing && (
               <div className="pt-3 border-t border-slate-200">
-                {editing.is_active ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs"
-                    onClick={() => setDeactivatingId(editing.id)}
-                    disabled={isPending}
-                  >
-                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                    Deactivate
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs"
-                    onClick={() => handleReactivate(editing.id)}
-                    disabled={isPending}
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                    Reactivate
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs"
+                  onClick={() => setDeletingId(editing.id)}
+                  disabled={isPending}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  Delete
+                </Button>
               </div>
             )}
           </div>
@@ -516,16 +508,6 @@ export function StagesClient({ stages, materials, units }: Props) {
                 }}
                 className="max-w-sm"
               />
-              {inactive.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowInactive((v) => !v)}
-                  className="shrink-0 text-xs"
-                >
-                  {showInactive ? "Back to Active" : `Inactive (${inactive.length})`}
-                </Button>
-              )}
             </div>
 
             {/* Table */}
@@ -555,8 +537,6 @@ export function StagesClient({ stages, materials, units }: Props) {
                       className={`group border-t border-slate-200 cursor-pointer ${
                         i === focusedIdx
                           ? "ring-1 ring-inset ring-blue-500 bg-blue-50"
-                          : !s.is_active
-                          ? "opacity-50 bg-slate-50 hover:bg-rowhover"
                           : "hover:bg-rowhover hover:text-slate-900"
                       }`}
                     >
@@ -606,30 +586,35 @@ export function StagesClient({ stages, materials, units }: Props) {
       />
 
       <ConfirmDialog
-        open={deactivatingId !== null}
-        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
-        title="Deactivate stage?"
-        description="This will deactivate the stage. It will be hidden from the New VMI stage dropdown. You can reactivate at any time."
-        confirmLabel="Deactivate"
+        open={deletingId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        title="Delete stage?"
+        description="This permanently deletes the stage. If it is used in any issue slip or has a material template, its history is preserved and it is simply removed from all lists. This cannot be undone."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (!deactivatingId) return;
+          if (!deletingId) return;
           startTransition(async () => {
             try {
-              const { draftCount } = await deleteStage(deactivatingId);
-              toast.success("Stage deactivated");
-              if (draftCount > 0) {
-                toast.warning(
-                  `${draftCount} draft slip${draftCount === 1 ? "" : "s"} still reference this stage — they are unaffected but the stage is now inactive.`
-                );
-              }
+              await deleteStage(deletingId);
+              toast.success("Stage deleted");
               resetForm();
             } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+              toast.error(e instanceof Error ? e.message : "Could not delete");
             } finally {
-              setDeactivatingId(null);
+              setDeletingId(null);
             }
           });
         }}
+        isPending={isPending}
+      />
+
+      <ConfirmDialog
+        open={hiddenCollision !== null}
+        onOpenChange={(open) => { if (!open) setHiddenCollision(null); }}
+        title="Restore deleted stage?"
+        description={`A previously-deleted stage named "${hiddenCollision?.name ?? ""}" still exists in your issue history. Restore that record (its history reattaches), or cancel and use a different name.`}
+        confirmLabel="Restore"
+        onConfirm={handleRestore}
         isPending={isPending}
       />
     </>

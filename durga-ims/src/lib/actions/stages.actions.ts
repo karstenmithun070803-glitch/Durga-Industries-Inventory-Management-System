@@ -10,10 +10,12 @@ import {
   units,
   taxRates,
   materialIssues,
+  materialIssueItems,
   purchaseOrders,
   purchaseOrderItems,
 } from "@/lib/db/schema";
-import { eq, and, count, sql, desc, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { isForeignKeyViolation } from "@/lib/utils/pg-errors";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -246,26 +248,56 @@ async function generateStageCode(
 // Mutations
 // ---------------------------------------------------------------------------
 
+/** Signals the client that a new name matched a hidden ("deleted") row it may restore (R5). */
+export type CreateResult = { ok: true } | { hiddenCollision: { id: string; name: string } };
+
+/**
+ * True when any row anywhere still references this stage — i.e. it has history/template and
+ * must be HIDDEN rather than physically deleted.
+ *
+ * CRITICAL: stageMaterials.stage_id references stages.id with onDelete CASCADE. A hard DELETE
+ * of the stage would therefore SILENTLY drop its template rows WITHOUT Postgres ever raising
+ * 23503 — so the FK backstop in deleteStage cannot save us here. Counting stageMaterials is the
+ * only thing that keeps a stage-with-a-template from being physically deleted (and its template
+ * lost). materialIssues/materialIssueItems (no cascade) would raise 23503, but we count them too
+ * so the common case is decided up front. Net: a stage is hard-deleted ONLY when truly empty.
+ */
+async function stageIsReferenced(id: string): Promise<boolean> {
+  const checks = [
+    db.select({ x: sql`1` }).from(stageMaterials).where(eq(stageMaterials.stage_id, id)).limit(1),
+    db.select({ x: sql`1` }).from(materialIssues).where(eq(materialIssues.stage_id, id)).limit(1),
+    db.select({ x: sql`1` }).from(materialIssueItems).where(eq(materialIssueItems.stage_id, id)).limit(1),
+  ];
+  const results = await Promise.all(checks);
+  return results.some((r) => r.length > 0);
+}
+
 export async function saveStage(params: {
   id: string | null;
   stage_name: string;
   materials: Array<{ material_id: string; default_qty: string; unit_id: string }>;
-}): Promise<{ stageId: string }> {
+}): Promise<CreateResult> {
   const { id, stage_name, materials: items } = params;
   const name = stage_name.trim();
   if (!name) throw new Error("Stage name is required");
 
-  const stageId = await db.transaction(async (tx) => {
-    // Duplicate name check (case-insensitive)
-    const [existing] = await tx
-      .select({ id: stages.id })
-      .from(stages)
-      .where(sql`LOWER(${stages.stage_name}) = LOWER(${name})`);
+  // Duplicate name check (case-insensitive). A hidden ("deleted") stage still holds its name.
+  // On CREATE, distinguish an active duplicate (a real error) from a hidden one (offer to
+  // restore, R5): return a signal so the client can ask instead of showing a raw error.
+  // On EDIT, any collision with another stage is an error (mirrors updateMaterial).
+  const [existing] = await db
+    .select({ id: stages.id, is_active: stages.is_active, stage_name: stages.stage_name })
+    .from(stages)
+    .where(sql`LOWER(${stages.stage_name}) = LOWER(${name})`);
 
-    if (existing && existing.id !== id) {
+  if (existing && existing.id !== id) {
+    if (id !== null || existing.is_active) {
       throw new Error("A stage with this name already exists");
     }
+    return { hiddenCollision: { id: existing.id, name: existing.stage_name } };
+  }
 
+  await db.transaction(async (tx) => {
     let resolvedId: string;
 
     if (id === null) {
@@ -296,29 +328,35 @@ export async function saveStage(params: {
         }))
       );
     }
-
-    return resolvedId;
   });
 
   revalidateTag(CACHE_TAGS.stages);
-  return { stageId };
+  return { ok: true };
 }
 
-export async function deleteStage(id: string): Promise<{ draftCount: number }> {
-  const [{ draftCount }] = await db
-    .select({ draftCount: count() })
-    .from(materialIssues)
-    .where(and(eq(materialIssues.stage_id, id), eq(materialIssues.status, "Draft")));
-
-  if (draftCount > 0)
-    throw new Error(
-      `Stage has ${draftCount} Draft issue slip${draftCount === 1 ? "" : "s"} — complete or delete those slips before deactivating this stage.`
-    );
+/**
+ * Smart delete: physically remove the stage only when nothing references it (no template rows,
+ * no issue references), otherwise HIDE it (is_active=false) so it leaves all lists while its
+ * template and issue history keep displaying correctly. To the user both outcomes look identical.
+ *
+ * See stageIsReferenced: the stageMaterials CASCADE means the pre-check — not the 23503 catch —
+ * is what preserves a stage's template. The FK catch remains a backstop for materialIssues /
+ * materialIssueItems references that appear between the check and the delete.
+ */
+export async function deleteStage(id: string): Promise<void> {
+  if (!(await stageIsReferenced(id))) {
+    try {
+      await db.delete(stages).where(eq(stages.id, id));
+      revalidateTag(CACHE_TAGS.stages);
+      return;
+    } catch (e) {
+      if (!isForeignKeyViolation(e)) throw e;
+      // fall through: a reference appeared → hide instead
+    }
+  }
 
   await db.update(stages).set({ is_active: false }).where(eq(stages.id, id));
   revalidateTag(CACHE_TAGS.stages);
-
-  return { draftCount: 0 };
 }
 
 export async function reactivateStage(id: string): Promise<void> {

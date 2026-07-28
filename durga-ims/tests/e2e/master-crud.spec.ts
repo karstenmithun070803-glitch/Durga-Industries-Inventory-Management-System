@@ -2,7 +2,7 @@
 // Phase: 3
 // Category: E2E
 // Tests: Customer create, search, edit, GSTIN validation,
-//        deactivate → Inactive Only view, reactivate
+//        delete (unused record is permanently removed)
 // Source: src/app/(dashboard)/masters/customers/customers-client.tsx
 // ============================================================
 
@@ -54,7 +54,7 @@ test.describe("masters — customer CRUD", () => {
     await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 6_000 });
   });
 
-  test("deactivate: customer disappears from active list, visible in Inactive Only", async ({ page }) => {
+  test("delete: unused customer is permanently removed and does not reappear", async ({ page }) => {
     // Search first to filter table to only this customer (avoid clicking wrong row from prior runs)
     const searchInput = page.locator('input[placeholder*="Search"]').first();
     await searchInput.fill(CUSTOMER_NAME);
@@ -64,66 +64,18 @@ test.describe("masters — customer CRUD", () => {
     await expect(customerRow).toBeVisible({ timeout: 10_000 });
     await customerRow.click();
 
-    const deactivateBtn = page.locator('[data-testid="customer-deactivate-btn"]');
-    await expect(deactivateBtn).toBeVisible({ timeout: 5_000 });
-    await deactivateBtn.click();
+    const deleteBtn = page.locator('[data-testid="customer-delete-btn"]');
+    await expect(deleteBtn).toBeVisible({ timeout: 5_000 });
+    await deleteBtn.click();
 
-    // Confirm any confirmation dialog
-    const confirmBtn = page.locator('button:has-text("Deactivate")').last();
-    if (await confirmBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await confirmBtn.click();
-    }
+    // Confirm the delete dialog
+    const confirmBtn = page.locator('button:has-text("Delete")').last();
+    await expect(confirmBtn).toBeVisible({ timeout: 3_000 });
+    await confirmBtn.click();
 
-    // Customer should be gone from active list
+    // This customer is a fresh, unused record → hard-deleted → gone from the list for good.
+    // There is no "Inactive Only" view anymore, so it must not reappear anywhere.
     await expect(page.locator(`td:has-text("${CUSTOMER_NAME}")`)).not.toBeVisible({ timeout: 8_000 });
-
-    // Show inactive
-    await page.click('[data-testid="inactive-only-btn"]');
-    await expect(page.locator(`td:has-text("${CUSTOMER_NAME}")`).first()).toBeVisible({ timeout: 5_000 });
-  });
-
-  test("reactivate: after deactivation, reactivation moves customer back to active", async ({ page }) => {
-    // Self-contained: deactivate first if active, then reactivate
-
-    // Check if customer exists in active list
-    const activeRow = page.locator(`td:has-text("${CUSTOMER_NAME}")`).first();
-    const isActive = await activeRow.isVisible({ timeout: 2_000 }).catch(() => false);
-
-    if (isActive) {
-      // Deactivate first
-      await activeRow.click();
-      const deactivateBtn = page.locator('[data-testid="customer-deactivate-btn"]');
-      if (await deactivateBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await deactivateBtn.click();
-        const confirmBtn = page.locator('button:has-text("Deactivate")').last();
-        if (await confirmBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-          await confirmBtn.click();
-        }
-        await page.waitForTimeout(1_000);
-      }
-    }
-
-    // Now switch to inactive view
-    const inactiveBtn = page.locator('[data-testid="inactive-only-btn"]');
-    if (!(await inactiveBtn.isVisible({ timeout: 3_000 }).catch(() => false))) {
-      test.skip();
-      return;
-    }
-    await inactiveBtn.click();
-
-    const inactiveRow = page.locator(`td:has-text("${CUSTOMER_NAME}")`).first();
-    if (!(await inactiveRow.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      test.skip();
-      return;
-    }
-    await inactiveRow.click();
-
-    const reactivateBtn = page.locator('[data-testid="customer-reactivate-btn"]');
-    await expect(reactivateBtn).toBeVisible({ timeout: 5_000 });
-    await reactivateBtn.click();
-
-    // handleReactivate calls setShowInactive(false) — UI switches back to active view.
-    // Customer should now be visible in the active list (positive assertion).
-    await expect(page.locator(`td:has-text("${CUSTOMER_NAME}")`)).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator('[data-testid="inactive-only-btn"]')).toHaveCount(0);
   });
 });

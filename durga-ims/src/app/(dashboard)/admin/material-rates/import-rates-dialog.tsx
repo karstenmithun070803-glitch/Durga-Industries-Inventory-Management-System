@@ -22,7 +22,8 @@ interface MatchedRow {
   rowNum: number;
   name: string;
   materialId: string;
-  rate: string;
+  base?: string;
+  buffer?: string;
 }
 
 interface UnmatchedRow {
@@ -35,7 +36,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   materials: Material[];
-  onApply: (matched: Record<string, string>) => void;
+  onApply: (matched: Record<string, { base?: string; buffer?: string }>) => void;
 }
 
 export function ImportRatesDialog({ open, onOpenChange, materials, onApply }: Props) {
@@ -61,11 +62,11 @@ export function ImportRatesDialog({ open, onOpenChange, materials, onApply }: Pr
   async function handleDownloadTemplate() {
     const xlsx = await import("xlsx");
     const data = [
-      ["Material Name", "Max Rate"],
-      ...materials.slice(0, 3).map((m) => [m.name, ""]),
+      ["Material Name", "Base Rate", "Buffer"],
+      ...materials.slice(0, 3).map((m) => [m.name, "", ""]),
     ];
     const ws = xlsx.utils.aoa_to_sheet(data);
-    ws["!cols"] = [{ wch: 34 }, { wch: 14 }];
+    ws["!cols"] = [{ wch: 34 }, { wch: 14 }, { wch: 14 }];
     const wb = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(wb, ws, "Rates");
     xlsx.writeFile(wb, "material-rates-template.xlsx");
@@ -118,25 +119,40 @@ export function ImportRatesDialog({ open, onOpenChange, materials, onApply }: Pr
       const name = String(row["Material Name"] ?? "").trim();
       if (!name) return;
 
-      const rateRaw = String(row["Max Rate"] ?? "").trim();
-      // Blank leaves the cell untouched — it must not clear an existing ceiling.
-      if (rateRaw === "") return;
+      // Accept "Base Rate" (new) or "Max Rate" (old templates) for the base column.
+      const baseRaw = String(row["Base Rate"] ?? row["Max Rate"] ?? "").trim();
+      const bufferRaw = String(row["Buffer"] ?? "").trim();
+      // Blank in both leaves the row untouched — never clears an existing value.
+      if (baseRaw === "" && bufferRaw === "") return;
 
       const mat = byName.get(normalise(name));
       if (!mat) {
-        // Includes names that match an INACTIVE material: this grid shows active
-        // materials only, so rating a hidden row would be invisible to the admin.
+        // Names matching an INACTIVE material land here too: this grid shows active
+        // materials only, so filling a hidden row would be invisible to the admin.
         bad.push({ rowNum, name, reason: "No active material with this name" });
         return;
       }
 
-      const n = Number(rateRaw);
-      if (!Number.isFinite(n) || n <= 0) {
-        bad.push({ rowNum, name, reason: "Rate must be a number greater than 0" });
-        return;
+      let base: string | undefined;
+      let buffer: string | undefined;
+      if (baseRaw !== "") {
+        const n = Number(baseRaw);
+        if (!Number.isFinite(n) || n <= 0) {
+          bad.push({ rowNum, name, reason: "Base Rate must be a number greater than 0" });
+          return;
+        }
+        base = String(n);
+      }
+      if (bufferRaw !== "") {
+        const n = Number(bufferRaw);
+        if (!Number.isFinite(n) || n < 0) {
+          bad.push({ rowNum, name, reason: "Buffer must be a number ≥ 0" });
+          return;
+        }
+        buffer = String(n);
       }
 
-      ok.push({ rowNum, name, materialId: mat.id, rate: String(n) });
+      ok.push({ rowNum, name, materialId: mat.id, base, buffer });
     });
 
     setMatched(ok);
@@ -145,7 +161,7 @@ export function ImportRatesDialog({ open, onOpenChange, materials, onApply }: Pr
   }
 
   function handleApply() {
-    onApply(Object.fromEntries(matched.map((m) => [m.materialId, m.rate])));
+    onApply(Object.fromEntries(matched.map((m) => [m.materialId, { base: m.base, buffer: m.buffer }])));
     reset();
   }
 
@@ -158,8 +174,8 @@ export function ImportRatesDialog({ open, onOpenChange, materials, onApply }: Pr
 
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Upload an .xlsx with two columns — <strong>Material Name</strong> and{" "}
-            <strong>Max Rate</strong>. Names are matched to existing materials, ignoring case and
+            Upload an .xlsx with columns <strong>Material Name</strong>, <strong>Base Rate</strong>{" "}
+            and <strong>Buffer</strong>. Names are matched to existing materials, ignoring case and
             surrounding spaces. Nothing is saved until you review the grid and press{" "}
             <strong>Save All</strong>.
           </p>
@@ -230,7 +246,7 @@ export function ImportRatesDialog({ open, onOpenChange, materials, onApply }: Pr
             Cancel
           </Button>
           <Button onClick={handleApply} disabled={!parsed || matched.length === 0}>
-            Fill {matched.length} rate{matched.length === 1 ? "" : "s"} into grid
+            Fill {matched.length} material{matched.length === 1 ? "" : "s"} into grid
           </Button>
         </DialogFooter>
       </DialogContent>

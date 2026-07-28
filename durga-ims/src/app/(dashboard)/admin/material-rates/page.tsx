@@ -1,4 +1,4 @@
-import { getMaterials } from "@/lib/actions/materials.actions";
+import { getMaterials, getMaterialsWithDeviations } from "@/lib/actions/materials.actions";
 import { getAllUnits } from "@/lib/actions/units.actions";
 import { MaterialRatesClient } from "./material-rates-client";
 
@@ -9,7 +9,13 @@ export const dynamic = "force-dynamic";
 export default async function MaterialRatesPage() {
   // getMaterials(), not getAllMaterials(): active only. Inactive materials cannot be
   // purchased anyway, and rating a hidden row would be invisible to the admin.
-  const [materials, units] = await Promise.all([getMaterials(), getAllUnits()]);
+  const [materials, units, deviationMaterialIds] = await Promise.all([
+    getMaterials(),
+    getAllUnits(),
+    getMaterialsWithDeviations(),
+  ]);
 
-  return <MaterialRatesClient materials={materials} units={units} />;
+  return (
+    <MaterialRatesClient materials={materials} units={units} deviationMaterialIds={deviationMaterialIds} />
+  );
 }

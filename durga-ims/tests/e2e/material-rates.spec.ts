@@ -30,9 +30,16 @@ async function unratedCount(page: Page): Promise<number> {
   return parseInt(text, 10);
 }
 
-/** Reads the first N material rows' rate inputs. */
+/** Base-rate input for a row (also carries data-rate-row for keyboard nav). */
 function rateInput(page: Page, rowIndex: number) {
   return page.locator(`[data-rate-row='${rowIndex}']`);
+}
+/** Both fields must be set for a material to count as configured. */
+function baseAndBuffer(page: Page, rowIndex: number) {
+  const base = page.locator(`[data-rate-row='${rowIndex}']`);
+  // buffer input is the sibling cell; grab the nth buffer input by row order.
+  const buffer = page.locator("[data-testid^='buffer-input-']").nth(rowIndex);
+  return { base, buffer };
 }
 
 test.describe("Material Rate Master — admin", () => {
@@ -54,39 +61,47 @@ test.describe("Material Rate Master — admin", () => {
     expect(back).toBe("0");
   });
 
-  test("unrated counter is derived from live state, not a frozen server prop", async ({ page }) => {
+  test("counter is derived from live state and needs BOTH base and buffer", async ({ page }) => {
     await openRateMaster(page);
     const before = await unratedCount(page);
+    const { base, buffer } = baseAndBuffer(page, 0);
 
-    await rateInput(page, 0).fill("150");
+    // Base alone does NOT configure the material — buffer still missing.
+    await base.fill("150");
+    expect(await unratedCount(page)).toBe(before);
+    // Both set → now configured, counter drops.
+    await buffer.fill("5");
     expect(await unratedCount(page)).toBe(before - 1);
 
-    // Clearing it puts the material back into the unrated set immediately.
-    await rateInput(page, 0).fill("");
+    await base.fill("");
+    await buffer.fill("");
     expect(await unratedCount(page)).toBe(before);
   });
 
-  test("a zero ceiling is rejected with an actionable message", async ({ page }) => {
+  test("a zero base rate is rejected with an actionable message", async ({ page }) => {
     await openRateMaster(page);
-    await rateInput(page, 0).fill("0");
+    const { base, buffer } = baseAndBuffer(page, 0);
+    await base.fill("0");
+    await buffer.fill("5");
     await page.getByRole("button", { name: "Save All" }).click();
 
     await expect(page.locator("[data-sonner-toast]")).toContainText(/greater than 0/i);
-    await expect(page.locator("[data-sonner-toast]")).toContainText(/Leave blank/i);
-    // Nothing was saved — the row is still dirty.
     await expect(page.getByTestId("dirty-count")).toContainText("1 unsaved change");
   });
 
   test("Save All clears the dirty set and the footer", async ({ page }) => {
     await openRateMaster(page);
-    await rateInput(page, 0).fill("150");
+    const { base, buffer } = baseAndBuffer(page, 0);
+    await base.fill("150");
+    await buffer.fill("5");
     await expect(page.getByTestId("dirty-count")).toContainText("1 unsaved change");
 
     await page.getByRole("button", { name: "Save All" }).click();
     await expect(page.getByTestId("dirty-count")).toContainText("No unsaved changes");
 
     // Cleanup: put it back to "not set".
-    await rateInput(page, 0).fill("");
+    await base.fill("");
+    await buffer.fill("");
     await page.getByRole("button", { name: "Save All" }).click();
     await expect(page.getByTestId("dirty-count")).toContainText("No unsaved changes");
   });
@@ -114,6 +129,31 @@ test.describe("Material Rate Master — admin", () => {
     await page.getByPlaceholder(/Search by name/).fill("");
     await expect(page.getByTestId("dirty-count")).toContainText("1 unsaved change");
   });
+
+  // C18 — the "Only changed prices" filter is a pure client view; a dirty row it hides
+  // must still be there (and still save). Toggling it must not reset edits.
+  test("'Only changed prices' filter is a pure view and preserves unsaved edits", async ({ page }) => {
+    await openRateMaster(page);
+    const { base, buffer } = baseAndBuffer(page, 0);
+    await base.fill("111");
+    await buffer.fill("5");
+    await expect(page.getByTestId("dirty-count")).toContainText("1 unsaved change");
+
+    // Turning the filter on likely hides this (freshly-typed, not a historical deviation).
+    await page.getByTestId("only-changed-toggle").check();
+    await expect(page.getByTestId("dirty-count")).toContainText("1 unsaved change"); // edit survives
+    await page.getByTestId("only-changed-toggle").uncheck();
+    await expect(page.getByTestId("dirty-count")).toContainText("1 unsaved change");
+    await expect(base).toHaveValue("111");
+  });
+
+  // The history drawer opens from the per-row icon (not a whole-row click, which would
+  // fight the editable inputs).
+  test("history icon opens the deviation drawer", async ({ page }) => {
+    await openRateMaster(page);
+    await page.locator("[data-testid^='history-btn-']").first().click();
+    await expect(page.getByTestId("deviation-drawer")).toBeVisible();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -135,7 +175,8 @@ test.describe("Material Rate Master — admin and employee at once", () => {
     await expect(page.getByRole("button", { name: "Admin" })).toHaveCount(0);
 
     await page.goto("/masters/materials");
-    await expect(page.getByRole("columnheader", { name: /Max Rate/i })).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: /Base Rate/i })).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: /Buffer/i })).toHaveCount(0);
 
     await page.goto("/admin/material-rates");
     // Assert the property that matters — no grid, no editable ceiling — not the HTTP

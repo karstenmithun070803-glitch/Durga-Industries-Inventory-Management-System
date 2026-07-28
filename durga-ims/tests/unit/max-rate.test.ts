@@ -7,7 +7,15 @@
 // ============================================================
 
 import { describe, it, expect } from "vitest";
-import { exceedsCeiling, parseCeilingInput, InvalidCeilingError } from "@/lib/utils/max-rate";
+import {
+  exceedsCeiling,
+  belowFloor,
+  rateBand,
+  parseCeilingInput,
+  parseBufferInput,
+  InvalidCeilingError,
+  InvalidBufferError,
+} from "@/lib/utils/max-rate";
 
 describe("exceedsCeiling()", () => {
   // ---------------------------------------------------------------------
@@ -94,5 +102,49 @@ describe("parseCeilingInput()", () => {
 
   it("tells the user how to mark a material as not set", () => {
     expect(() => parseCeilingInput("0")).toThrow(/Leave blank to mark it as not set/);
+  });
+});
+
+describe("belowFloor()", () => {
+  it("string operands do not lexicographically mis-fire", () => {
+    // "9" < "10" is false lexicographically ("9" > "1"); numeric says 9 < 10.
+    expect(belowFloor("9", "10.0000")).toBe(true);
+    expect(belowFloor("538", "538.0000")).toBe(false); // at the floor is allowed
+    expect(belowFloor("537.99", "538.0000")).toBe(true);
+  });
+});
+
+describe("rateBand()", () => {
+  it("computes base ± buffer", () => {
+    expect(rateBand("543", "5")).toEqual({ min: 538, max: 548 });
+  });
+  it("clamps the floor at 0 — never negative", () => {
+    expect(rateBand("400", "500")).toEqual({ min: 0, max: 900 });
+  });
+  it("buffer 0 collapses the band to exactly base", () => {
+    expect(rateBand("400", "0")).toEqual({ min: 400, max: 400 });
+  });
+  it("returns null when base or buffer is missing", () => {
+    expect(rateBand(null, "5")).toBeNull();
+    expect(rateBand("400", null)).toBeNull();
+    expect(rateBand("400", "")).toBeNull();
+  });
+});
+
+describe("parseBufferInput()", () => {
+  it("blank => null", () => {
+    expect(parseBufferInput("")).toBeNull();
+    expect(parseBufferInput(null)).toBeNull();
+  });
+  it("ACCEPTS zero (exact-base policy) — unlike a zero base", () => {
+    expect(parseBufferInput("0")).toBe("0.0000");
+  });
+  it("normalises to 4dp", () => {
+    expect(parseBufferInput("5")).toBe("5.0000");
+    expect(parseBufferInput(" 2.5 ")).toBe("2.5000");
+  });
+  it("rejects negatives and non-numbers", () => {
+    expect(() => parseBufferInput("-1")).toThrow(InvalidBufferError);
+    expect(() => parseBufferInput("abc")).toThrow(InvalidBufferError);
   });
 });

@@ -12,7 +12,7 @@ import { createCustomer, updateCustomer, deleteCustomer, reactivateCustomer, bul
 import { INDIAN_STATES } from "@/lib/constants";
 import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Customer } from "@/types";
-import { RotateCcw, UserX, Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -21,9 +21,10 @@ const EMPTY = { customer_name: "", address_1: "", address_2: "", street: "", cit
 export function CustomersClient({ customers }: { customers: Customer[] }) {
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
-  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Set when a new customer collides with a hidden ("deleted") row: prompt to restore it (R5).
+  const [hiddenCollision, setHiddenCollision] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
@@ -42,9 +43,8 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
       c.id !== editing?.id
     );
 
-  const inactive = customers.filter((c) => !c.is_active);
   const visible = useMemo(() =>
-    customers.filter((c) => showInactive ? !c.is_active : c.is_active).filter((c) => {
+    customers.filter((c) => {
       const s = search.toLowerCase();
       return (
         c.customer_name.toLowerCase().includes(s) ||
@@ -53,7 +53,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
         matchesCode(search, "C-", c.customer_no)
       );
     }),
-    [customers, search, showInactive]
+    [customers, search]
   );
 
   function startEdit(c: Customer) {
@@ -87,24 +87,37 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
   function handleSubmit() {
     startTransition(async () => {
       try {
-        if (editing) { await updateCustomer(editing.id, form); } else { await createCustomer(form); }
-        toast.success(editing ? "Customer updated" : "Customer added");
-        resetForm();
+        if (editing) {
+          await updateCustomer(editing.id, form);
+          toast.success("Customer updated");
+          resetForm();
+        } else {
+          const res = await createCustomer(form);
+          if ("hiddenCollision" in res) {
+            // Name matches a previously-deleted (hidden) customer — offer to restore it.
+            setHiddenCollision(res.hiddenCollision);
+            return;
+          }
+          toast.success("Customer added");
+          resetForm();
+        }
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Something went wrong");
       }
     });
   }
 
-  function handleReactivate(id: string) {
+  function handleRestore() {
+    if (!hiddenCollision) return;
     startTransition(async () => {
       try {
-        await reactivateCustomer(id);
-        toast.success("Customer reactivated");
-        setShowInactive(false);
+        await reactivateCustomer(hiddenCollision.id);
+        toast.success("Customer restored");
         resetForm();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+        toast.error(e instanceof Error ? e.message : "Could not restore");
+      } finally {
+        setHiddenCollision(null);
       }
     });
   }
@@ -165,15 +178,9 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
             </div>
             {editing && (
               <div className="pt-3 border-t border-slate-200 mt-1">
-                {editing.is_active ? (
-                  <Button type="button" data-testid="customer-deactivate-btn" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
-                    <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
-                  </Button>
-                ) : (
-                  <Button type="button" data-testid="customer-reactivate-btn" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
-                  </Button>
-                )}
+                <Button type="button" data-testid="customer-delete-btn" variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs" onClick={() => setDeletingId(editing.id)} disabled={isPending}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
               </div>
             )}
           </div>
@@ -195,11 +202,6 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                 autoComplete="off"
                 className="max-w-sm"
               />
-              {inactive.length > 0 && (
-                <Button data-testid="inactive-only-btn" variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
-                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
-                </Button>
-              )}
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs border-field ml-auto">
                 <Upload className="w-3.5 h-3.5 mr-1.5" />Import
               </Button>
@@ -221,12 +223,12 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                     <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-700">No customers found</td></tr>
                   )}
                   {visible.map((c, i) => {
-                    const stickyBg = !c.is_active ? "bg-slate-50" : i % 2 === 1 ? "bg-slate-50" : "bg-white";
+                    const stickyBg = i % 2 === 1 ? "bg-slate-50" : "bg-white";
                     const addr = [c.address_1, c.address_2, c.street].filter(Boolean).join(", ") || "—";
                     return (
                     <tr
                       key={c.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(c)}
                     >
                       <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-rowhover group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
@@ -312,25 +314,34 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
         isPending={false}
       />
       <ConfirmDialog
-        open={deactivatingId !== null}
-        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
-        title="Deactivate customer?"
-        description="This will deactivate the customer. They will be hidden from active lists. You can reactivate at any time."
-        confirmLabel="Deactivate"
+        open={deletingId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        title="Delete customer?"
+        description="This permanently deletes the customer. If they appear in any transaction, their history is preserved and they are simply removed from all lists. This cannot be undone."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (!deactivatingId) return;
+          if (!deletingId) return;
           startTransition(async () => {
             try {
-              await deleteCustomer(deactivatingId);
-              toast.success("Customer deactivated");
+              await deleteCustomer(deletingId);
+              toast.success("Customer deleted");
               resetForm();
             } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+              toast.error(e instanceof Error ? e.message : "Could not delete");
             } finally {
-              setDeactivatingId(null);
+              setDeletingId(null);
             }
           });
         }}
+        isPending={isPending}
+      />
+      <ConfirmDialog
+        open={hiddenCollision !== null}
+        onOpenChange={(open) => { if (!open) setHiddenCollision(null); }}
+        title="Restore deleted customer?"
+        description={`A previously-deleted customer named "${hiddenCollision?.name ?? ""}" still exists in your transaction history. Restore that record (its history reattaches), or cancel and use a different name.`}
+        confirmLabel="Restore"
+        onConfirm={handleRestore}
         isPending={isPending}
       />
     </>

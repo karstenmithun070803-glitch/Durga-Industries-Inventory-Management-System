@@ -292,13 +292,14 @@ describe("adjustStock — block negative standardCost", () => {
 });
 
 // ===========================================================================
-// STAGE DELETION WITH MI STATE
-// Confirm: deleteStage is a soft delete that blocks only on Draft MIs.
-// CONFIRMED SAFE — no code was changed.
+// STAGE DELETION (smart delete)
+// A stage referenced by any material issue (or a material template) is HIDDEN
+// (is_active=false) so its history is preserved; a truly unreferenced stage is
+// physically hard-deleted. deleteStage no longer throws or returns a draft count.
 // ===========================================================================
 
-describe("deleteStage — Draft MI blocks deactivation", () => {
-  it("throws error with Draft count when a Draft MI references the stage", async () => {
+describe("deleteStage — referenced by a material issue → hidden, not erased", () => {
+  it("a stage used by a Draft MI is hidden (is_active=false), row preserved", async () => {
     const stage = await createTestStage();
     const vehicle = await createTestVehicle();
     await createTestMaterialIssue(
@@ -306,42 +307,17 @@ describe("deleteStage — Draft MI blocks deactivation", () => {
       { stage_id: stage.id, status: "Draft", financial_year: TEST_FY }
     );
 
-    await expect(deleteStage(stage.id)).rejects.toThrow(/Draft issue slip/i);
+    await deleteStage(stage.id); // no longer throws — it hides
 
     const [row] = await db
       .select({ is_active: schema.stages.is_active })
       .from(schema.stages)
       .where(eq(schema.stages.id, stage.id));
-    expect(row.is_active).toBe(true);
+    expect(row).toBeDefined();
+    expect(row.is_active).toBe(false);
   });
 
-  it("error message includes the count of blocking Draft slips", async () => {
-    const stage = await createTestStage();
-    const vehicle = await createTestVehicle();
-    const vehicle2 = await createTestVehicle();
-    await createTestMaterialIssue(
-      { vehicleId: vehicle.id },
-      { stage_id: stage.id, status: "Draft", financial_year: TEST_FY }
-    );
-    await createTestMaterialIssue(
-      { vehicleId: vehicle2.id },
-      { stage_id: stage.id, status: "Draft", financial_year: TEST_FY }
-    );
-
-    let errMsg = "";
-    try {
-      await deleteStage(stage.id);
-    } catch (e) {
-      errMsg = (e as Error).message;
-    }
-
-    expect(errMsg).toMatch(/2/);
-    expect(errMsg).toMatch(/Draft/i);
-  });
-});
-
-describe("deleteStage — Issued MI does NOT block deactivation", () => {
-  it("successfully deactivates stage when all MIs referencing it are Issued (not Draft)", async () => {
+  it("a stage used by an Issued MI is hidden (is_active=false), row preserved", async () => {
     const stage = await createTestStage();
     const vehicle = await createTestVehicle();
     await createTestMaterialIssue(
@@ -349,38 +325,28 @@ describe("deleteStage — Issued MI does NOT block deactivation", () => {
       { stage_id: stage.id, status: "Issued", financial_year: TEST_FY }
     );
 
-    const result = await deleteStage(stage.id);
-
-    expect(result).toEqual({ draftCount: 0 });
+    await deleteStage(stage.id);
 
     const [row] = await db
       .select({ is_active: schema.stages.is_active })
       .from(schema.stages)
       .where(eq(schema.stages.id, stage.id));
+    expect(row).toBeDefined();
     expect(row.is_active).toBe(false);
-
-    // Soft delete: stage record still exists in DB (FK integrity intact)
-    const [stageRow] = await db
-      .select({ id: schema.stages.id })
-      .from(schema.stages)
-      .where(eq(schema.stages.id, stage.id));
-    expect(stageRow).toBeDefined();
   });
 });
 
-describe("deleteStage — no MIs: always succeeds", () => {
-  it("deactivates a stage with no associated MIs", async () => {
+describe("deleteStage — no references → hard delete", () => {
+  it("a stage with no MIs and no material template is physically removed", async () => {
     const stage = await createTestStage();
 
-    const result = await deleteStage(stage.id);
-
-    expect(result).toEqual({ draftCount: 0 });
+    await deleteStage(stage.id);
 
     const [row] = await db
-      .select({ is_active: schema.stages.is_active })
+      .select({ id: schema.stages.id })
       .from(schema.stages)
       .where(eq(schema.stages.id, stage.id));
-    expect(row.is_active).toBe(false);
+    expect(row).toBeUndefined();
   });
 });
 

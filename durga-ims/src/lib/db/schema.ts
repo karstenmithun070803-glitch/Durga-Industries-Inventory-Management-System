@@ -114,9 +114,12 @@ export const materials = pgTable(
     current_stock: numeric("current_stock", { precision: 12, scale: 4 }).notNull().default("0"),
     max_level: numeric("max_level", { precision: 12, scale: 4 }),
     standard_cost: numeric("standard_cost", { precision: 14, scale: 4 }),
-    // Admin-only purchase ceiling. NULL = not set = the material cannot be purchased.
-    // Distinct from standard_cost, which values stock and must not be repurposed.
-    max_rate: numeric("max_rate", { precision: 14, scale: 4 }),
+    // Admin-only purchase governance. The allowed PO rate band is base_rate ± buffer.
+    // Both NULL = not configured = the material cannot be purchased. Distinct from
+    // standard_cost, which values stock and must not be repurposed.
+    // NOTE: renamed from max_rate — the migration MUST be RENAME COLUMN, never drop+add.
+    base_rate: numeric("base_rate", { precision: 14, scale: 4 }),
+    buffer: numeric("buffer", { precision: 14, scale: 4 }),
     ...softDelete,
     ...timestamps,
   },
@@ -212,6 +215,11 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   supplier_id: uuid("supplier_id").references(() => suppliers.id),
   // gst_type frozen at entry time — historical integrity if supplier GSTIN changes later
   gst_type: text("gst_type"), // "CGST_SGST" | "IGST"
+  // The material's base_rate frozen at SAVE time (not receipt) — the reference the rate
+  // was validated against. Powers the admin price-deviation history so later base edits
+  // never rewrite the record. NULL only on drafts for materials with no base yet;
+  // validateRateBand guarantees it is non-null on any received PO.
+  base_rate_snapshot: numeric("base_rate_snapshot", { precision: 14, scale: 4 }),
   ...timestamps,
 }, (table) => [
   index("idx_poi_po_id").on(table.po_id),

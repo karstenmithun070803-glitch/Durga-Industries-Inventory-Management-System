@@ -3,8 +3,21 @@
 import { unstable_cache, revalidateTag } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
-import { contractors, materialIssueItems, materialIssues } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { contractors, materialIssueItems } from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
+import { isForeignKeyViolation } from "@/lib/utils/pg-errors";
+
+// True when any material-issue line still references this contractor — i.e. it has
+// history and must be HIDDEN rather than physically deleted. Checks any status, not
+// just the Draft subset the old soft-delete warning looked at.
+async function contractorIsReferenced(id: string): Promise<boolean> {
+  const rows = await db
+    .select({ x: sql`1` })
+    .from(materialIssueItems)
+    .where(eq(materialIssueItems.contractor_id, id))
+    .limit(1);
+  return rows.length > 0;
+}
 
 // ─── Reads (cached) ──────────────────────────────────────────────────────────
 
@@ -48,23 +61,29 @@ export async function updateContractor(
   revalidateTag(CACHE_TAGS.contractors);
 }
 
+/**
+ * Smart delete: physically remove the contractor when nothing references it, otherwise
+ * HIDE it (is_active=false) so it leaves all lists/pickers while its material-issue history
+ * keeps displaying correctly. To the user both outcomes look identical — the row vanishes.
+ */
 export async function deleteContractor(id: string) {
-  const [con] = await db.select({ name: contractors.name }).from(contractors).where(eq(contractors.id, id));
-  const inUse = await db
-    .select({ id: materialIssueItems.id })
-    .from(materialIssueItems)
-    .innerJoin(materialIssues, eq(materialIssueItems.issue_id, materialIssues.id))
-    .where(
-      and(
-        eq(materialIssueItems.contractor_id, id),
-        eq(materialIssues.status, "Draft")
-      )
-    )
-    .limit(1);
-  if (inUse.length > 0)
-    throw new Error(
-      `Cannot deactivate "${con?.name ?? "this contractor"}": assigned to a Draft issue slip. Complete or delete that slip first.`
-    );
+  const [con] = await db.select({ id: contractors.id }).from(contractors).where(eq(contractors.id, id));
+  if (!con) return;
+
+  // Unreferenced → physically delete. The FK check is the primary guard; the 23503 catch
+  // is a backstop for a concurrent insert racing between the check and the delete. Run the
+  // delete as a standalone statement (no explicit tx), so a failed delete never poisons the
+  // fresh update below.
+  if (!(await contractorIsReferenced(id))) {
+    try {
+      await db.delete(contractors).where(eq(contractors.id, id));
+      revalidateTag(CACHE_TAGS.contractors);
+      return;
+    } catch (e) {
+      if (!isForeignKeyViolation(e)) throw e;
+      // fall through: a reference appeared → hide instead
+    }
+  }
 
   await db.update(contractors).set({ is_active: false }).where(eq(contractors.id, id));
   revalidateTag(CACHE_TAGS.contractors);

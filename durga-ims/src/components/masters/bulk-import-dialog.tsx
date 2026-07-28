@@ -39,7 +39,7 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fileName, setFileName] = useState<string>("");
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; skippedInactive?: number } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [largeFileWarning, setLargeFileWarning] = useState(false);
@@ -366,6 +366,11 @@ export function BulkImportDialog({ open, onOpenChange, units, taxRates, existing
                   {importResult.skipped > 0 && (
                     <p className="text-sm text-emerald-600 mt-0.5">
                       {importResult.skipped} row{importResult.skipped !== 1 ? "s" : ""} skipped (already existed).
+                    </p>
+                  )}
+                  {(importResult.skippedInactive ?? 0) > 0 && (
+                    <p className="text-sm text-amber-600 mt-0.5">
+                      {importResult.skippedInactive} row{importResult.skippedInactive !== 1 ? "s" : ""} match a previously-deleted material and were skipped. Add them individually to restore.
                     </p>
                   )}
                 </div>

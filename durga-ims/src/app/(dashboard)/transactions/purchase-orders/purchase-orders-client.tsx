@@ -16,6 +16,7 @@ import {
   revertPOToDraft,
 } from "@/lib/actions/purchase-orders.actions";
 import { TransactionGrid, newRow } from "@/components/forms/TransactionGrid";
+import { formatRate } from "@/lib/utils/row-calc";
 import { rowsReducer, type RowAction } from "@/lib/utils/rows-reducer";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
@@ -69,7 +70,8 @@ interface MaterialOption {
   purchase_unit_id: string | null;
   current_stock: string;
   lastRate?: string | null;
-  max_rate?: string | null; // admin purchase ceiling; null = not set
+  base_rate?: string | null; // admin base rate; null = not configured
+  buffer?: string | null;    // admin buffer (±); null = not configured
 }
 
 interface TaxRateOption {
@@ -163,7 +165,7 @@ function poItemsToRows(po: PurchaseOrderWithDetails): LineItemDraft[] {
     qty: item.qty,
     unit_id: item.unit_id ?? "",
     unit_name: item.unit_name ?? "",
-    rate: item.rate,
+    rate: formatRate(item.rate),
     tax_percentage: item.tax_percentage,
     cgst_amount: item.cgst_amount,
     sgst_amount: item.sgst_amount,
@@ -697,7 +699,7 @@ export function PurchaseOrdersClient({
       supplier_name: item.supplier_name ?? null,
       qty: item.qty,
       unit_name: item.unit_name ?? null,
-      rate: item.rate,
+      rate: formatRate(item.rate),
       tax_percentage: item.tax_percentage,
       cgst_amount: item.cgst_amount,
       sgst_amount: item.sgst_amount,
@@ -726,7 +728,7 @@ export function PurchaseOrdersClient({
         supplier_name: item.supplier_name ?? null,
         qty: item.qty,
         unit_name: item.unit_name ?? null,
-        rate: item.rate,
+        rate: formatRate(item.rate),
         tax_percentage: item.tax_percentage,
         cgst_amount: item.cgst_amount,
         sgst_amount: item.sgst_amount,

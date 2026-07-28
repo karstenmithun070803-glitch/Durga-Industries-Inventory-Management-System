@@ -1,5 +1,17 @@
 import type { LineItemDraft } from "@/types";
 
+/**
+ * Formats a rate for display/entry in the transaction grids: 2 decimals, no thousands
+ * separator (it feeds an <input>). `numeric(14,4)` from the DB arrives as "1080.0000";
+ * this shows "1080.00". Blank/invalid → "". Full precision is kept in the stored value —
+ * only what the user sees/edits is trimmed.
+ */
+export function formatRate(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(2) : "";
+}
+
 export function calcAmountsForRow(
   qty: string,
   rate: string,

@@ -11,7 +11,12 @@ export default async function StagesPage() {
     getActiveUnits(),
   ]);
 
+  // Smart delete hides (is_active=false) any stage that has history/template; the master
+  // list shows ACTIVE stages only. The loader keeps returning every stage (with its material
+  // template intact), so we filter here without disturbing that per-stage template data.
+  const activeStages = stagesData.filter((s) => s.is_active);
+
   return (
-    <StagesClient stages={stagesData} materials={materialsData} units={unitsData} />
+    <StagesClient stages={activeStages} materials={materialsData} units={unitsData} />
   );
 }

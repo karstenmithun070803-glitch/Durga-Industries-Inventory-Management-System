@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createMaterial, updateMaterial, deleteMaterial, reactivateMaterial } from "@/lib/actions/materials.actions";
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Material, TaxRate, Unit } from "@/types";
-import { RotateCcw, UserX, Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { BulkImportDialog } from "@/components/masters/bulk-import-dialog";
 
@@ -22,9 +22,10 @@ interface Props { materials: Material[]; taxRates: TaxRate[]; units: Unit[]; isA
 export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) {
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
-  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Material | null>(null);
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Set when a new name collides with a hidden ("deleted") material: prompt to restore it (R5).
+  const [hiddenCollision, setHiddenCollision] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
@@ -41,12 +42,30 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
       m.id !== editing?.id
     );
 
-  const inactive = materials.filter((m) => !m.is_active);
   const activeUnits = units.filter((u) => u.is_active);
   const activeTaxRates = taxRates.filter((t) => t.is_active);
 
+  // Picker options: active choices, plus the material's currently-saved tax/unit even if it
+  // has since been deleted (hidden) — otherwise editing that material would blank the field (R4).
+  const taxOptions = useMemo(() => {
+    const opts = activeTaxRates.map((t) => ({ value: t.id, label: t.description }));
+    if (form.tax_rate_id && !activeTaxRates.some((t) => t.id === form.tax_rate_id)) {
+      const cur = taxRates.find((t) => t.id === form.tax_rate_id);
+      if (cur) opts.unshift({ value: cur.id, label: `${cur.description} (deleted)` });
+    }
+    return opts;
+  }, [taxRates, form.tax_rate_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const unitOptions = useMemo(() => {
+    const opts = activeUnits.map((u) => ({ value: u.id, label: `${formatCode("U-", u.unit_code, 2)} — ${u.unit_name}` }));
+    if (form.purchase_unit_id && !activeUnits.some((u) => u.id === form.purchase_unit_id)) {
+      const cur = units.find((u) => u.id === form.purchase_unit_id);
+      if (cur) opts.unshift({ value: cur.id, label: `${formatCode("U-", cur.unit_code, 2)} — ${cur.unit_name} (deleted)` });
+    }
+    return opts;
+  }, [units, form.purchase_unit_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const visible = useMemo(() =>
-    materials.filter((m) => showInactive ? !m.is_active : m.is_active).filter((m) => {
+    materials.filter((m) => {
       const q = search.toLowerCase();
       return (
         m.name.toLowerCase().includes(q) ||
@@ -54,7 +73,7 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
         matchesCode(search, "M-", m.material_no)
       );
     }),
-    [materials, search, showInactive]
+    [materials, search]
   );
 
   function startEdit(m: Material) {
@@ -88,24 +107,37 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
   function handleSubmit() {
     startTransition(async () => {
       try {
-        if (editing) { await updateMaterial(editing.id, form); } else { await createMaterial(form); }
-        toast.success(editing ? "Material updated" : "Material added");
-        resetForm();
+        if (editing) {
+          await updateMaterial(editing.id, form);
+          toast.success("Material updated");
+          resetForm();
+        } else {
+          const res = await createMaterial(form);
+          if ("hiddenCollision" in res) {
+            // Name matches a previously-deleted (hidden) material — offer to restore it.
+            setHiddenCollision(res.hiddenCollision);
+            return;
+          }
+          toast.success("Material added");
+          resetForm();
+        }
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Something went wrong");
       }
     });
   }
 
-  function handleReactivate(id: string) {
+  function handleRestore() {
+    if (!hiddenCollision) return;
     startTransition(async () => {
       try {
-        await reactivateMaterial(id);
-        toast.success("Material reactivated");
-        setShowInactive(false);
+        await reactivateMaterial(hiddenCollision.id);
+        toast.success("Material restored");
         resetForm();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+        toast.error(e instanceof Error ? e.message : "Could not restore");
+      } finally {
+        setHiddenCollision(null);
       }
     });
   }
@@ -131,7 +163,7 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Tax Rate</label>
               <Combobox
-                options={activeTaxRates.map((t) => ({ value: t.id, label: t.description }))}
+                options={taxOptions}
                 value={form.tax_rate_id}
                 onChange={(v) => set("tax_rate_id", v)}
                 placeholder="Select tax rate..."
@@ -141,7 +173,7 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Purchase Unit *</label>
               <Combobox
-                options={activeUnits.map((u) => ({ value: u.id, label: `${formatCode("U-", u.unit_code, 2)} — ${u.unit_name}` }))}
+                options={unitOptions}
                 value={form.purchase_unit_id}
                 onChange={(v) => set("purchase_unit_id", v)}
                 placeholder="Select unit..."
@@ -172,15 +204,9 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
             </div>
             {editing && (
               <div className="pt-3 border-t border-slate-200 mt-1">
-                {editing.is_active ? (
-                  <Button type="button" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
-                    <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
-                  </Button>
-                ) : (
-                  <Button type="button" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
-                  </Button>
-                )}
+                <Button type="button" variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs" onClick={() => setDeletingId(editing.id)} disabled={isPending}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
               </div>
             )}
           </div>
@@ -202,11 +228,6 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
                 }}
                 className="max-w-sm"
               />
-              {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
-                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
-                </Button>
-              )}
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs border-field ml-auto">
                 <Upload className="w-3.5 h-3.5 mr-1.5" />Import
               </Button>
@@ -230,11 +251,11 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
                   {visible.map((m, i) => {
                     const purUnit = units.find((u) => u.id === m.purchase_unit_id);
                     const taxRate = taxRates.find((t) => t.id === m.tax_rate_id);
-                    const stickyBg = !m.is_active ? "bg-slate-50" : i % 2 === 1 ? "bg-slate-50" : "bg-white";
+                    const stickyBg = i % 2 === 1 ? "bg-slate-50" : "bg-white";
                     return (
                       <tr
                         key={m.id}
-                        className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !m.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
+                        className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : "hover:bg-rowhover hover:text-slate-900"}`}
                         onClick={() => startEdit(m)}
                       >
                         <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-rowhover group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
@@ -271,25 +292,34 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
         isAdmin={isAdmin}
       />
       <ConfirmDialog
-        open={deactivatingId !== null}
-        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
-        title="Deactivate material?"
-        description="This will deactivate the material. Stock and transaction history will be preserved. You can reactivate at any time."
-        confirmLabel="Deactivate"
+        open={deletingId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        title="Delete material?"
+        description="This permanently deletes the material. If it appears in any transaction, its history is preserved and it is simply removed from all lists. This cannot be undone."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (!deactivatingId) return;
+          if (!deletingId) return;
           startTransition(async () => {
             try {
-              await deleteMaterial(deactivatingId);
-              toast.success("Material deactivated");
+              await deleteMaterial(deletingId);
+              toast.success("Material deleted");
               resetForm();
             } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+              toast.error(e instanceof Error ? e.message : "Could not delete");
             } finally {
-              setDeactivatingId(null);
+              setDeletingId(null);
             }
           });
         }}
+        isPending={isPending}
+      />
+      <ConfirmDialog
+        open={hiddenCollision !== null}
+        onOpenChange={(open) => { if (!open) setHiddenCollision(null); }}
+        title="Restore deleted material?"
+        description={`A previously-deleted material named "${hiddenCollision?.name ?? ""}" still exists in your transaction history. Restore that record (its history reattaches), or cancel and use a different name.`}
+        confirmLabel="Restore"
+        onConfirm={handleRestore}
         isPending={isPending}
       />
     </>

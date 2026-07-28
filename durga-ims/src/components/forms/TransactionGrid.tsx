@@ -11,7 +11,8 @@ import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useKeyboardGrid } from "@/hooks/use-keyboard-grid";
 import { newRow } from "@/lib/utils/row-calc";
-import { exceedsCeiling } from "@/lib/utils/max-rate";
+import { exceedsCeiling, belowFloor, rateBand } from "@/lib/utils/max-rate";
+import { formatRate } from "@/lib/utils/row-calc";
 import type { RowAction } from "@/lib/utils/rows-reducer";
 
 // Re-export so parent components that haven't migrated yet still compile
@@ -37,7 +38,8 @@ interface MaterialOption {
   sales_unit_id?: string | null;
   current_stock?: string;
   lastRate?: string | null; // pre-fetched last purchase rate — avoids per-selection server round-trip
-  max_rate?: string | null; // admin purchase ceiling; null = not set. PO mode only.
+  base_rate?: string | null; // admin base rate. PO mode only. null = not configured.
+  buffer?: string | null;    // admin buffer (±). PO mode only. null = not configured.
 }
 
 interface TaxRateOption {
@@ -209,11 +211,12 @@ const TransactionRow = React.memo(
       const lastRate = mat.lastRate ?? null;
       const rateBlank = lastRate === null;
       // Apply the current margin (VMI modes) so the popped-in rate already reflects it.
-      // baseRate stays raw so the debounced margin recalc remains consistent.
+      // formatRate → 2 decimals for display/entry (was 4dp "1080.0000"). baseRate keeps
+      // full precision so the debounced margin recalc doesn't compound rounding.
       const displayRate =
         lastRate != null && marginFactor > 1
-          ? (parseFloat(lastRate) * marginFactor).toFixed(4)
-          : (lastRate ?? "");
+          ? formatRate(parseFloat(lastRate) * marginFactor)
+          : formatRate(lastRate);
 
       update(key, {
         material_id: materialId,
@@ -267,21 +270,19 @@ const TransactionRow = React.memo(
 
     const showZeroWarning = !row.rateBlank && row.rate === "0" && !row.zeroRateConfirmed;
 
-    // Admin ceiling hints — ADVISORY ONLY. These never block Save. The browser holds a
-    // page-load snapshot of max_rate, so a blocking check would wrongly refuse a rate the
-    // admin has since raised. validateItems() on the server is the sole hard block, and
-    // it always reads a fresh ceiling. A stale hint is harmless; a stale block is not.
-    const ceilingMaterial =
+    // Admin price-band hints — ADVISORY ONLY. They never block Save. The browser holds a
+    // page-load snapshot of base/buffer, so a blocking check would wrongly refuse a rate the
+    // admin has since widened. validateItems() on the server is the sole hard block and
+    // always reads a fresh band. A stale hint is harmless; a stale block is not.
+    const bandMaterial =
       enforceMaxRate && row.material_id ? materials.find((m) => m.id === row.material_id) : undefined;
-    const maxRate = ceilingMaterial?.max_rate ?? null;
-    // Warn on material-select, not on save — otherwise the employee fills the whole line
-    // before learning the material cannot be bought at all.
-    const showNoCeiling = Boolean(enforceMaxRate && row.material_id && maxRate === null);
-    // Shares exceedsCeiling() with the server block so the hint and the hard stop cannot
-    // drift apart. It coerces both sides — see src/lib/utils/max-rate.ts.
-    const showOverCeiling = Boolean(
-      enforceMaxRate && maxRate !== null && row.rate !== "" && exceedsCeiling(row.rate, maxRate)
-    );
+    const band = bandMaterial ? rateBand(bandMaterial.base_rate, bandMaterial.buffer) : null;
+    // "Not configured" = base or buffer missing. Warn on material-select, not on save, so
+    // the employee learns up front the material cannot be bought.
+    const showNotConfigured = Boolean(enforceMaxRate && row.material_id && band === null);
+    // Shares exceedsCeiling/belowFloor with the server so hint and hard-stop can't drift.
+    const showOverMax = Boolean(band && row.rate !== "" && exceedsCeiling(row.rate, band.max));
+    const showUnderMin = Boolean(band && row.rate !== "" && belowFloor(row.rate, band.min));
 
     const fmt2 = (v: string) =>
       parseFloat(v || "0").toLocaleString("en-IN", {
@@ -457,8 +458,8 @@ const TransactionRow = React.memo(
                 inputMode="decimal"
                 className={`w-24 h-8 text-sm ${row.rateBlank ? "bg-yellow-50 border-yellow-300" : ""} ${
                   showZeroWarning ? "border-amber-400" : ""
-                } ${showOverCeiling ? "border-red-500 bg-red-50" : ""} ${
-                  showNoCeiling ? "border-amber-400 bg-amber-50" : ""
+                } ${(showOverMax || showUnderMin) ? "border-red-500 bg-red-50" : ""} ${
+                  showNotConfigured ? "border-amber-400 bg-amber-50" : ""
                 }`}
                 value={row.rate}
                 onChange={(e) =>
@@ -470,17 +471,37 @@ const TransactionRow = React.memo(
                 placeholder={row.rateBlank ? "No history" : ""}
                 title={row.rateBlank ? "No purchase history — enter rate manually" : ""}
               />
-              {showNoCeiling && (
-                <p className="text-sm text-amber-700 whitespace-nowrap" data-testid="no-ceiling-hint">
-                  Admin ceiling rate needed — cannot be purchased until it is set.
+              {/* Band hints are width-capped (w-24 truncate) so a big number can never
+                  stretch the cell and shove Tax%/Amount aside. Full text lives in the
+                  title tooltip and the server save-toast. */}
+              {showNotConfigured && (
+                <p
+                  className="w-24 truncate text-xs text-amber-700"
+                  data-testid="no-ceiling-hint"
+                  title="Admin base rate + buffer needed — cannot be purchased until they are set."
+                >
+                  ⚠ Not set
                 </p>
               )}
-              {showOverCeiling && (
-                <p className="text-sm text-red-600 whitespace-nowrap" data-testid="over-ceiling-hint">
-                  Above the admin ceiling rate of ₹{fmt2(maxRate!)}.
+              {showOverMax && (
+                <p
+                  className="w-24 truncate text-xs text-red-600"
+                  data-testid="over-ceiling-hint"
+                  title={`Above the maximum of ₹${fmt2(String(band!.max))} (base + buffer).`}
+                >
+                  Max ₹{fmt2(String(band!.max))}
                 </p>
               )}
-              {row.rateBlank && !showNoCeiling && (
+              {showUnderMin && !showOverMax && (
+                <p
+                  className="w-24 truncate text-xs text-red-600"
+                  data-testid="under-floor-hint"
+                  title={`Below the minimum of ₹${fmt2(String(band!.min))} (base − buffer).`}
+                >
+                  Min ₹{fmt2(String(band!.min))}
+                </p>
+              )}
+              {row.rateBlank && !showNotConfigured && (
                 <p className="text-sm text-amber-600 whitespace-nowrap">First purchase — enter rate</p>
               )}
               {showZeroWarning && (

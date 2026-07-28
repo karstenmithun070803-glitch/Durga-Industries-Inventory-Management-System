@@ -4,8 +4,20 @@ import { unstable_cache, revalidateTag } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { vehicles, customers, materialIssues, invoices } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
-import { getCurrentFY } from "@/lib/fy";
+import { eq, sql } from "drizzle-orm";
+import { isForeignKeyViolation } from "@/lib/utils/pg-errors";
+
+// True when any row anywhere still references this vehicle — i.e. it has history and
+// must be HIDDEN rather than physically deleted. Covers both child tables at ANY status
+// (a Finalized invoice counts just as much as a Draft one).
+async function vehicleIsReferenced(id: string): Promise<boolean> {
+  const checks = [
+    db.select({ x: sql`1` }).from(materialIssues).where(eq(materialIssues.vehicle_id, id)).limit(1),
+    db.select({ x: sql`1` }).from(invoices).where(eq(invoices.vehicle_id, id)).limit(1),
+  ];
+  const results = await Promise.all(checks);
+  return results.some((r) => r.length > 0);
+}
 
 const vehicleSelect = {
   id: vehicles.id,
@@ -45,15 +57,31 @@ export const getAllVehicles = unstable_cache(
 
 // ─── Mutations ───────────────────────────────────────────────────────────────
 
+/** Signals the client that a new job_ref_no matched a hidden ("deleted") row it may restore (R5). */
+export type CreateResult = { ok: true } | { hiddenCollision: { id: string; name: string } };
+
 export async function createVehicle(data: {
   job_ref_no: string;
   type: string;
   customer_id?: string;
-}) {
+}): Promise<CreateResult> {
   if (!data.job_ref_no.trim()) throw new Error("Job No / Reg No is required.");
+
+  // A hidden ("deleted") row still occupies the unique job_ref_no index. Distinguish an
+  // active duplicate (a real error) from a hidden one (offer to restore, R5): return a
+  // signal so the client can ask the user instead of showing a raw "already exists" wall.
+  const key = data.job_ref_no.trim().toUpperCase();
+  const dups = await db.select({ id: vehicles.id, is_active: vehicles.is_active }).from(vehicles)
+    .where(eq(vehicles.job_ref_no, key));
+  if (dups.some((d) => d.is_active))
+    throw new Error(`Job No / Reg No "${data.job_ref_no.trim()}" already exists. Choose a different number.`);
+  if (dups.length > 0) {
+    return { hiddenCollision: { id: dups[0].id, name: key } };
+  }
+
   try {
     await db.insert(vehicles).values({
-      job_ref_no: data.job_ref_no.trim().toUpperCase(),
+      job_ref_no: key,
       type: data.type || "New",
       customer_id: data.customer_id || null,
     });
@@ -64,6 +92,7 @@ export async function createVehicle(data: {
     throw e;
   }
   revalidateTag(CACHE_TAGS.vehicles);
+  return { ok: true as const };
 }
 
 export async function updateVehicle(id: string, data: {
@@ -87,44 +116,29 @@ export async function updateVehicle(id: string, data: {
   revalidateTag(CACHE_TAGS.vehicles);
 }
 
-export async function deleteVehicle(id: string, force = false) {
-  const [veh] = await db.select({ job_ref_no: vehicles.job_ref_no }).from(vehicles).where(eq(vehicles.id, id));
+/**
+ * Smart delete: physically remove the vehicle when nothing references it, otherwise
+ * HIDE it (is_active=false) so it leaves all lists/pickers while its transaction history
+ * keeps displaying correctly. To the user both outcomes look identical — the row vanishes.
+ */
+export async function deleteVehicle(id: string) {
+  const [veh] = await db.select({ id: vehicles.id }).from(vehicles).where(eq(vehicles.id, id));
+  if (!veh) return;
 
-  if (!force) {
-    // Soft warning: vehicle has material issue records in the current FY
-    // Caller catches this, shows a confirmation dialog, then calls deleteVehicle(id, true)
-    const currentFY = getCurrentFY();
-    const currentFYIssue = await db
-      .select({ id: materialIssues.id })
-      .from(materialIssues)
-      .where(and(eq(materialIssues.vehicle_id, id), eq(materialIssues.financial_year, currentFY)))
-      .limit(1);
-    if (currentFYIssue.length > 0) {
-      throw new Error(
-        `WARN:This vehicle has material issue records in FY ${currentFY}. Deactivating will hide it from new issue forms.`
-      );
+  // Unreferenced → physically delete. The reference check is the primary guard; the 23503
+  // catch is a backstop for a concurrent insert racing between the check and the delete. Run
+  // the delete as a standalone statement (no explicit tx), so a failed delete never poisons
+  // the fresh update below.
+  if (!(await vehicleIsReferenced(id))) {
+    try {
+      await db.delete(vehicles).where(eq(vehicles.id, id));
+      revalidateTag(CACHE_TAGS.vehicles);
+      return;
+    } catch (e) {
+      if (!isForeignKeyViolation(e)) throw e;
+      // fall through: a reference appeared → hide instead
     }
   }
-
-  const draftInvoice = await db
-    .select({ bill_number: invoices.bill_number })
-    .from(invoices)
-    .where(and(eq(invoices.vehicle_id, id), eq(invoices.status, "Draft")))
-    .limit(1);
-  if (draftInvoice.length > 0)
-    throw new Error(
-      `Cannot deactivate "${veh?.job_ref_no ?? "this vehicle"}": has a Draft invoice ${draftInvoice[0].bill_number}. Finalize or delete it first.`
-    );
-
-  const finalizedInvoice = await db
-    .select({ bill_number: invoices.bill_number })
-    .from(invoices)
-    .where(and(eq(invoices.vehicle_id, id), eq(invoices.status, "Finalized")))
-    .limit(1);
-  if (finalizedInvoice.length > 0)
-    throw new Error(
-      `Cannot deactivate "${veh?.job_ref_no ?? "this vehicle"}": has a Finalized invoice ${finalizedInvoice[0].bill_number}. Finalized invoices are permanent GST records.`
-    );
 
   await db.update(vehicles).set({ is_active: false }).where(eq(vehicles.id, id));
   revalidateTag(CACHE_TAGS.vehicles);

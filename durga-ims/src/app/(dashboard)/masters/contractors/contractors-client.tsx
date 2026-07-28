@@ -7,19 +7,18 @@ import { MasterLayout } from "@/components/masters/master-layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { createContractor, updateContractor, deleteContractor, reactivateContractor, bulkImportContractors } from "@/lib/actions/contractors.actions";
+import { createContractor, updateContractor, deleteContractor, bulkImportContractors } from "@/lib/actions/contractors.actions";
 import { formatCode, matchesCode } from "@/lib/utils";
 import type { Contractor } from "@/types";
-import { RotateCcw, UserX, Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
 export function ContractorsClient({ contractors }: { contractors: Contractor[] }) {
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
-  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Contractor | null>(null);
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", role: "", contact: "" });
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
@@ -30,9 +29,8 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef({ name: "", role: "", contact: "" });
 
-  const inactive = contractors.filter((c) => !c.is_active);
   const visible = useMemo(() =>
-    contractors.filter((c) => showInactive ? !c.is_active : c.is_active).filter((c) => {
+    contractors.filter((c) => {
       const q = search.toLowerCase();
       return (
         c.name.toLowerCase().includes(q) ||
@@ -40,7 +38,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
         matchesCode(search, "CON-", c.code_no, 2)
       );
     }),
-    [contractors, search, showInactive]
+    [contractors, search]
   );
 
   function startEdit(c: Contractor) {
@@ -81,19 +79,6 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
     });
   }
 
-  function handleReactivate(id: string) {
-    startTransition(async () => {
-      try {
-        await reactivateContractor(id);
-        toast.success("Contractor reactivated");
-        setShowInactive(false);
-        resetForm();
-      } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Could not reactivate");
-      }
-    });
-  }
-
   return (
     <>
       <MasterLayout
@@ -117,15 +102,9 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
             </div>
             {editing && (
               <div className="pt-3 border-t border-slate-200 mt-1">
-                {editing.is_active ? (
-                  <Button type="button" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
-                    <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
-                  </Button>
-                ) : (
-                  <Button type="button" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
-                  </Button>
-                )}
+                <Button type="button" variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs" onClick={() => setDeletingId(editing.id)} disabled={isPending}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
               </div>
             )}
           </div>
@@ -147,11 +126,6 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
                 }}
                 className="max-w-xs"
               />
-              {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
-                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
-                </Button>
-              )}
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs border-field ml-auto">
                 <Upload className="w-3.5 h-3.5 mr-1.5" />Import
               </Button>
@@ -172,7 +146,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
                   {visible.map((c, i) => (
                     <tr
                       key={c.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !c.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(c)}
                     >
                       <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
@@ -227,22 +201,22 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
         isPending={false}
       />
       <ConfirmDialog
-        open={deactivatingId !== null}
-        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
-        title="Deactivate contractor?"
-        description="This will deactivate the contractor. Historical material issue records will be preserved. You can reactivate at any time."
-        confirmLabel="Deactivate"
+        open={deletingId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        title="Delete contractor?"
+        description="This permanently deletes the contractor. If it appears in any transaction, its history is preserved and it is simply removed from all lists. This cannot be undone."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (!deactivatingId) return;
+          if (!deletingId) return;
           startTransition(async () => {
             try {
-              await deleteContractor(deactivatingId);
-              toast.success("Contractor deactivated");
+              await deleteContractor(deletingId);
+              toast.success("Contractor deleted");
               resetForm();
             } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+              toast.error(e instanceof Error ? e.message : "Could not delete");
             } finally {
-              setDeactivatingId(null);
+              setDeletingId(null);
             }
           });
         }}

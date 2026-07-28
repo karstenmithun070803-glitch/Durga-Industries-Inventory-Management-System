@@ -120,10 +120,11 @@ export async function createTestMaterial(
       tax_rate_id: taxRate,
       opening_stock: "0",
       current_stock: "0",
-      // A material with max_rate = NULL cannot be purchased — validateItems() blocks the
-      // PO. Default to an effectively unbounded ceiling so tests that are not about the
-      // ceiling can still create POs. Ceiling tests override this (including to null).
-      max_rate: "9999999.0000",
+      // A material needs BOTH base_rate and buffer to be purchasable (validateRateBand
+      // blocks otherwise). Default to an effectively unbounded band so tests that are not
+      // about the band can still create/receive POs. Band tests override these (incl. null).
+      base_rate: "9999999.0000",
+      buffer: "9999999.0000",
       ...overrides,
     })
     .returning();

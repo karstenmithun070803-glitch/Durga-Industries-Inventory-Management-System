@@ -30,11 +30,17 @@ export interface VerticalFormNavOptions {
    * Default false → masters keep their existing behavior.
    */
   advanceOnComboboxEnter?: boolean;
+  /**
+   * When true (default), ←/→ move between fields. Set false so ←/→ are left to the
+   * browser (move the text caret within a field) and only Enter/↑/↓ change fields —
+   * the expected behavior for a single-column form like the masters pages.
+   */
+  horizontalArrows?: boolean;
 }
 
 export function handleVerticalFormKeyDown(
   e: React.KeyboardEvent<Element>,
-  { trapTab = true, extraSelector, advanceOnComboboxEnter = false }: VerticalFormNavOptions = {}
+  { trapTab = true, extraSelector, advanceOnComboboxEnter = false, horizontalArrows = true }: VerticalFormNavOptions = {}
 ): void {
   // A combobox dropdown is open → pass all keys through to cmdk.
   if (document.querySelector("[cmdk-root]")) return;
@@ -44,8 +50,10 @@ export function handleVerticalFormKeyDown(
     return;
   }
 
-  const isDown = e.key === "ArrowDown" || e.key === "Enter" || e.key === "ArrowRight";
-  const isUp = e.key === "ArrowUp" || e.key === "ArrowLeft";
+  // ←/→ count as navigation only when horizontalArrows; otherwise they fall through
+  // to the browser (caret movement) via the early return below.
+  const isDown = e.key === "ArrowDown" || e.key === "Enter" || (horizontalArrows && e.key === "ArrowRight");
+  const isUp = e.key === "ArrowUp" || (horizontalArrows && e.key === "ArrowLeft");
   if (!isDown && !isUp) return;
 
   const target = e.target as HTMLElement;

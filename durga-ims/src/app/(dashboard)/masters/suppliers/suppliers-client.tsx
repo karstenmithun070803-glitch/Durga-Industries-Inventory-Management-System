@@ -12,7 +12,7 @@ import { createSupplier, updateSupplier, deleteSupplier, reactivateSupplier, bul
 import { INDIAN_STATES } from "@/lib/constants";
 import { formatCode, matchesCode, validateGstinFormat } from "@/lib/utils";
 import type { Supplier } from "@/types";
-import { RotateCcw, UserX, Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -22,9 +22,10 @@ const EMPTY = { name: "", gstin: "", address: "", state: "" };
 export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
-  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Set when a new supplier collides with a hidden ("deleted") row: prompt to restore it (R5).
+  const [hiddenCollision, setHiddenCollision] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
@@ -43,9 +44,8 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
       s.id !== editing?.id
     );
 
-  const inactive = suppliers.filter((s) => !s.is_active);
   const visible = useMemo(() =>
-    suppliers.filter((s) => showInactive ? !s.is_active : s.is_active).filter((s) => {
+    suppliers.filter((s) => {
       const q = search.toLowerCase();
       return (
         s.name.toLowerCase().includes(q) ||
@@ -54,7 +54,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
         matchesCode(search, "S-", s.code_no)
       );
     }),
-    [suppliers, search, showInactive]
+    [suppliers, search]
   );
 
   function startEdit(s: Supplier) {
@@ -88,24 +88,37 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
   function handleSubmit() {
     startTransition(async () => {
       try {
-        if (editing) { await updateSupplier(editing.id, form); } else { await createSupplier(form); }
-        toast.success(editing ? "Supplier updated" : "Supplier added");
-        resetForm();
+        if (editing) {
+          await updateSupplier(editing.id, form);
+          toast.success("Supplier updated");
+          resetForm();
+        } else {
+          const res = await createSupplier(form);
+          if ("hiddenCollision" in res) {
+            // Name matches a previously-deleted (hidden) supplier — offer to restore it.
+            setHiddenCollision(res.hiddenCollision);
+            return;
+          }
+          toast.success("Supplier added");
+          resetForm();
+        }
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Something went wrong");
       }
     });
   }
 
-  function handleReactivate(id: string) {
+  function handleRestore() {
+    if (!hiddenCollision) return;
     startTransition(async () => {
       try {
-        await reactivateSupplier(id);
-        toast.success("Supplier reactivated");
-        setShowInactive(false);
+        await reactivateSupplier(hiddenCollision.id);
+        toast.success("Supplier restored");
         resetForm();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+        toast.error(e instanceof Error ? e.message : "Could not restore");
+      } finally {
+        setHiddenCollision(null);
       }
     });
   }
@@ -152,15 +165,9 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
             </div>
             {editing && (
               <div className="pt-3 border-t border-slate-200 mt-1">
-                {editing.is_active ? (
-                  <Button type="button" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
-                    <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
-                  </Button>
-                ) : (
-                  <Button type="button" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
-                  </Button>
-                )}
+                <Button type="button" variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs" onClick={() => setDeletingId(editing.id)} disabled={isPending}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
               </div>
             )}
           </div>
@@ -182,11 +189,6 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                 }}
                 className="max-w-sm"
               />
-              {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
-                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
-                </Button>
-              )}
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs border-field ml-auto">
                 <Upload className="w-3.5 h-3.5 mr-1.5" />Import
               </Button>
@@ -208,11 +210,11 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                     <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-700">No suppliers found</td></tr>
                   )}
                   {visible.map((s, i) => {
-                    const stickyBg = !s.is_active ? "bg-slate-50" : i % 2 === 1 ? "bg-slate-50" : "bg-white";
+                    const stickyBg = i % 2 === 1 ? "bg-slate-50" : "bg-white";
                     return (
                     <tr
                       key={s.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !s.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(s)}
                     >
                       <td className={`px-3 py-1.5 text-slate-800 group-hover:bg-rowhover group-hover:text-slate-900 sticky left-0 z-10 w-12 ${stickyBg}`}>{i + 1}</td>
@@ -293,25 +295,34 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
         isPending={false}
       />
       <ConfirmDialog
-        open={deactivatingId !== null}
-        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
-        title="Deactivate supplier?"
-        description="This will deactivate the supplier. They will be hidden from active lists. You can reactivate at any time."
-        confirmLabel="Deactivate"
+        open={deletingId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        title="Delete supplier?"
+        description="This permanently deletes the supplier. If it appears in any transaction, its history is preserved and it is simply removed from all lists. This cannot be undone."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (!deactivatingId) return;
+          if (!deletingId) return;
           startTransition(async () => {
             try {
-              await deleteSupplier(deactivatingId);
-              toast.success("Supplier deactivated");
+              await deleteSupplier(deletingId);
+              toast.success("Supplier deleted");
               resetForm();
             } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+              toast.error(e instanceof Error ? e.message : "Could not delete");
             } finally {
-              setDeactivatingId(null);
+              setDeletingId(null);
             }
           });
         }}
+        isPending={isPending}
+      />
+      <ConfirmDialog
+        open={hiddenCollision !== null}
+        onOpenChange={(open) => { if (!open) setHiddenCollision(null); }}
+        title="Restore deleted supplier?"
+        description={`A previously-deleted supplier named "${hiddenCollision?.name ?? ""}" still exists in your transaction history. Restore that record (its history reattaches), or cancel and use a different name.`}
+        confirmLabel="Restore"
+        onConfirm={handleRestore}
         isPending={isPending}
       />
     </>

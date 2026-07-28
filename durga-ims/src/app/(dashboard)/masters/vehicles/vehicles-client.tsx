@@ -12,7 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createVehicle, updateVehicle, deleteVehicle, reactivateVehicle, bulkImportVehicles } from "@/lib/actions/vehicles.actions";
 import { formatCode } from "@/lib/utils";
 import type { Customer } from "@/types";
-import { RotateCcw, UserX, Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { GenericBulkImportDialog } from "@/components/masters/generic-bulk-import-dialog";
 
@@ -24,9 +24,10 @@ interface Props { vehicles: VehicleRow[]; customers: Customer[]; }
 export function VehiclesClient({ vehicles, customers }: Props) {
   const [search, setSearch] = useState("");
   const [focusedIdx, setFocusedIdx] = useState(-1);
-  const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<VehicleRow | null>(null);
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Set when a new job_ref_no collides with a hidden ("deleted") vehicle: prompt to restore it (R5).
+  const [hiddenCollision, setHiddenCollision] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
@@ -37,16 +38,28 @@ export function VehiclesClient({ vehicles, customers }: Props) {
   const saveRef = useRef<HTMLButtonElement>(null);
   const originalFormRef = useRef<typeof EMPTY>(EMPTY);
 
-  const inactive = vehicles.filter((v) => !v.is_active);
+  const activeCustomers = customers.filter((c) => c.is_active);
+
+  // Picker options: active customers, plus the vehicle's currently-saved customer even if it
+  // has since been deleted (hidden) — otherwise editing that vehicle would blank the field (R4).
+  const customerOptions = useMemo(() => {
+    const opts = activeCustomers.map((c) => ({ value: c.id, label: `${formatCode("C-", c.customer_no)} — ${c.customer_name}` }));
+    if (form.customer_id && !activeCustomers.some((c) => c.id === form.customer_id)) {
+      const cur = customers.find((c) => c.id === form.customer_id);
+      if (cur) opts.unshift({ value: cur.id, label: `${formatCode("C-", cur.customer_no)} — ${cur.customer_name} (deleted)` });
+    }
+    return opts;
+  }, [customers, form.customer_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const visible = useMemo(() =>
-    vehicles.filter((v) => showInactive ? !v.is_active : v.is_active).filter((v) => {
+    vehicles.filter((v) => {
       const q = search.toLowerCase();
       return (
         (v.customer_name ?? "").toLowerCase().includes(q) ||
         (v.job_ref_no ?? "").toLowerCase().includes(q)
       );
     }),
-    [vehicles, search, showInactive]
+    [vehicles, search]
   );
 
   function startEdit(v: VehicleRow) {
@@ -81,26 +94,35 @@ export function VehiclesClient({ vehicles, customers }: Props) {
       try {
         if (editing) {
           await updateVehicle(editing.id, form);
+          toast.success("Vehicle updated");
+          resetForm();
         } else {
-          await createVehicle(form);
+          const res = await createVehicle(form);
+          if ("hiddenCollision" in res) {
+            // job_ref_no matches a previously-deleted (hidden) vehicle — offer to restore it.
+            setHiddenCollision(res.hiddenCollision);
+            return;
+          }
+          toast.success("Vehicle added");
+          resetForm();
         }
-        toast.success(editing ? "Vehicle updated" : "Vehicle added");
-        resetForm();
       } catch (e: unknown) {
         toast.error(e instanceof Error ? e.message : "Something went wrong");
       }
     });
   }
 
-  function handleReactivate(id: string) {
+  function handleRestore() {
+    if (!hiddenCollision) return;
     startTransition(async () => {
       try {
-        await reactivateVehicle(id);
-        toast.success("Vehicle reactivated");
-        setShowInactive(false);
+        await reactivateVehicle(hiddenCollision.id);
+        toast.success("Vehicle restored");
         resetForm();
       } catch (e: unknown) {
-        toast.error(e instanceof Error ? e.message : "Could not reactivate");
+        toast.error(e instanceof Error ? e.message : "Could not restore");
+      } finally {
+        setHiddenCollision(null);
       }
     });
   }
@@ -136,7 +158,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Customer</label>
               <Combobox
-                options={customers.map((c) => ({ value: c.id, label: `${formatCode("C-", c.customer_no)} — ${c.customer_name}` }))}
+                options={customerOptions}
                 value={form.customer_id}
                 onChange={(v) => set("customer_id", v)}
                 placeholder="Select customer..."
@@ -152,15 +174,9 @@ export function VehiclesClient({ vehicles, customers }: Props) {
             </div>
             {editing && (
               <div className="pt-3 border-t border-slate-200 mt-1">
-                {editing.is_active ? (
-                  <Button type="button" variant="ghost" size="sm" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 text-xs" onClick={() => setDeactivatingId(editing.id)} disabled={isPending}>
-                    <UserX className="w-3.5 h-3.5 mr-1.5" />Deactivate
-                  </Button>
-                ) : (
-                  <Button type="button" variant="ghost" size="sm" className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 text-xs" onClick={() => handleReactivate(editing.id)} disabled={isPending}>
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reactivate
-                  </Button>
-                )}
+                <Button type="button" variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs" onClick={() => setDeletingId(editing.id)} disabled={isPending}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
               </div>
             )}
           </div>
@@ -182,11 +198,6 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                 }}
                 className="max-w-sm"
               />
-              {inactive.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)} className="shrink-0 text-xs border-field">
-                  {showInactive ? "Back to Active" : `Inactive Only (${inactive.length})`}
-                </Button>
-              )}
               <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="shrink-0 text-xs border-field ml-auto">
                 <Upload className="w-3.5 h-3.5 mr-1.5" />Import
               </Button>
@@ -207,7 +218,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                   {visible.map((v, i) => (
                     <tr
                       key={v.id}
-                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : !v.is_active ? "opacity-50 bg-slate-50 hover:bg-rowhover" : "hover:bg-rowhover hover:text-slate-900"}`}
+                      className={`group border-t border-slate-200 cursor-pointer ${i === focusedIdx ? "ring-1 ring-inset ring-blue-500 bg-blue-50" : "hover:bg-rowhover hover:text-slate-900"}`}
                       onClick={() => startEdit(v)}
                     >
                       <td className="px-4 py-1.5 text-slate-800 group-hover:text-slate-900">{i + 1}</td>
@@ -294,25 +305,34 @@ export function VehiclesClient({ vehicles, customers }: Props) {
         isPending={false}
       />
       <ConfirmDialog
-        open={deactivatingId !== null}
-        onOpenChange={(open) => { if (!open) setDeactivatingId(null); }}
-        title="Deactivate vehicle?"
-        description="This will deactivate the vehicle / job record. Historical material issues will be preserved. You can reactivate at any time."
-        confirmLabel="Deactivate"
+        open={deletingId !== null}
+        onOpenChange={(open) => { if (!open) setDeletingId(null); }}
+        title="Delete vehicle?"
+        description="This permanently deletes the vehicle / job. If it appears in any transaction, its history is preserved and it is simply removed from all lists. This cannot be undone."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (!deactivatingId) return;
+          if (!deletingId) return;
           startTransition(async () => {
             try {
-              await deleteVehicle(deactivatingId);
-              toast.success("Vehicle deactivated");
+              await deleteVehicle(deletingId);
+              toast.success("Vehicle deleted");
               resetForm();
             } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Could not deactivate");
+              toast.error(e instanceof Error ? e.message : "Could not delete");
             } finally {
-              setDeactivatingId(null);
+              setDeletingId(null);
             }
           });
         }}
+        isPending={isPending}
+      />
+      <ConfirmDialog
+        open={hiddenCollision !== null}
+        onOpenChange={(open) => { if (!open) setHiddenCollision(null); }}
+        title="Restore deleted vehicle?"
+        description={`A previously-deleted vehicle "${hiddenCollision?.name ?? ""}" still exists in your transaction history. Restore that record (its history reattaches), or cancel and use a different number.`}
+        confirmLabel="Restore"
+        onConfirm={handleRestore}
         isPending={isPending}
       />
     </>

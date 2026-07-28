@@ -78,6 +78,13 @@
       "when": 1784030333873,
       "tag": "0010_vengeful_bromley",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784030333874,
+      "tag": "0011_base_rate_buffer",
+      "breakpoints": true
     }
   ]
 }

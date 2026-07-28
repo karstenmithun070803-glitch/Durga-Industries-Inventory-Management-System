@@ -1,9 +1,10 @@
 export const dynamic = "force-dynamic";
 
-import { getAllSuppliers } from "@/lib/actions/suppliers.actions";
+import { getSuppliers } from "@/lib/actions/suppliers.actions";
 import { SuppliersClient } from "./suppliers-client";
 
 export default async function SuppliersPage() {
-  const suppliers = await getAllSuppliers();
+  // getSuppliers = active only, so deleted/hidden suppliers leave the list.
+  const suppliers = await getSuppliers();
   return <SuppliersClient suppliers={suppliers} />;
 }
