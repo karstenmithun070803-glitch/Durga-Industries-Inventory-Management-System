@@ -1,5 +1,5 @@
 /**
- * Wipes purchase history and stock ledger for the "16 GI BOLT (RF)" material.
+ * Wipes purchase history and stock ledger for the "5/16 GI BOLT (RF)" material (M-002).
  * The material itself is kept active. All other materials are untouched.
  *
  * What is deleted:
@@ -47,12 +47,12 @@ async function main() {
     const matches = await sql<{ id: string; name: string; material_no: number; current_stock: string }[]>`
       SELECT id, name, material_no, current_stock
       FROM materials
-      WHERE name ILIKE ${'%GI BOLT%'}
+      WHERE name ILIKE ${'%5/16 GI BOLT%'}
       ORDER BY material_no
     `;
 
     if (matches.length === 0) {
-      console.error("✗ No material found matching '%GI BOLT%'. Nothing changed.");
+      console.error("✗ No material found matching '%5/16 GI BOLT%'. Nothing changed.");
       process.exit(1);
     }
     if (matches.length > 1) {
