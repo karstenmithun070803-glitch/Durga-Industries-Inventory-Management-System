@@ -596,7 +596,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                           {status === "out" && (
                             <span onClick={(e) => e.stopPropagation()}>
                               <Link
-                                href={`/transactions/purchase-orders/new?prefill=${row.id}`}
+                                href="/transactions/purchase-orders"
                                 title="Create Purchase Order for this material"
                               >
                                 <button className="p-1 rounded hover:bg-blue-50 text-slate-700 hover:text-blue-600 transition-colors">

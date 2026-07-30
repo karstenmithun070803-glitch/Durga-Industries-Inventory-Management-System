@@ -267,9 +267,7 @@ export async function getMonthlyStockReport(params: {
   const from = new Date(fromDate + "T00:00:00+05:30");
   const to = new Date(toDate + "T23:59:59+05:30");
 
-  // All materials (+ filter if specified). Deliberately NOT filtered by is_active: a
-  // deleted/hidden material can still have stock movement in this period, and the report
-  // must include it so totals reconcile with the append-only stock_ledger.
+  // Active materials only — deleted materials (is_active=false) are excluded from the report.
   const matRows = await db
     .select({
       id: materials.id,
@@ -281,7 +279,12 @@ export async function getMonthlyStockReport(params: {
       standard_cost: materials.standard_cost,
     })
     .from(materials)
-    .where(materialId ? eq(materials.id, materialId) : undefined)
+    .where(
+      and(
+        eq(materials.is_active, true),
+        materialId ? eq(materials.id, materialId) : undefined
+      )
+    )
     .orderBy(materials.material_no);
 
   if (matRows.length === 0) return [];
@@ -399,7 +402,13 @@ export async function getMonthlyStockReport(params: {
       opening_rate: mat.opening_rate !== null ? parseFloat(mat.opening_rate) : null,
       standard_cost: mat.standard_cost !== null ? parseFloat(mat.standard_cost) : null,
     };
-  });
+  }).filter((row) =>
+    row.opening_stock !== 0 ||
+    row.po_inward !== 0 ||
+    row.issues !== 0 ||
+    row.reversals !== 0 ||
+    row.adjustments !== 0
+  );
     },
     ["report-monthly-stock", fromDate, toDate, materialId ?? ""],
     { tags: [CACHE_TAGS.materials], revalidate: 120 }
