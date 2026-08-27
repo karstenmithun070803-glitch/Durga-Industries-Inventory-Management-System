@@ -868,7 +868,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             {isReduction && writeOff !== null && writeOff > 0 && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
                 <p className="text-xs font-medium text-red-700">
-                  This adjustment will write off {fmtAmt(writeOff)} from this item's stock value
+                  This adjustment will write off {fmtAmt(writeOff)} from this item&apos;s stock value
                 </p>
               </div>
             )}
