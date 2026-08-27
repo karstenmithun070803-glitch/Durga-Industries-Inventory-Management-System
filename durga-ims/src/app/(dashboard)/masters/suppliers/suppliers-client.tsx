@@ -132,14 +132,14 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Supplier" : "Add Supplier"}</p>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Supplier Name *</label>
-              <Input ref={firstFieldRef} placeholder="Company name" value={form.name} onChange={(e) => set("name", e.target.value)} />
+              <Input ref={firstFieldRef} placeholder="Company name" value={form.name} onChange={(e) => set("name", e.target.value)} forceUppercase />
               {isDuplicateName && (
                 <p className="text-xs text-red-500 mt-0.5">A supplier named &ldquo;{form.name.trim()}&rdquo; with the same address and GSTIN already exists. Change the address or GSTIN.</p>
               )}
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Address</label>
-              <Input placeholder="Full address" value={form.address} onChange={(e) => set("address", e.target.value)} />
+              <Input placeholder="Full address" value={form.address} onChange={(e) => set("address", e.target.value)} forceUppercase />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">GSTIN</label>
@@ -181,6 +181,7 @@ export function SuppliersClient({ suppliers }: { suppliers: Supplier[] }) {
                 placeholder="Search by name, S001 or just 1, GSTIN..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                forceUppercase
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
                   else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }

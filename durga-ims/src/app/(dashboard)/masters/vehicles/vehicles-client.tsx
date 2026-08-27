@@ -190,6 +190,7 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                 placeholder="Search by job no / reg no or customer..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                forceUppercase
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
                   else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }

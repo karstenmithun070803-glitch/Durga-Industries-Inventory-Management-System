@@ -361,6 +361,7 @@ export function StagesClient({ stages, materials, units }: Props) {
                       focusSubCell(0, 0);
                     }
                   }}
+                  forceUppercase
                 />
               </div>
             </div>
@@ -492,6 +493,7 @@ export function StagesClient({ stages, materials, units }: Props) {
                 placeholder="Search by stage code or name…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                forceUppercase
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") {
                     e.preventDefault();

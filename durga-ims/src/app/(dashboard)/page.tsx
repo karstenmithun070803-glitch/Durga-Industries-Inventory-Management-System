@@ -120,14 +120,7 @@ export default async function HomePage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard
-          label="Total Stock Value"
-          value={fmtAmt(stats.totalStockValue)}
-          sub={`${stats.materialsExcludedFromValue} excl. (no rate) · incl. GST basis`}
-          href="/stock"
-          color="slate"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
           label={`FY ${fy} Sales`}
           value={fmtAmt(stats.fyTotalSales)}

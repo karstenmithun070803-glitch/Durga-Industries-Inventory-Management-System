@@ -55,14 +55,6 @@ function fmtAmt(v: number): string {
   return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function fmtLargeAmt(v: number): string {
-  if (v >= 1_00_00_000) return `₹${(v / 1_00_00_000).toFixed(2)} Cr`;
-  if (v >= 10_00_000)   return `₹${(v / 1_00_000).toFixed(2)} L`;
-  if (v >= 1_00_000)    return "₹" + Math.round(v).toLocaleString("en-IN");
-  if (v >= 1_000)       return `₹${(v / 1_000).toFixed(1)} K`;
-  return fmtAmt(v);
-}
-
 function fmtDate(d: Date): string {
   return new Date(d).toLocaleDateString("en-IN", {
     day: "2-digit", month: "short", year: "numeric",
@@ -402,19 +394,11 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
       </div>
 
       {/* ── Summary cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <SummaryCard
           label="Total Materials"
           value={String(summary.totalMaterials)}
           sub="active materials"
-        />
-        <SummaryCard
-          label="Stock Value"
-          value={fmtLargeAmt(summary.totalStockValue)}
-          sub={[
-            summary.standardCostCount > 0 ? `${summary.standardCostCount} use non-PO rate` : null,
-            summary.materialsExcludedFromValue > 0 ? `${summary.materialsExcludedFromValue} excl. (no cost set)` : null,
-          ].filter(Boolean).join(" · ") || "based on last PO rate (incl. GST)"}
         />
         <SummaryCard
           label="Out of Stock"
@@ -884,7 +868,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
             {isReduction && writeOff !== null && writeOff > 0 && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
                 <p className="text-xs font-medium text-red-700">
-                  This adjustment will write off {fmtAmt(writeOff)} from total stock value
+                  This adjustment will write off {fmtAmt(writeOff)} from this item's stock value
                 </p>
               </div>
             )}
@@ -955,7 +939,7 @@ export function StockClient({ initialRows, summary: initialSummary }: Props) {
                   placeholder="e.g. 150.00"
                 />
                 <p className="text-xs text-amber-700">
-                  This item has no purchase history. Enter a unit cost to include it in total stock value.
+                  This item has no purchase history. Enter a unit cost to include it in stock valuation.
                   {adjustMaterial?.standard_cost ? " Current cost will be updated." : " Leave blank to keep it excluded."}
                 </p>
               </div>

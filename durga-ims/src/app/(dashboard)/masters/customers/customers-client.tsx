@@ -131,27 +131,27 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Customer" : "Add Customer"}</p>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Customer Name *</label>
-              <Input ref={firstFieldRef} data-testid="customer-name-input" placeholder="Full name" value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
+              <Input ref={firstFieldRef} data-testid="customer-name-input" placeholder="Full name" value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} forceUppercase />
               {isDuplicateName && (
                 <p className="text-xs text-red-500 mt-0.5">A customer named &ldquo;{form.customer_name.trim()}&rdquo; with the same address and GSTIN already exists. Change the address or GSTIN.</p>
               )}
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Address Line 1</label>
-              <Input placeholder="Door no, Building" value={form.address_1} onChange={(e) => set("address_1", e.target.value)} />
+              <Input placeholder="Door no, Building" value={form.address_1} onChange={(e) => set("address_1", e.target.value)} forceUppercase />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Address Line 2</label>
-              <Input placeholder="Area, Landmark" value={form.address_2} onChange={(e) => set("address_2", e.target.value)} />
+              <Input placeholder="Area, Landmark" value={form.address_2} onChange={(e) => set("address_2", e.target.value)} forceUppercase />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Street</label>
-              <Input placeholder="Street name" value={form.street} onChange={(e) => set("street", e.target.value)} />
+              <Input placeholder="Street name" value={form.street} onChange={(e) => set("street", e.target.value)} forceUppercase />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-600">City</label>
-                <Input placeholder="City" value={form.city} onChange={(e) => set("city", e.target.value)} />
+                <Input placeholder="City" value={form.city} onChange={(e) => set("city", e.target.value)} forceUppercase />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-600">State</label>
@@ -192,6 +192,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                 placeholder="Search by name, C001 or just 1, city, GSTIN..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                forceUppercase
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
                   else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }

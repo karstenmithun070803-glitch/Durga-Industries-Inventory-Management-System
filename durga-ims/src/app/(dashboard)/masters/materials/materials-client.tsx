@@ -151,7 +151,7 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Material" : "Add Material"}</p>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Material Name *</label>
-              <Input ref={firstFieldRef} placeholder="e.g. 25*3MM ANGLE" value={form.name} onChange={(e) => set("name", e.target.value)} />
+              <Input ref={firstFieldRef} placeholder="e.g. 25*3MM ANGLE" value={form.name} onChange={(e) => set("name", e.target.value)} forceUppercase />
               {isDuplicateName && (
                 <p className="text-xs text-red-500 mt-0.5">A material named &ldquo;{form.name.trim().toUpperCase()}&rdquo; already exists.</p>
               )}
@@ -220,6 +220,7 @@ export function MaterialsClient({ materials, taxRates, units, isAdmin }: Props) 
                 placeholder="Search by name, M001 or just 1, HSN..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                forceUppercase
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
                   else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }

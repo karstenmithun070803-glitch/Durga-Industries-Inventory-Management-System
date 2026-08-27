@@ -93,7 +93,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
             ].map(({ label, key, placeholder }) => (
               <div key={key} className="space-y-1.5">
                 <label className="text-xs text-slate-600">{label}</label>
-                <Input ref={key === "name" ? firstFieldRef : undefined} placeholder={placeholder} value={form[key as keyof typeof form]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
+                <Input ref={key === "name" ? firstFieldRef : undefined} placeholder={placeholder} value={form[key as keyof typeof form]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} forceUppercase={key !== "contact"} />
               </div>
             ))}
             <div className="flex gap-2">
@@ -118,6 +118,7 @@ export function ContractorsClient({ contractors }: { contractors: Contractor[] }
                 placeholder="Search by name, CON01 or just 1, role..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                forceUppercase
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
                   else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }

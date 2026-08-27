@@ -38,9 +38,6 @@ export interface StockMaterialRow {
 export interface StockSummary {
   totalMaterials: number;
   outOfStockCount: number;
-  totalStockValue: number;
-  materialsExcludedFromValue: number;
-  standardCostCount: number;
 }
 
 export interface StockLedgerEntry {
@@ -123,7 +120,7 @@ export const getStockDashboardMaterials = unstable_cache(
   if (allMats.length === 0) {
     return {
       rows: [],
-      summary: { totalMaterials: 0, outOfStockCount: 0, totalStockValue: 0, materialsExcludedFromValue: 0, standardCostCount: 0 },
+      summary: { totalMaterials: 0, outOfStockCount: 0 },
     };
   }
 
@@ -171,22 +168,9 @@ export const getStockDashboardMaterials = unstable_cache(
 
   const outOfStockCount = activeMats.filter((r) => parseFloat(r.current_stock) === 0).length;
 
-  let totalStockValue = 0;
-  let materialsExcludedFromValue = 0;
-  let standardCostCount = 0;
-  for (const r of activeMats) {
-    const effectiveRate = r.last_po_rate ?? r.opening_rate ?? r.standard_cost;
-    if (effectiveRate !== null) {
-      totalStockValue += parseFloat(r.current_stock) * parseFloat(effectiveRate);
-      if (!r.last_po_rate) standardCostCount++;
-    } else {
-      materialsExcludedFromValue++;
-    }
-  }
-
   return {
     rows,
-    summary: { totalMaterials, outOfStockCount, totalStockValue, materialsExcludedFromValue, standardCostCount },
+    summary: { totalMaterials, outOfStockCount },
   };
 },
 ["stock-dashboard"],

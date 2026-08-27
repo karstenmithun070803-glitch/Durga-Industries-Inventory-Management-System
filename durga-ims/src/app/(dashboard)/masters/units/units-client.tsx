@@ -77,7 +77,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
             <p className="text-sm font-medium text-slate-700">{editing ? "Edit Unit" : "Add New Unit"}</p>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-600">Unit Name *</label>
-              <Input ref={firstFieldRef} placeholder="e.g. KG, PCS, ROLL" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+              <Input ref={firstFieldRef} placeholder="e.g. KG, PCS, ROLL" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} forceUppercase />
             </div>
             <div className="flex gap-2">
               <Button ref={saveRef} onClick={handleSubmit} disabled={isPending} className="flex-1">{editing ? "Update" : "Add Unit"}</Button>
@@ -101,6 +101,7 @@ export function UnitsClient({ units }: { units: Unit[] }) {
                 placeholder="Search by name, U01 or just 1..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setFocusedIdx(-1); }}
+                forceUppercase
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx((i) => Math.min(i + 1, visible.length - 1)); }
                   else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx((i) => Math.max(i - 1, 0)); }

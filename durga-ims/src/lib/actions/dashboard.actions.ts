@@ -5,7 +5,6 @@ import {
   invoices,
   purchaseOrders,
   materialIssues,
-  materials,
   suppliers,
   vehicles,
 } from "@/lib/db/schema";
@@ -15,9 +14,6 @@ import { MI_STATUS, PO_STATUS } from "@/lib/constants";
 import { CACHE_TAGS } from "@/lib/cache";
 
 export interface DashboardStats {
-  totalStockValue: number;
-  materialsExcludedFromValue: number;
-  standardCostCount: number;
   fyTotalSales: number;
   fyVMINewTotal: number;
   fyVMIOldTotal: number;
@@ -34,11 +30,9 @@ export const getDashboardStats = unstable_cache(
   const [
     miSalesRows,
     purchaseRow,
-    stockRows,
     recentPORows,
     recentMIRows,
     recentInvoiceRows,
-    latestRates,
   ] = await Promise.all([
     // This FY total sales — VMI New + VMI Old material issues (Issued status only)
     db
@@ -61,12 +55,6 @@ export const getDashboardStats = unstable_cache(
         eq(purchaseOrders.financial_year, fy),
         eq(purchaseOrders.status, PO_STATUS.RECEIVED),
       )),
-
-    // Active materials — id needed for rate map join
-    db
-      .select({ id: materials.id, current_stock: materials.current_stock, standard_cost: materials.standard_cost, opening_rate: materials.opening_rate })
-      .from(materials)
-      .where(eq(materials.is_active, true)),
 
     // Recent 5 POs
     db
@@ -109,55 +97,12 @@ export const getDashboardStats = unstable_cache(
       .from(invoices)
       .orderBy(desc(invoices.bill_date), desc(invoices.bill_number))
       .limit(5),
-
-    // Most recent received PO rate per material (tax-inclusive) — identical formula to getStockDashboardMaterials()
-    // so Home tab totalStockValue matches Stock tab totalStockValue exactly.
-    db.execute<{ material_id: string; rate: string }>(sql`
-      SELECT DISTINCT ON (poi.material_id)
-        poi.material_id,
-        (
-          poi.amount
-          + COALESCE(poi.cgst_amount, 0)
-          + COALESCE(poi.sgst_amount, 0)
-          + COALESCE(poi.igst_amount, 0)
-        ) / NULLIF(poi.qty, 0) AS rate
-      FROM purchase_order_items poi
-      INNER JOIN purchase_orders po ON poi.po_id = po.id
-      WHERE po.status = 'Received'
-      ORDER BY poi.material_id, po.po_date DESC
-    `),
   ]);
-
-  // Compute totalStockValue using the same logic as getStockDashboardMaterials()
-  const rateMap = new Map<string, string>(
-    Array.from(latestRates).map((r) => [r.material_id, r.rate])
-  );
-  let totalStockValue = 0;
-  let materialsExcludedFromValue = 0;
-  let standardCostCount = 0;
-  for (const r of stockRows) {
-    const poRate = rateMap.get(r.id) ?? null;
-    const openRate = r.opening_rate ?? null;
-    const effectiveRate = poRate ?? openRate ?? r.standard_cost;
-    if (effectiveRate != null) {
-      const rate = parseFloat(String(effectiveRate));
-      const stock = parseFloat(String(r.current_stock));
-      if (Number.isFinite(rate) && Number.isFinite(stock)) {
-        totalStockValue += stock * rate;
-        if (!poRate) standardCostCount++;
-      }
-    } else {
-      materialsExcludedFromValue++;
-    }
-  }
 
   const fyVMINewTotal = parseFloat(miSalesRows.find((r) => r.issue_type === "NEW")?.total ?? "0");
   const fyVMIOldTotal = parseFloat(miSalesRows.find((r) => r.issue_type === "OLD")?.total ?? "0");
 
   return {
-    totalStockValue,
-    materialsExcludedFromValue,
-    standardCostCount,
     fyTotalSales: fyVMINewTotal + fyVMIOldTotal,
     fyVMINewTotal,
     fyVMIOldTotal,
