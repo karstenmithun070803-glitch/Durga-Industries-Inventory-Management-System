@@ -303,25 +303,23 @@ export function PurchaseReport({ suppliers, materials, defaultFY, companySetting
             <PrintButton
               label="Print"
               hotkey="mod+p"
-              getDocument={async () => {
-                const { PurchaseReportDocument } = await import("@/components/pdf/purchase-report-pdf");
-                return (
-                  <PurchaseReportDocument
-                    rows={rows}
-                    monthlyRows={monthlyRows}
-                    groupByMonth={groupByMonth}
-                    fy={fy}
-                    statusFilter={status}
-                    supplierName={supplierId ? suppliers.find((s) => s.id === supplierId)?.name : undefined}
-                    materialName={materialId ? materials.find((m) => m.id === materialId)?.name : undefined}
-                    dateFrom={dateFrom}
-                    dateTo={dateTo}
-                    companySetting={companySetting}
-                    showBill={showBill}
-                    showTaxAmt={showTaxAmt}
-                  />
-                );
-              }}
+              getJob={() => ({
+                kind: "purchase-report" as const,
+                props: {
+                  rows,
+                  monthlyRows,
+                  groupByMonth,
+                  fy,
+                  statusFilter: status,
+                  supplierName: supplierId ? suppliers.find((s) => s.id === supplierId)?.name : undefined,
+                  materialName: materialId ? materials.find((m) => m.id === materialId)?.name : undefined,
+                  dateFrom,
+                  dateTo,
+                  companySetting,
+                  showBill,
+                  showTaxAmt,
+                },
+              })}
             />
           </div>
 

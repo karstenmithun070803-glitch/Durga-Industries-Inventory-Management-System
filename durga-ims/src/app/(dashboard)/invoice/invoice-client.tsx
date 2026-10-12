@@ -1046,6 +1046,8 @@ export function InvoiceClient({
           {/* Sticky totals + action bar */}
           <div className="fixed bottom-0 left-64 right-0 z-30 bg-white border-t border-slate-200 shadow-lg">
             <div className="flex items-center gap-6 px-6 py-2 border-b border-slate-100 text-sm">
+              {includeTax && (
+                <>
               <span className="text-slate-600">
                 Taxable: <strong className="text-slate-800">₹{fmt2(totals.subtotal)}</strong>
               </span>
@@ -1063,6 +1065,8 @@ export function InvoiceClient({
                 <span className="text-slate-600">
                   IGST: <strong className="text-slate-800">₹{fmt2(totals.igst)}</strong>
                 </span>
+              )}
+                </>
               )}
               <span className="ml-auto text-base font-semibold text-slate-900">
                 Net: ₹{fmt2(netAmount)}

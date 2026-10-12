@@ -37,8 +37,8 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
         const cgst = items.reduce((s, r) => s + parseFloat(r.cgst_amount || "0"), 0);
         const sgst = items.reduce((s, r) => s + parseFloat(r.sgst_amount || "0"), 0);
         const igst = items.reduce((s, r) => s + parseFloat(r.igst_amount || "0"), 0);
-        const hasCgstSgst = cgst > 0 || sgst > 0;
-        const hasIgst = igst > 0;
+        const hasCgstSgst = showTax && (cgst > 0 || sgst > 0);
+        const hasIgst = showTax && igst > 0;
 
         return (
           <Page key={first.id} size="A4" style={styles.page}>
