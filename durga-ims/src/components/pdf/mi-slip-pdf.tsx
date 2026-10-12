@@ -213,12 +213,7 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
         {/* Footer */}
         <View style={styles.pageFooter} fixed>
           <View style={styles.footerLine} />
-          <Text
-            style={styles.footerText}
-            render={() =>
-              `For ${coName}`
-            }
-          />
+          <Text style={styles.footerText}>{`For ${coName}`}</Text>
         </View>
       </Page>
     </Document>

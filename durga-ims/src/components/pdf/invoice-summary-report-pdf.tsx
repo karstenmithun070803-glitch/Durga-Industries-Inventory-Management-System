@@ -131,12 +131,7 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
         {/* Footer */}
         <View style={styles.pageFooter} fixed>
           <View style={styles.footerLine} />
-          <Text
-            style={styles.footerText}
-            render={() =>
-              `Invoice Summary — FY ${fy}`
-            }
-          />
+          <Text style={styles.footerText}>{`Invoice Summary — FY ${fy}`}</Text>
         </View>
       </Page>
     </Document>

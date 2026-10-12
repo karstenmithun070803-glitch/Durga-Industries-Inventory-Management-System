@@ -174,12 +174,7 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
         {/* Footer */}
         <View style={styles.pageFooter} fixed>
           <View style={styles.footerLine} />
-          <Text
-            style={styles.footerText}
-            render={() =>
-              `Monthly Stock Report — ${periodLabel}`
-            }
-          />
+          <Text style={styles.footerText}>{`Monthly Stock Report — ${periodLabel}`}</Text>
         </View>
       </Page>
     </Document>

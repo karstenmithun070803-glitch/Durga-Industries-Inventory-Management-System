@@ -180,12 +180,7 @@ function PurchaseDetailDocument({
 
       <View style={styles.pageFooter} fixed>
         <View style={styles.footerLine} />
-        <Text
-          style={styles.footerText}
-          render={() =>
-            `Purchase Report — FY ${fy}`
-          }
-        />
+        <Text style={styles.footerText}>{`Purchase Report — FY ${fy}`}</Text>
       </View>
     </Page>
   );
@@ -275,12 +270,7 @@ function PurchaseMonthlyDocument({
 
       <View style={styles.pageFooter} fixed>
         <View style={styles.footerLine} />
-        <Text
-          style={styles.footerText}
-          render={() =>
-            `Purchase Report (Monthly) — FY ${fy}`
-          }
-        />
+        <Text style={styles.footerText}>{`Purchase Report (Monthly) — FY ${fy}`}</Text>
       </View>
     </Page>
   );

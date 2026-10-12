@@ -81,12 +81,6 @@ function rgb(hex: string): string {
 }
 const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
 
-interface PreparedRow {
-  row: TableRow;
-  lines: string[][]; // per column → wrapped lines (WinAnsi)
-  height: number;
-}
-
 export function buildTablePdf(spec: TablePdfSpec): Uint8Array {
   const landscape = spec.orientation === "landscape";
   const PW = landscape ? 841.89 : 595.28;

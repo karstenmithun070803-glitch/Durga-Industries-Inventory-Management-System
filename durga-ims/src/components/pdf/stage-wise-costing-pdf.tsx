@@ -126,12 +126,7 @@ export function StageWiseCostingDocument({
         {/* Footer */}
         <View style={styles.pageFooter} fixed>
           <View style={styles.footerLine} />
-          <Text
-            style={styles.footerText}
-            render={() =>
-              `${title} — ${jobLabel} — FY ${fy}`
-            }
-          />
+          <Text style={styles.footerText}>{`${title} — ${jobLabel} — FY ${fy}`}</Text>
         </View>
       </Page>
     </Document>

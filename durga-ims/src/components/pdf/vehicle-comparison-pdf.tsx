@@ -124,12 +124,7 @@ export function VehicleComparisonDocument({
         {/* Footer */}
         <View style={styles.pageFooter} fixed>
           <View style={styles.footerLine} />
-          <Text
-            style={styles.footerText}
-            render={() =>
-              `Vehicle Comparison — ${v1Name} vs ${v2Name} — FY ${fy}`
-            }
-          />
+          <Text style={styles.footerText}>{`Vehicle Comparison — ${v1Name} vs ${v2Name} — FY ${fy}`}</Text>
         </View>
       </Page>
     </Document>

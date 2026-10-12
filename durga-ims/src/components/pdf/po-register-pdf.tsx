@@ -223,12 +223,7 @@ export function PORegisterDocument({ rows, showRates, companySetting }: Props) {
             {/* ── Page footer ── */}
             <View style={styles.pageFooter} fixed>
               <View style={styles.footerLine} />
-              <Text
-                style={styles.footerText}
-                render={() =>
-                  `For ${coName}`
-                }
-              />
+              <Text style={styles.footerText}>{`For ${coName}`}</Text>
             </View>
           </Page>
         );
