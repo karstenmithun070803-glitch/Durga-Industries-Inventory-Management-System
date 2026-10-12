@@ -6,7 +6,13 @@ import { cn } from "@/lib/utils"
 function Input({ className, type, forceUppercase, onChange, ...props }: React.ComponentProps<"input"> & { forceUppercase?: boolean }) {
   const handleChange = forceUppercase
     ? (e: React.ChangeEvent<HTMLInputElement>) => {
-        e.target.value = e.target.value.toUpperCase()
+        // Writing .value moves the caret to the end; save and restore it.
+        const el = e.target
+        const { selectionStart, selectionEnd } = el
+        el.value = el.value.toUpperCase()
+        if (selectionStart !== null && selectionEnd !== null) {
+          el.setSelectionRange(selectionStart, selectionEnd)
+        }
         onChange?.(e)
       }
     : onChange

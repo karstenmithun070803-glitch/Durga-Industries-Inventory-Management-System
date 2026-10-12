@@ -128,8 +128,8 @@ export function StageWiseCostingDocument({
           <View style={styles.footerLine} />
           <Text
             style={styles.footerText}
-            render={({ pageNumber, totalPages }) =>
-              `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          ${title} — ${jobLabel} — FY ${fy}`
+            render={() =>
+              `${title} — ${jobLabel} — FY ${fy}`
             }
           />
         </View>

@@ -126,8 +126,8 @@ export function VehicleComparisonDocument({
           <View style={styles.footerLine} />
           <Text
             style={styles.footerText}
-            render={({ pageNumber, totalPages }) =>
-              `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          Vehicle Comparison — ${v1Name} vs ${v2Name} — FY ${fy}`
+            render={() =>
+              `Vehicle Comparison — ${v1Name} vs ${v2Name} — FY ${fy}`
             }
           />
         </View>

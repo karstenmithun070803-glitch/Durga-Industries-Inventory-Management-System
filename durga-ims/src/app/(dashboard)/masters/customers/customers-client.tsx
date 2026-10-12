@@ -163,7 +163,8 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
               <Input
                 placeholder="e.g. 33AAAAA1234A1Z5"
                 value={form.gstin}
-                onChange={(e) => set("gstin", e.target.value.toUpperCase())}
+                forceUppercase
+                onChange={(e) => set("gstin", e.target.value)}
                 onBlur={(e) => {
                   const err = validateGstinFormat(e.target.value);
                   if (err) toast.warning(err);

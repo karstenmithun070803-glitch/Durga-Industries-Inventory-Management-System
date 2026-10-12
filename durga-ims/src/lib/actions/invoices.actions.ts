@@ -444,6 +444,7 @@ export async function getInvoices(
       payment_notes: invoices.payment_notes,
       cancelled_by: invoices.cancelled_by,
       cancelled_at: invoices.cancelled_at,
+      include_tax: invoices.include_tax,
       // vehicle
       vehicle_id: vehicles.id,
       job_ref_no: vehicles.job_ref_no,
@@ -492,6 +493,7 @@ export async function getInvoices(
 
   return rows.map((r) => ({
     ...r,
+    include_tax: r.include_tax ?? false,
     bill_date: r.bill_date.toISOString(),
     rate_date: r.rate_date?.toISOString() ?? null,
     payment_date: r.payment_date ? (r.payment_date as unknown as Date).toISOString().split("T")[0] : null,

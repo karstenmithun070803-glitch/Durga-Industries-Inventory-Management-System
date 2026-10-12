@@ -140,7 +140,8 @@ export function VehiclesClient({ vehicles, customers }: Props) {
                 ref={firstFieldRef}
                 placeholder="e.g. 2026/001"
                 value={form.job_ref_no}
-                onChange={(e) => set("job_ref_no", e.target.value.toUpperCase())}
+                forceUppercase
+                onChange={(e) => set("job_ref_no", e.target.value)}
               />
             </div>
             <div className="space-y-1.5">

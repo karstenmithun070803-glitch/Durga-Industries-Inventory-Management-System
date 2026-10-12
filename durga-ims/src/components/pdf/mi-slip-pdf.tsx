@@ -215,8 +215,8 @@ export function MISlipDocument({ slip, showAdvRate = false, companySetting }: Pr
           <View style={styles.footerLine} />
           <Text
             style={styles.footerText}
-            render={({ pageNumber, totalPages }) =>
-              `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          For ${coName}`
+            render={() =>
+              `For ${coName}`
             }
           />
         </View>

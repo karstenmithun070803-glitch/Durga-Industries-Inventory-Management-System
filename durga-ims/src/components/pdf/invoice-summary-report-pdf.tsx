@@ -133,8 +133,8 @@ export function InvoiceSummaryReportDocument({ rows, fy, statusFilter, dateFrom,
           <View style={styles.footerLine} />
           <Text
             style={styles.footerText}
-            render={({ pageNumber, totalPages }) =>
-              `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          Invoice Summary — FY ${fy}`
+            render={() =>
+              `Invoice Summary — FY ${fy}`
             }
           />
         </View>

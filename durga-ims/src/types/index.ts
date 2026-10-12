@@ -234,6 +234,7 @@ export interface MaterialIssueWithDetails {
 // Flat row returned by getInvoices() — one row per line item (for list view)
 export interface InvoiceRow {
   // header fields
+  include_tax?: boolean;
   id: string;
   bill_number: string;
   bill_date: string;

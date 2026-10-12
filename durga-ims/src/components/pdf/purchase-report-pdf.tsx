@@ -182,8 +182,8 @@ function PurchaseDetailDocument({
         <View style={styles.footerLine} />
         <Text
           style={styles.footerText}
-          render={({ pageNumber, totalPages }) =>
-            `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          Purchase Report — FY ${fy}`
+          render={() =>
+            `Purchase Report — FY ${fy}`
           }
         />
       </View>
@@ -277,8 +277,8 @@ function PurchaseMonthlyDocument({
         <View style={styles.footerLine} />
         <Text
           style={styles.footerText}
-          render={({ pageNumber, totalPages }) =>
-            `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          Purchase Report (Monthly) — FY ${fy}`
+          render={() =>
+            `Purchase Report (Monthly) — FY ${fy}`
           }
         />
       </View>

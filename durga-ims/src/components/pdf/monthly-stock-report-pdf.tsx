@@ -176,8 +176,8 @@ export function MonthlyStockReportDocument({ rows, fromMonth, toMonth, showDetai
           <View style={styles.footerLine} />
           <Text
             style={styles.footerText}
-            render={({ pageNumber, totalPages }) =>
-              `Pg.No.:${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}          Monthly Stock Report — ${periodLabel}`
+            render={() =>
+              `Monthly Stock Report — ${periodLabel}`
             }
           />
         </View>

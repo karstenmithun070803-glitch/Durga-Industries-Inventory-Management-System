@@ -21,7 +21,7 @@ interface Props {
 }
 
 
-export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns = true }: Props) {
+export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns }: Props) {
   const coName = companySetting?.company_name ?? COMPANY_NAME;
   const coAddress = companySetting?.address ?? COMPANY_ADDRESS;
   const coGstin = companySetting?.gstin ?? COMPANY_GSTIN;
@@ -30,6 +30,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
     <Document title="Invoice — Customer Copy">
       {groups.map((items) => {
         const first = items[0];
+        const showTax = showTaxColumns ?? first.include_tax ?? true;
 
 
         const subtotal = items.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
@@ -101,7 +102,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                 </View>
               </View>
             </View>
-            {/* ── Table — simplified (no tax columns) ── */}
+            {/* ── Table — tax columns shown only when showTaxColumns ── */}
             <View style={[styles.table, { marginTop: 8 }]}>
               <View style={styles.separator} />
 
@@ -111,7 +112,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                 <Text style={[styles.plainTableHeadCell, { width: "10%", textAlign: "right" }]}>Qty</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "7%", marginLeft: 4 }]}>Unit</Text>
                 <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Rate</Text>
-                {showTaxColumns && (
+                {showTax && (
                   <>
                     <Text style={[styles.plainTableHeadCell, { width: "7%", textAlign: "right" }]}>Tax%</Text>
                     <Text style={[styles.plainTableHeadCell, { width: "11%", textAlign: "right" }]}>Tax Amt</Text>
@@ -132,7 +133,7 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
                     <Text style={[styles.plainTableCell, { width: "10%", textAlign: "right" }]}>{fmtQty(r.qty)}</Text>
                     <Text style={[styles.plainTableCell, { width: "7%", marginLeft: 4 }]}>{r.unit_name ?? "—"}</Text>
                     <Text style={[styles.plainTableCell, { width: "11%", textAlign: "right" }]}>{fmtAmt(r.rate)}</Text>
-                    {showTaxColumns && (
+                    {showTax && (
                       <>
                         <Text style={[styles.plainTableCell, { width: "7%", textAlign: "right" }]}>
                           {r.tax_percentage_item ? `${parseFloat(r.tax_percentage_item)}%` : "—"}
@@ -154,14 +155,14 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
               {/* Totals — Taxable Value → tax lines → Net Amount */}
               <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2, gap: 8 }}>
                 <View style={{ alignItems: "flex-end", gap: 3 }}>
-                  <Text style={styles.plainTableCell}>Taxable Value</Text>
+                  {showTax && <Text style={styles.plainTableCell}>Taxable Value</Text>}
                   {hasCgstSgst && <Text style={styles.plainTableCell}>CGST</Text>}
                   {hasCgstSgst && <Text style={styles.plainTableCell}>SGST</Text>}
                   {hasIgst && <Text style={styles.plainTableCell}>IGST</Text>}
                   <Text style={styles.plainTableCellBold}>Net Amount</Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 3, minWidth: 90 }}>
-                  <Text style={styles.plainTableCell}>{fmtAmt(subtotal.toFixed(2))}</Text>
+                  {showTax && <Text style={styles.plainTableCell}>{fmtAmt(subtotal.toFixed(2))}</Text>}
                   {hasCgstSgst && <Text style={styles.plainTableCell}>{fmtAmt(cgst.toFixed(2))}</Text>}
                   {hasCgstSgst && <Text style={styles.plainTableCell}>{fmtAmt(sgst.toFixed(2))}</Text>}
                   {hasIgst && <Text style={styles.plainTableCell}>{fmtAmt(igst.toFixed(2))}</Text>}
@@ -210,16 +211,6 @@ export function CustomerInvoiceDocument({ groups, companySetting, showTaxColumns
 
             </View>
 
-            {/* ── Page footer ── */}
-            <View style={styles.pageFooter} fixed>
-              <View style={styles.footerLine} />
-              <Text
-                style={styles.footerText}
-                render={({ pageNumber, totalPages }) =>
-                  `Pg. ${pageNumber}${totalPages > 1 ? ` of ${totalPages}` : ""}`
-                }
-              />
-            </View>
           </Page>
         );
       })}
