@@ -206,21 +206,19 @@ export function VehicleComparisonReport({ vehicles, stages, defaultFY, companySe
               label="Print"
               disabled={!hasData}
               hotkey="mod+p"
-              getDocument={async () => {
-                const { VehicleComparisonDocument } = await import("@/components/pdf/vehicle-comparison-pdf");
-                return (
-                  <VehicleComparisonDocument
-                    rows={displayRows}
-                    v1Name={v1Label}
-                    v2Name={v2Label}
-                    fy={fy}
-                    stageName={stageLabel}
-                    hideAmounts={hideAmounts}
-                    showDiffOnly={showDiffOnly}
-                    companySetting={companySetting}
-                  />
-                );
-              }}
+              getJob={() => ({
+                kind: "vehicle-comparison" as const,
+                props: {
+                  rows: displayRows,
+                  v1Name: v1Label,
+                  v2Name: v2Label,
+                  fy,
+                  stageName: stageLabel,
+                  hideAmounts,
+                  showDiffOnly,
+                  companySetting,
+                },
+              })}
             />
           </div>
 

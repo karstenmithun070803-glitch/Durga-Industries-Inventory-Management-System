@@ -129,10 +129,10 @@ export function JobCostPanel({ vehicles, companySetting }: Props) {
                 <PrintButton
                   label="Print Job Cost PDF"
                   hotkey="mod+p"
-                  getDocument={async () => {
-                    const { JobCostDocument } = await import("@/components/pdf/job-cost-pdf");
-                    return <JobCostDocument result={result} companySetting={companySetting} />;
-                  }}
+                  getJob={() => ({
+                    kind: "job-cost" as const,
+                    props: { result, companySetting },
+                  })}
                 />
               </div>
             </>

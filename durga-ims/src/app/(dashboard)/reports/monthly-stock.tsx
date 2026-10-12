@@ -264,20 +264,18 @@ export function MonthlyStockReport({ materials, defaultFY, companySetting }: Pro
             <PrintButton
               label="Print"
               hotkey="mod+p"
-              getDocument={async () => {
-                const { MonthlyStockReportDocument } = await import("@/components/pdf/monthly-stock-report-pdf");
-                return (
-                  <MonthlyStockReportDocument
-                    rows={rows}
-                    fromMonth={fromMonth}
-                    toMonth={toMonth}
-                    showDetails={showDetails}
-                    showPrices={showPrices}
-                    materialName={materialId ? materials.find((m) => m.id === materialId)?.name : undefined}
-                    companySetting={companySetting}
-                  />
-                );
-              }}
+              getJob={() => ({
+                kind: "monthly-stock" as const,
+                props: {
+                  rows,
+                  fromMonth,
+                  toMonth,
+                  showDetails,
+                  showPrices,
+                  materialName: materialId ? materials.find((m) => m.id === materialId)?.name : undefined,
+                  companySetting,
+                },
+              })}
             />
           </div>
 

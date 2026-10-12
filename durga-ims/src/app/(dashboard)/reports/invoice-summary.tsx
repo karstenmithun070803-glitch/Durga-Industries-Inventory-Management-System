@@ -208,19 +208,10 @@ export function InvoiceSummaryReport({ vehicles, customers, defaultFY, companySe
             <PrintButton
               label="Print"
               hotkey="mod+p"
-              getDocument={async () => {
-                const { InvoiceSummaryReportDocument } = await import("@/components/pdf/invoice-summary-report-pdf");
-                return (
-                  <InvoiceSummaryReportDocument
-                    rows={rows}
-                    fy={fy}
-                    statusFilter={status}
-                    dateFrom={dateFrom}
-                    dateTo={dateTo}
-                    companySetting={companySetting}
-                  />
-                );
-              }}
+              getJob={() => ({
+                kind: "invoice-summary" as const,
+                props: { rows, fy, statusFilter: status, dateFrom, dateTo, companySetting },
+              })}
             />
           </div>
 

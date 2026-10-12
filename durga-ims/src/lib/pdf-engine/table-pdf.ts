@@ -26,6 +26,8 @@ export interface Column {
   /** Relative weight; widths are normalised to the printable width. */
   width: number;
   align?: Align;
+  /** Extra left padding in points (e.g. keeps a unit column off a right-aligned qty). */
+  padLeft?: number;
 }
 
 export interface TableRow {
@@ -59,6 +61,7 @@ export interface TablePdfSpec {
   footerText: string;
   /** Centered notes drawn after the last row (e.g. "Opening balance not shown…"). */
   trailer?: HeaderLine[];
+  rowPadY?: number; // vertical padding inside each row, default 3
   fontSize?: number; // body, default 9.5
   headerFontSize?: number; // default = fontSize
 }
@@ -67,7 +70,8 @@ const MARGIN_X = 32;
 const MARGIN_TOP = 30;
 const MARGIN_BOTTOM = 40;
 const CELL_PAD_RIGHT = 1.5;
-const ROW_PAD_Y = 3;
+const HEADER_TOP_GAP = 7; // space between the top rule and the column headings
+const ROWS_TOP_GAP = 5; // space between the header's bottom rule and the first row
 const LINE_FACTOR = 1.15;
 const FOOTER_SIZE = 8.5;
 
@@ -91,6 +95,8 @@ export function buildTablePdf(spec: TablePdfSpec): Uint8Array {
   const fs = spec.fontSize ?? 9.5;
   const hfs = spec.headerFontSize ?? fs;
   const lineH = fs * LINE_FACTOR;
+  const ROW_PAD_Y = spec.rowPadY ?? 3;
+  const padLeft = spec.columns.map((c) => c.padLeft ?? 0);
 
   const totalWeight = spec.columns.reduce((s, c) => s + c.width, 0);
   const colW = spec.columns.map((c) => (c.width / totalWeight) * usable);
@@ -102,7 +108,7 @@ export function buildTablePdf(spec: TablePdfSpec): Uint8Array {
 
   const headerCells = spec.columns.map((c) => toWinAnsi(c.header));
   const headerLines = headerCells.map((h, i) =>
-    wrapText(h, colW[i], hfs, true, false)
+    wrapText(h, colW[i] - padLeft[i], hfs, true, false)
   );
   const headerH = Math.max(...headerLines.map((l) => l.length)) * hfs * LINE_FACTOR + 4;
 
@@ -148,20 +154,20 @@ export function buildTablePdf(spec: TablePdfSpec): Uint8Array {
 
   const drawTableHeader = () => {
     drawRule(y, "#000000", 0.75);
-    y += 2;
+    y += HEADER_TOP_GAP;
     const base = y + hfs;
     for (let c = 0; c < spec.columns.length; c++) {
       const lines = headerLines[c];
       for (let l = 0; l < lines.length; l++) {
         drawAligned(
-          lines[l], colX[c], colW[c], base + l * hfs * LINE_FACTOR, hfs, true,
+          lines[l], colX[c] + padLeft[c], colW[c] - padLeft[c], base + l * hfs * LINE_FACTOR, hfs, true,
           spec.columns[c].align ?? "left", null
         );
       }
     }
-    y += headerH - 2;
+    y += headerH;
     drawRule(y, "#000000", 0.75);
-    y += 2;
+    y += ROWS_TOP_GAP;
   };
 
   const newPage = (first: boolean) => {
@@ -206,7 +212,7 @@ export function buildTablePdf(spec: TablePdfSpec): Uint8Array {
         const raw = row.cells[c] ?? "";
         const bold = !!row.bold || !!row.boldCols?.includes(c);
         const s = toWinAnsi(raw);
-        const l = wrapText(s, colW[c] - CELL_PAD_RIGHT, fs, bold, false, !!row.italicCols?.includes(c));
+        const l = wrapText(s, colW[c] - CELL_PAD_RIGHT - padLeft[c], fs, bold, false, !!row.italicCols?.includes(c));
         lines[c] = l;
         if (l.length > maxLines) maxLines = l.length;
       }
@@ -235,7 +241,7 @@ export function buildTablePdf(spec: TablePdfSpec): Uint8Array {
           const lineBase = base + l * lineH;
           const color = row.cellColors?.[c] ?? row.color ?? null;
           const italic = !!row.italicCols?.includes(c);
-          drawAligned(cl[l], colX[c], colW[c], lineBase, fs, bold, align, color, italic);
+          drawAligned(cl[l], colX[c] + padLeft[c], colW[c] - padLeft[c], lineBase, fs, bold, align, color, italic);
           if (row.strike && cl[l] !== "") {
             const tw = measure(cl[l], fs, bold);
             const sx = align === "right" ? colX[c] + colW[c] - CELL_PAD_RIGHT - tw : colX[c];

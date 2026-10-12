@@ -43,12 +43,13 @@ export function buildJobCostSpec({ result, companySetting: co }: JobCostProps): 
 
   return {
     fontSize: 11,
+    rowPadY: 4,
     headerLines: header,
     columns: [
       { header: "Material Name", width: 40 },
       { header: "Contractor", width: 16 },
       { header: "Qty", width: 10, align: "right" },
-      { header: "Unit", width: 8 },
+      { header: "Unit", width: 8, padLeft: 4 },
       { header: "Rate", width: 12, align: "right" },
       { header: "Total", width: 14, align: "right" },
     ],

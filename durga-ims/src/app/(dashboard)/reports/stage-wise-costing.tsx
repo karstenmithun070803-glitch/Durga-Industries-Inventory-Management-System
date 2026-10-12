@@ -269,21 +269,19 @@ export function StageWiseCostingReport({ vehicles, defaultFY, companySetting }: 
               label="Print"
               disabled={!hasData}
               hotkey="mod+p"
-              getDocument={async () => {
-                const { StageWiseCostingDocument } = await import("@/components/pdf/stage-wise-costing-pdf");
-                return (
-                  <StageWiseCostingDocument
-                    stageRows={displayStageRows}
-                    materialRows={displayMaterialRows}
-                    rptType={rptType}
-                    jobLabel={vehicleLabel}
-                    fy={fmtFY(fy)}
-                    marginPct={parseFloat(marginPct) || 0}
-                    companySetting={companySetting}
-                    asOfDate={asOfDate || undefined}
-                  />
-                );
-              }}
+              getJob={() => ({
+                kind: "stage-wise-costing" as const,
+                props: {
+                  stageRows: displayStageRows,
+                  materialRows: displayMaterialRows,
+                  rptType,
+                  jobLabel: vehicleLabel,
+                  fy: fmtFY(fy),
+                  marginPct: parseFloat(marginPct) || 0,
+                  companySetting,
+                  asOfDate: asOfDate || undefined,
+                },
+              })}
             />
           </div>
 
